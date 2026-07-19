@@ -231,7 +231,7 @@ INFORMATION SOURCES
 
 ## 5. Recommended Core Technology Stack
 
-Operating System
+### Operating System
 
 Recommended:
 
@@ -239,7 +239,7 @@ Ubuntu Server or Debian.
 
 ---
 
-Backend Language
+### Backend Language
 
 Python.
 
@@ -256,7 +256,7 @@ PHP and JavaScript may still be used where appropriate.
 
 ---
 
-Application Framework
+### Application Framework
 
 FastAPI.
 
@@ -273,7 +273,7 @@ Responsibilities:
 
 ---
 
-Primary Database
+### Primary Database
 
 PostgreSQL.
 
@@ -290,7 +290,7 @@ Initial responsibilities:
 
 ---
 
-Vector Extension
+### Vector Extension
 
 pgvector.
 
@@ -304,7 +304,7 @@ Responsibilities:
 
 ---
 
-Initial Full-Text Search
+### Initial Full-Text Search
 
 PostgreSQL Full Text Search.
 
@@ -316,7 +316,7 @@ OpenSearch should not be added until actual system scale demonstrates a need.
 
 ---
 
-Cache and Queue Backend
+### Cache and Queue Backend
 
 Redis.
 
@@ -331,7 +331,7 @@ Responsibilities:
 
 ---
 
-Background Processing
+### Background Processing
 
 Celery.
 
