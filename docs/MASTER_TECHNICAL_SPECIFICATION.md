@@ -231,7 +231,7 @@ INFORMATION SOURCES
 
 ## 5. Recommended Core Technology Stack
 
-### Operating System
+### 5.1 Operating System
 
 Recommended:
 
@@ -256,7 +256,7 @@ PHP and JavaScript may still be used where appropriate.
 
 ---
 
-### Application Framework
+### 5.2 Application Framework
 
 FastAPI.
 
@@ -273,7 +273,7 @@ Responsibilities:
 
 ---
 
-### Primary Database
+### 5.3 Primary Database
 
 PostgreSQL.
 
@@ -290,7 +290,7 @@ Initial responsibilities:
 
 ---
 
-### Vector Extension
+### 5.4 Vector Extension
 
 pgvector.
 
@@ -304,7 +304,7 @@ Responsibilities:
 
 ---
 
-### Initial Full-Text Search
+### 5.5 Initial Full-Text Search
 
 PostgreSQL Full Text Search.
 
@@ -316,7 +316,7 @@ OpenSearch should not be added until actual system scale demonstrates a need.
 
 ---
 
-### Cache and Queue Backend
+### 5.6 Cache and Queue Backend
 
 Redis.
 
@@ -331,7 +331,7 @@ Responsibilities:
 
 ---
 
-### Background Processing
+### 5.7 Background Processing
 
 Celery.
 
