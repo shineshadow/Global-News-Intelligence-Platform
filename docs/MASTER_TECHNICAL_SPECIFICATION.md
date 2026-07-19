@@ -11,7 +11,7 @@ Version 0.1 — July 18, 2026
 
 Build a self-hosted, AI-assisted global news intelligence and monitoring platform capable of continuously collecting, organizing, translating, analyzing, correlating, and alerting on information.
 
-The system is intended to go significantly beyond a conventional RSS reader such as Inoreader.
+The system is intended to go significantly beyond a conventional RSS reader such as [Inoreader](https://www.inoreader.com/).
 
 The fundamental unit of the system is not merely an article or feed item. The system will distinguish between:
 
