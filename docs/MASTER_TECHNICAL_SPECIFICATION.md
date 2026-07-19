@@ -16,18 +16,32 @@ The system is intended to go significantly beyond a conventional RSS reader such
 The fundamental unit of the system is not merely an article or feed item. The system will distinguish between:
 
 #### Source
-The organization, website, government agency, YouTube channel, or other publisher.
+- Organization
+- Website
+- Government agency
+- YouTube Channel
+- Social Media Platform
+- Other Publisher
 
 #### Document
-An individual article, video transcript, social post, press release, scraped webpage, or other item.
+- Individual article
+- Video Transcript
+- Social Media Platform Post
+- Press Release
+- Scraped Webpage
+- Other Item
 
 #### Story
-A collection of documents describing substantially the same underlying event or development.
+A collection of documents describing essentially the same underlying event or development regardless of source, type or language.
 
 #### Event
 The real-world occurrence represented by one or more evolving stories.
 
-This distinction enables the system to consolidate dozens of articles into a single evolving story, recognize cross-language reporting about the same event, identify genuinely new developments, and reduce repetitive alerts.
+#### This distinction enables the system to:
+- Consolidate dozens of articles into a single evolving story.
+- Recognize cross-language reporting about the same event.
+- Genuinely identify new developments.
+- Practically eliminate repetitive alerts.
 
 ---
 
