@@ -16,20 +16,23 @@ The system is intended to go significantly beyond a conventional RSS reader such
 The fundamental unit of the system is not merely an article or feed item. The system will distinguish between:
 
 #### Source
-- Organization
-- Website
-- Government agency
-- YouTube Channel
-- Social Media Platform
-- Other Publisher
+- Organizations
+- Websites
+- Government agencies
+- Election commissions
+- Courts
+- Military agencies
+- YouTube Channels
+- Social Media Platforms
+- Other Publishers
 
 #### Document
-- Individual article
-- Video Transcript
-- Social Media Platform Post
-- Press Release
-- Scraped Webpage
-- Other Item
+- Individual articles
+- Video Transcripts
+- Social Media Platform Posts
+- Press Releases
+- Scraped Webpages
+- Other Items
 
 #### Story
 A collection of documents describing essentially the same underlying event or development regardless of source, type or language.
@@ -51,7 +54,7 @@ The platform must be capable of:
 
 1. Monitoring thousands of international news sources.
 2. Processing potentially tens of thousands of new items per day.
-3. Supporting English, Korean, Japanese, Chinese, and additional languages.
+3. Supporting English, Korean, Japanese, Chinese, Filipino and additional languages.
 4. Monitoring RSS and Atom feeds.
 5. Generating feeds for websites lacking RSS.
 6. Scraping ordinary and JavaScript-rendered webpages.
@@ -456,10 +459,11 @@ YouTube
 │   ├── Government
 │   ├── Independent
 │   └── News
-├── Japan
+├── English
 ├── Taiwan
 ├── China
-└── English
+├── Filipino
+└── Japan
 ```
 ---
 
@@ -550,6 +554,7 @@ Primary role:
 - Korean
 - Japanese
 - Chinese
+- Filipino
 - multilingual classification
 - multilingual translation
 - multilingual summarization
@@ -682,10 +687,11 @@ Embeddings will support:
 
 Example:
 ```
+English report
 Korean report
 Japanese report
-English report
 Taiwanese report
+Filipino report
 
         ↓
 
@@ -703,10 +709,11 @@ The exact embedding model remains an open benchmarking decision.
 
 Requirements:
 
+- strong English support
 - strong Korean support
 - strong Japanese support
 - strong Chinese support
-- strong English support
+- strong Filipino support
 - cross-language semantic alignment
 - good retrieval performance
 - reasonable GPU requirements
@@ -886,6 +893,8 @@ website
 youtube
 social
 government
+military
+court
 newsletter
 podcast
 manual
@@ -1017,6 +1026,7 @@ English: 10
 Chinese: 7
 Japanese: 5
 Korean: 5
+Filipino: 1
 
 NEW DEVELOPMENT:
 Taiwan now reports 14 aircraft crossed the median line.
@@ -1159,10 +1169,11 @@ Cross-Language Search
 
 An English query may return:
 
+- English documents
 - Korean documents
 - Japanese documents
 - Chinese documents
-- English documents
+- Filipino documents
 
 ---
 
@@ -1547,14 +1558,32 @@ These should be decided using actual material from the intended news sources.
 
 Before finalizing AI models, create a permanent evaluation dataset containing real examples from:
 
+- English news
+- English government
+- English military
+- English court
+- English YouTube
 - Korean news
+- Korean government
+- Korean military
+- Korean court
 - Korean YouTube
 - Japanese news
+- Japanese government
+- Japanese military
+- Japanese court
 - Japanese YouTube
 - Taiwanese Mandarin news
+- Taiwanese government
+- Taiwanese military
+- Taiwanese court
+- Taiwanese YouTube
+- Filipino news
+- Filipino government
+- Filipino military
+- Filipino court
+- Filipino YouTube
 - Chinese-language reporting
-- English news
-- English YouTube
 
 Tests should measure:
 
