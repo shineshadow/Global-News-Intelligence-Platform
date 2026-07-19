@@ -35,7 +35,7 @@ The fundamental unit of the system is not merely an article or feed item. The sy
 - Other Items
 
 #### Story
-A collection of documents describing essentially the same underlying event or development regardless of source, type or language.
+A collection of documents describing essentially the same underlying news or development regardless of source, type or language.
 
 #### Event
 The real-world occurrence represented by one or more evolving stories.
