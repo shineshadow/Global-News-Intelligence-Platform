@@ -179,8 +179,9 @@ INFORMATION SOURCES
         ├── RSS / Atom
         ├── News Websites
         ├── Government Websites
+        ├── Scraped Websites
         ├── YouTube
-        ├── Social Sources
+        ├── Social Media Sources
         ├── Newsletters
         ├── Podcasts
         └── Manual URLs
