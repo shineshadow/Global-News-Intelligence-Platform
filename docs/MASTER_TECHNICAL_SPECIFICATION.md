@@ -239,7 +239,7 @@ Ubuntu Server or Debian.
 
 ---
 
-### Backend Language
+### 5.2 Backend Language
 
 Python.
 
@@ -256,7 +256,7 @@ PHP and JavaScript may still be used where appropriate.
 
 ---
 
-### 5.2 Application Framework
+### 5.3 Application Framework
 
 FastAPI.
 
@@ -273,7 +273,7 @@ Responsibilities:
 
 ---
 
-### 5.3 Primary Database
+### 5.4 Primary Database
 
 PostgreSQL.
 
@@ -290,7 +290,7 @@ Initial responsibilities:
 
 ---
 
-### 5.4 Vector Extension
+### 5.5 Vector Extension
 
 pgvector.
 
@@ -304,7 +304,7 @@ Responsibilities:
 
 ---
 
-### 5.5 Initial Full-Text Search
+### 5.6 Initial Full-Text Search
 
 PostgreSQL Full Text Search.
 
@@ -316,7 +316,7 @@ OpenSearch should not be added until actual system scale demonstrates a need.
 
 ---
 
-### 5.6 Cache and Queue Backend
+### 5.7 Cache and Queue Backend
 
 Redis.
 
@@ -331,7 +331,7 @@ Responsibilities:
 
 ---
 
-### 5.7 Background Processing
+### 5.8 Background Processing
 
 Celery.
 
