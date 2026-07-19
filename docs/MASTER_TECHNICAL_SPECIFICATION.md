@@ -9,7 +9,7 @@ Version 0.1 — July 18, 2026
 
 ## 1. Project Vision
 
-Build a self-hosted, AI-assisted global news intelligence and monitoring platform capable of continuously collecting, organizing, translating, analyzing, correlating, and alerting on informationes.
+Build a self-hosted, AI-assisted global news intelligence and monitoring platform capable of continuously collecting, organizing, translating, analyzing, correlating, and alerting on information.
 
 The system is intended to go significantly beyond a conventional RSS reader such as Inoreader.
 
