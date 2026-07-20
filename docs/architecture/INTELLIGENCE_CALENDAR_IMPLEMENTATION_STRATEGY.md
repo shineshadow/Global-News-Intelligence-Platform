@@ -274,7 +274,7 @@ Event workflow
 Post-event workflow
 ```
 
-My recommendation should therefore be:
+Therefore my recommendation is:
 
 ```text
 VERSION 1
