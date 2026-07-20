@@ -134,7 +134,24 @@ The local RTX 5090 should perform tasks such as:
 
 OpenAI should primarily be used as an escalation layer.
 
+
+The Intelligence Calendar should follow the same local-first principle.
+
+Routine calendar-related tasks should be handled locally whenever practical, including:
+
+- temporal-language detection
+- relative-date normalization
+- routine future-event extraction
+- event candidate classification
+- calendar-event deduplication
+- routine source-authority scoring
+- event-to-document and event-to-story correlation
+
+OpenAI should primarily be reserved for ambiguous temporal reasoning, difficult multilingual extraction, high-value event validation, and other cases where local confidence is insufficient.
+
 ---
+
+
 
 ### 3.2 Provider-Agnostic AI
 
@@ -154,7 +171,21 @@ The router may dispatch work to:
 
 Changing providers must not require changing the news-processing application.
 
+
+Intelligence Calendar tasks must also pass through the LLM Router rather than depending directly on a specific model provider.
+
+Calendar-related AI tasks may include:
+
+- future-event detection
+- ambiguous date interpretation
+- event-candidate extraction
+- cancellation and postponement detection
+- event validation
+- calendar-event correlation
+
 ---
+
+
 
 ### 3.3 Native Linux First
 
@@ -202,64 +233,164 @@ For foreign-language documents, retain:
 
 AI-generated output must always be distinguishable from original source content.
 
+
+The same preservation rule applies to Calendar Events.
+
+The system must retain:
+
+- the original future-event statement or announcement
+- the original temporal phrase
+- the source document that produced the event candidate
+- supporting and contradicting evidence
+- original and normalized event dates
+- prior dates when an event is rescheduled
+- event-status history
+- cancellation and postponement evidence
+
+Significant Calendar Event changes must be versioned rather than silently overwritten.
+
 ---
 
+
 ## 4. High-Level Architecture
+
+The platform combines a reactive news-intelligence pipeline with a proactive Intelligence Calendar control loop.
+
+```text
+RECURRING EVENT DISCOVERY ───────┐
+MANUAL EVENT ENTRY ──────────────┤
+AI FUTURE-EVENT EXTRACTION ──────┤
+OFFICIAL CALENDAR INGESTION ─────┘
+                │
+                ▼
+       INTELLIGENCE CALENDAR
+                │
+                ▼
+         EVENT VALIDATION
+                │
+                ▼
+       PRE-EVENT MONITORING
+                │
+      ┌─────────┴─────────┐
+      ▼                   ▼
+TEMPORARY MONITORS   POLLING ESCALATION
+      │                   │
+      └─────────┬─────────┘
+                │
+                ▼
+        INFORMATION SOURCES
+                │
+                ├── RSS / Atom
+                ├── News Websites
+                ├── Government Websites
+                ├── Scraped Websites
+                ├── YouTube
+                ├── Social Media Sources
+                ├── Newsletters
+                ├── Podcasts
+                └── Manual URLs
+                        │
+                        ▼
+                INGESTION LAYER
+                        │
+                        ▼
+                CONTENT NORMALIZATION
+                        │
+                        ▼
+                DEDUPLICATION
+                        │
+                        ▼
+                RULE ENGINE
+                        │
+                        ▼
+                FUTURE EVENT DETECTION
+                        │
+              ┌─────────┴─────────┐
+              │                   │
+              ▼                   ▼
+      CALENDAR CANDIDATES    LOCAL AI PROCESSING
+      / EVENT UPDATES              │
+              │                    ▼
+              │            EMBEDDING GENERATION
+              │                    │
+              │                    ▼
+              │            STORY CLUSTERING
+              │                    │
+              └──────────┐         ▼
+                         │   EVENT CORRELATION
+                         │         │
+                         ▼         ▼
+                 INTELLIGENCE   NEW-DEVELOPMENT
+                    CALENDAR       DETECTION
+                         │          │
+                         │    ┌─────┴─────┐
+                         │    │           │
+                         │    ▼           ▼
+                         │ Local AI     OpenAI
+                         │    │           │
+                         │    └─────┬─────┘
+                         │          │
+                         └────┬─────┘
+                              ▼
+                        STORY DATABASE
+                              │
+                    ┌─────────┼─────────┐
+                    ▼         ▼         ▼
+                  Search    Alerts    Web UI
+                                      │
+                                      ▼
+                             INTELLIGENCE CALENDAR UI
 ```
-INFORMATION SOURCES
-        │
-        ├── RSS / Atom
-        ├── News Websites
-        ├── Government Websites
-        ├── Scraped Websites
-        ├── YouTube
-        ├── Social Media Sources
-        ├── Newsletters
-        ├── Podcasts
-        └── Manual URLs
-                │
-                ▼
-        INGESTION LAYER
-                │
-                ▼
-        CONTENT NORMALIZATION
-                │
-                ▼
-        DEDUPLICATION
-                │
-                ▼
-        RULE ENGINE
-                │
-                ▼
-        LOCAL AI PROCESSING
-                │
-                ▼
-        EMBEDDING GENERATION
-                │
-                ▼
-        STORY CLUSTERING
-                │
-                ▼
-        NEW-DEVELOPMENT DETECTION
-                │
-          ┌─────┴─────┐
-          │           │
-       Routine     Difficult
-          │           │
-          ▼           ▼
-       Local AI     OpenAI
-          │           │
-          └─────┬─────┘
-                │
-                ▼
-          STORY DATABASE
-                │
-         ┌──────┼──────┐
-         │      │      │
-         ▼      ▼      ▼
-       Search  Alerts  Web UI
+
+### 4.1 Intelligence Calendar and Automated Event Scheduler
+
+The Intelligence Calendar and Automated Event Scheduler is a first-class subsystem of the platform.
+
+Formal subsystem name:
+
+```text
+Intelligence Calendar and Automated Event Scheduler
 ```
----
+
+UI and functional name:
+
+```text
+Intelligence Calendar
+```
+
+Internal and database namespace:
+
+```text
+intelligence_calendar
+```
+
+The subsystem supports three primary Calendar Event types:
+
+1. recurring events,
+2. scheduled one-time events,
+3. AI-discovered future events.
+
+The Intelligence Calendar is populated through four primary sources:
+
+1. recurring-event discovery,
+2. manual event entry,
+3. automatic future-event extraction from incoming documents,
+4. official-calendar and schedule ingestion.
+
+Validated Calendar Events are assigned both a Calendar monitoring priority and an expected news importance. These are separate concepts: Calendar priority determines how important it is that the platform not miss the event, while expected news importance estimates how significant the event itself is likely to be as news.
+
+The Calendar may automatically activate:
+
+- pre-event monitoring,
+- temporary monitors,
+- source-polling escalation,
+- event-aware YouTube and livestream monitoring,
+- Calendar-specific alerts,
+- post-event analysis.
+
+The subsystem operates as a closed intelligence loop. It drives monitoring before known or expected events, receives new future-event candidates from incoming documents, correlates documents and stories with existing Calendar Events, and updates the Calendar as events are confirmed, postponed, cancelled, started, completed, or observed differently from what was scheduled.
+
+Detailed Calendar architecture, database models, validation logic, temporal-language handling, monitoring policies, APIs, scheduler behavior, and UI specifications are defined in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
 
 ## 5. Recommended Core Technology Stack
 
@@ -303,7 +434,21 @@ Responsibilities:
 - Web UI backend
 - AI router integration
 
+
+Intelligence Calendar responsibilities include:
+
+- Calendar event APIs
+- manual Calendar event entry
+- event validation and administrative review
+- Calendar search and filtering
+- event-to-document and event-to-story views
+- temporary monitor configuration
+- pre-event monitoring controls
+- Calendar dashboard integration
+
 ---
+
+
 
 ### 5.4 Primary Database
 
@@ -320,7 +465,26 @@ Initial responsibilities:
 - full-text search
 - embedding storage
 
+
+The database will also store:
+
+- Intelligence Calendar events
+- recurring-event rules
+- event validation state
+- event confidence
+- Calendar priority
+- expected news importance
+- event-source provenance
+- event-to-document relationships
+- event-to-story relationships
+- event-to-monitor relationships
+- event history
+- scheduled versus observed outcomes
+- durable scheduler state where required
+
 ---
+
+
 
 ### 5.5 Vector Extension
 
@@ -361,14 +525,26 @@ Responsibilities:
 - temporary task state
 - counters
 
+
+Calendar-related Redis responsibilities may include:
+
+- event-scheduler queue state
+- temporary monitor activation state
+- short-lived polling-escalation state
+- distributed locks for idempotent event jobs
+- rate-limit coordination during temporary polling escalation
+
 ---
+
+
 
 ### 5.8 Background Processing
 
 Celery.
 
 Worker categories may include:
-```
+
+```text
 feed-worker
 scrape-worker
 youtube-worker
@@ -377,10 +553,30 @@ llm-worker
 embedding-worker
 cluster-worker
 alert-worker
-```
-Workers can later be distributed across multiple servers.
 
----
+calendar-discovery-worker
+future-event-worker
+calendar-validation-worker
+event-scheduler-worker
+event-correlation-worker
+```
+
+Calendar worker responsibilities include:
+
+- recurring-event discovery
+- official-calendar ingestion
+- future-event extraction
+- temporal normalization
+- event-candidate validation
+- event deduplication
+- temporary monitor activation and expiration
+- source-polling escalation
+- event-to-document and event-to-story correlation
+- post-event scheduling
+
+Periodic scheduling may use Celery Beat or an equivalent scheduler, but critical schedules should be stored durably and jobs should be idempotent so that worker restarts do not silently lose Calendar actions.
+
+Workers can later be distributed across multiple servers.
 
 ## 6. Source Acquisition Layer
 
@@ -467,6 +663,29 @@ Particularly useful for:
 - pages without RSS
 
 ---
+
+
+### 6.7 Intelligence Calendar Inputs
+
+The Intelligence Calendar is populated through four primary inputs:
+
+1. recurring-event discovery,
+2. manual event entry,
+3. automatic future-event extraction from incoming documents,
+4. official-calendar and schedule ingestion.
+
+Official calendars may be acquired through:
+
+- ICS / iCalendar
+- RSS / Atom
+- JSON APIs
+- HTML event listings
+- PDF schedules
+- official press calendars
+
+Relevant institutions may include presidential offices, legislatures, courts, election commissions, foreign ministries, defense ministries, military commands, central banks, embassies, and international organizations.
+
+Recurring-event discovery should periodically research predictable national, political, judicial, military, diplomatic, and economic events for target countries and the Indo-Pacific region.
 
 ## 7. YouTube Subsystem
 
@@ -570,6 +789,22 @@ National Election Commission
 ```
 ---
 
+
+### 7.5 Event-Aware YouTube Monitoring
+
+The Intelligence Calendar may temporarily increase YouTube monitoring around expected events such as:
+
+- presidential speeches
+- political rallies
+- press conferences
+- government ceremonies
+- military events
+- diplomatic summits
+
+The event scheduler may increase channel polling, detect livestreams, monitor relevant playlists, acquire metadata with yt-dlp, retrieve captions, and invoke local ASR when captions are unavailable.
+
+Calendar-triggered YouTube escalation must automatically return to normal monitoring levels after the configured post-event window.
+
 ## 8. Local LLM Layer
 
 No single local LLM should initially be assumed to be best for every task.
@@ -615,6 +850,18 @@ Final model selection must be based on internal benchmarking.
 
 ---
 
+
+The local AI layer should also handle Calendar-related tasks when practical:
+
+- multilingual future-event extraction
+- temporal-expression interpretation
+- event-candidate structured extraction
+- cancellation and postponement detection
+- routine event validation
+- Calendar-event correlation
+
+Complex or high-value ambiguous cases may escalate through the LLM Router to OpenAI.
+
 ## 9. AI Model Server
 
 Preferred initial inference server:
@@ -659,6 +906,20 @@ Example:
 ```
 ---
 
+
+Calendar-related request metadata may additionally include:
+
+```text
+calendar_event_id
+calendar_priority
+expected_news_importance
+source_authority
+event_confidence
+date_precision
+time_precision
+verification_status
+```
+
 ### 10.1 Example Routing
 ```
 English routine classification
@@ -682,7 +943,32 @@ High-value cross-source reasoning
 Low-confidence local response
     → OpenAI escalation
 ```
+
+Additional Calendar routing examples:
+
+```text
+Simple temporal parsing
+    → Deterministic parser
+
+Routine multilingual future-event extraction
+    → Local Qwen
+
+Routine Calendar-event correlation
+    → Local model + embeddings
+
+Ambiguous high-value date interpretation
+    → OpenAI
+
+High-value event with conflicting evidence
+    → OpenAI escalation
+
+Official structured calendar entry
+    → Deterministic ingestion and validation where practical
+```
+
 ---
+
+
 
 ### 10.2 Cost-Based Routing
 
@@ -703,6 +989,8 @@ OpenAI for high-priority tasks only
 Local-only processing
 ```
 Current OpenAI API pricing varies materially by model; therefore pricing data must be stored as configurable metadata rather than hard-coded. For example, GPT-5.4 mini currently lists $0.75 per million input tokens and $4.50 per million output tokens. 
+
+## 11. Multilingual Embedding Layer
 
 A dedicated multilingual embedding model will generate semantic vectors.
 
@@ -748,6 +1036,15 @@ Requirements:
 - reasonable GPU requirements
 
 ---
+
+
+Embeddings may also support:
+
+- Calendar-event deduplication
+- matching future-event candidates to existing Calendar Events
+- Calendar-aware story clustering
+- event-to-document correlation
+- event-to-story correlation
 
 ## 12. Topic Classification System
 
@@ -815,6 +1112,11 @@ South Korea
 ```
 ---
 
+
+Calendar Events use the same topic taxonomy as documents and stories.
+
+This allows an expected event to provide prior topic context before related documents arrive and allows temporary monitors to be generated from the event's assigned topics.
+
 ## 13. Monitoring Rule System
 
 Monitors may combine multiple criteria.
@@ -861,6 +1163,46 @@ Only when new information detected
 ```
 ---
 
+
+The Intelligence Calendar may create temporary monitors automatically.
+
+Calendar-generated monitors may use the same rule types as permanent monitors and should additionally support:
+
+- `calendar_event_id`
+- event-relative activation time
+- event-relative expiration time
+- automatic expiration
+- temporary source-group overrides
+- temporary polling escalation
+- temporary YouTube monitoring escalation
+
+Example:
+
+```text
+Calendar Event:
+Presidential Address
+
+Activate:
+T - 2 hours
+
+Expire:
+T + 24 hours
+
+Entities:
+President
+
+Keywords:
+address OR speech
+
+Sources:
+Official + Wire + Major News + YouTube
+
+Priority:
+Critical
+```
+
+Temporary monitors must be distinguishable from permanent user-created monitors and should automatically expire unless explicitly extended.
+
 ## 14. Entity System
 
 Entities include:
@@ -890,6 +1232,23 @@ National Election Commission
 This allows monitoring to work across languages and naming variations.
 
 ---
+
+
+Calendar Events should use the same entity system.
+
+An event may link to people, organizations, governments, agencies, military units, and locations with roles such as:
+
+- speaker
+- participant
+- host
+- target
+- organization
+- government
+- military unit
+- location
+- subject
+
+Entity aliases improve both future-event extraction and event-aware monitoring across languages.
 
 ## 15. Unified Document Model
 
@@ -930,44 +1289,98 @@ manual
 ```
 ---
 
+
+Documents that mention future events should preserve the original temporal expression and may be linked to Calendar Events through `intelligence_calendar_event_documents`.
+
+The Calendar relationship should remain normalized rather than embedding event identifiers directly into the document record.
+
+Possible document-to-Calendar relationship types include:
+
+```text
+announcement
+confirmation
+preview
+pre_event_analysis
+live_update
+result
+post_event_analysis
+cancellation
+postponement
+correction
+```
+
 ## 16. Primary Database Entities
 
 Initial tables should include:
-```
+
+```text
 users
+
 sources
 source_groups
 source_endpoints
+
 documents
 document_versions
+
 topics
 document_topics
+
 entities
 entity_aliases
 document_entities
+
 keywords
+
 monitors
 monitor_rules
 monitor_matches
+
 stories
 story_documents
+
+events
 story_events
+
 translations
 summaries
 embeddings
+
 ai_jobs
 ai_results
+
 alerts
 alert_deliveries
+
 youtube_channels
 youtube_videos
 transcripts
 transcript_segments
+
+intelligence_calendar_events
+intelligence_calendar_event_topics
+intelligence_calendar_event_entities
+intelligence_calendar_event_sources
+intelligence_calendar_event_documents
+intelligence_calendar_event_stories
+intelligence_calendar_event_monitors
+intelligence_calendar_event_history
+intelligence_calendar_event_watch_sources
+intelligence_calendar_event_search_terms
+intelligence_calendar_monitor_templates
 ```
----
+
+The `events` table represents observed real-world occurrences.
+
+The `intelligence_calendar_events` table represents known, scheduled, recurring, or AI-discovered expected occurrences.
+
+A Calendar Event may later link to an observed real-world Event, allowing the system to distinguish what was expected from what actually occurred.
+
+Detailed Calendar field definitions and relational-table schemas are maintained in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
 
 ## 17. Document Processing Workflow
-```
+
+```text
 NEW DOCUMENT
       │
       ▼
@@ -992,7 +1405,15 @@ Topic classification
 Entity extraction
       │
       ▼
-Future Event Detection
+FUTURE EVENT DETECTION
+      │
+      ▼
+Future date normalization
+      │
+      ▼
+Future event candidate creation
+      │
+      ├──────────────► Search / Update Intelligence Calendar
       │
       ▼
 Relevance scoring
@@ -1010,6 +1431,11 @@ Semantic duplicate detection
 Story cluster assignment
       │
       ▼
+CALENDAR EVENT CORRELATION
+      │
+      ├──────────────► Link document/story to expected Calendar Event
+      │
+      ▼
 Compare against existing story
       │
       ▼
@@ -1024,7 +1450,16 @@ Alert evaluation
       ▼
 Store
 ```
----
+
+Future Event Detection should detect newly announced future events as well as changes to existing Calendar Events, including:
+
+- postponements
+- cancellations
+- rescheduling
+- time changes
+- venue changes
+
+Calendar Event Correlation should determine whether an incoming document or story belongs to a known or expected Calendar Event and should update event evidence, confidence, validation state, and observed outcome where appropriate.
 
 ## 18. Story Model
 
@@ -1065,6 +1500,18 @@ Taiwan now reports 14 aircraft crossed the median line.
 ```
 ---
 
+
+Stories may also maintain relationships to:
+
+```text
+related_calendar_events
+related_observed_events
+```
+
+Calendar Events provide prior intelligence signals that may improve story assignment when the system already knows the expected date, country, entities, topics, and sources associated with an upcoming event.
+
+Calendar relationships should influence clustering as a weighted prior rather than forcing documents into a story solely because their publication time overlaps an event.
+
 ## 19. New-Information Detection
 
 This will be a major differentiating capability.
@@ -1098,6 +1545,25 @@ Only meaningful developments may trigger alerts.
 
 ---
 
+
+Calendar-related changes may themselves qualify as new information.
+
+Examples:
+
+```text
+Event time changed
+Venue changed
+New participant announced
+Event postponed
+Event cancelled
+Event confirmed
+Expected event began
+Expected event completed
+Observed outcome differed from schedule
+```
+
+The new-information engine should therefore exchange state with the Intelligence Calendar so that significant schedule or outcome changes can trigger Calendar-specific alerts without being confused with ordinary repetitive news alerts.
+
 ## 20. Alert System
 
 Primary notification system:
@@ -1112,15 +1578,39 @@ Additional options:
 - Discord
 - future mobile application
 
-Alert priorities:
-```
+Content/news alert priorities:
+
+```text
 Critical
 High
 Normal
 Low
 ```
-Example:
+
+Calendar alerts should be treated as a separate alert class from ordinary content alerts.
+
+Calendar alert types may include:
+
+```text
+Event reminder
+Event candidate detected
+Event confirmed
+Event postponed
+Event cancelled
+Event rescheduled
+Event time changed
+Event venue changed
+Temporary monitors activated
+Temporary monitors expired
+Event started
+Event completed
 ```
+
+Calendar monitoring priority and expected news importance must remain separate.
+
+Example content alert:
+
+```text
 HIGH PRIORITY
 
 South Korea — Judiciary
@@ -1141,7 +1631,27 @@ Court hearing moved to July 22.
 Sources reporting:
 4
 ```
----
+
+Example Calendar alert:
+
+```text
+CALENDAR CHANGE
+
+Event:
+Constitutional Court Hearing
+
+Change:
+Rescheduled
+
+Original:
+July 20
+
+New:
+July 22
+
+Calendar Priority:
+Critical
+```
 
 ## 21. Web UI
 
@@ -1155,9 +1665,11 @@ Initial frontend:
 A separate React or Next.js frontend may be introduced later.
 
 Initial sections:
-```
+
+```text
 Dashboard
 Breaking
+Intelligence Calendar
 Stories
 Documents
 Alerts
@@ -1171,7 +1683,47 @@ Search
 AI Analysis
 System
 ```
----
+
+The Intelligence Calendar should provide views such as:
+
+```text
+Today
+Tomorrow
+This Week
+Next 30 Days
+Critical
+Recurring
+One-Time
+AI-Discovered
+Manually Added
+Official Calendar
+Candidates
+Unconfirmed
+Probable
+Verified
+Confirmed
+In Progress
+Completed
+Postponed
+Cancelled
+```
+
+The main Dashboard should include an Intelligence Calendar widget showing upcoming Critical events, events awaiting verification, and AI-discovered candidates.
+
+Calendar Event detail pages should expose:
+
+- event description
+- schedule and timezone
+- validation evidence
+- supporting and contradicting sources
+- topics and entities
+- related documents
+- related stories
+- temporary monitors
+- polling escalation
+- relevant YouTube channels
+- event history
+- observed outcome
 
 ## 22. Search
 
@@ -1209,6 +1761,24 @@ An English query may return:
 
 ---
 
+
+Intelligence Calendar Search
+
+Calendar search should support:
+
+- keyword
+- entity
+- country
+- topic
+- date range
+- event type
+- validation status
+- Calendar priority
+- expected news importance
+- source
+
+Calendar results should support event-local time, user-local time, and UTC display.
+
 ## 23. AI Question Interface
 
 Future functionality:
@@ -1230,6 +1800,27 @@ The system retrieves relevant stored content before invoking an LLM.
 The LLM should reason over selected evidence rather than being expected to recall historical news independently.
 
 ---
+
+
+Calendar-aware questions should include:
+
+```text
+What important events are coming up this week?
+
+What Critical events are scheduled in South Korea next month?
+
+Which events were discovered automatically by AI?
+
+Which scheduled events changed dates?
+
+What events are expected to generate major news tomorrow?
+
+Which upcoming events involve Taiwan and China?
+
+Which stories are connected to today's scheduled events?
+
+What happened differently from what was scheduled?
+```
 
 ## 24. Hardware Strategy
 
@@ -1276,10 +1867,22 @@ Containers remain optional for isolated third-party components.
 
 ---
 
+
+The Calendar subsystem may additionally require a periodic scheduler such as:
+
+```text
+Celery Beat
+```
+
+or an equivalent scheduling service.
+
+Critical event schedules should be persisted durably in PostgreSQL, and event-scheduler jobs should be idempotent so that service restarts do not silently lose monitoring activations.
+
 ## 26. Repository Structure
 
 Suggested structure:
-```
+
+```text
 news-intelligence/
 │
 ├── app/
@@ -1295,6 +1898,7 @@ news-intelligence/
 │   ├── web/
 │   ├── youtube/
 │   ├── social/
+│   ├── calendars/
 │   └── manual/
 │
 ├── processing/
@@ -1303,12 +1907,20 @@ news-intelligence/
 │   ├── classify/
 │   ├── translate/
 │   ├── entities/
+│   ├── future_events/
+│   ├── temporal/
 │   ├── embeddings/
 │   └── clustering/
 │
 ├── intelligence/
 │   ├── stories/
 │   ├── events/
+│   ├── calendar/
+│   │   ├── discovery/
+│   │   ├── validation/
+│   │   ├── scheduling/
+│   │   ├── monitoring/
+│   │   └── correlation/
 │   ├── novelty/
 │   └── scoring/
 │
@@ -1322,6 +1934,9 @@ news-intelligence/
 ├── alerts/
 │
 ├── workers/
+│   ├── ingestion/
+│   ├── processing/
+│   └── calendar/
 │
 ├── migrations/
 │
@@ -1329,7 +1944,8 @@ news-intelligence/
 │
 └── config/
 ```
----
+
+The detailed Intelligence Calendar implementation should remain modular so that calendar discovery, validation, scheduling, and event correlation can evolve independently.
 
 ## 27. Development Roadmap
 
@@ -1496,6 +2112,83 @@ The platform identifies meaningful developments rather than merely new documents
 
 ---
 
+
+### Parallel Intelligence Calendar Implementation Track
+
+The Intelligence Calendar should be developed as a parallel track aligned with dependencies in the main roadmap.
+
+#### Calendar Phase 1 — Manual Calendar
+
+Begin after the Core Platform foundation exists.
+
+Add:
+
+- `intelligence_calendar_events`
+- manual event entry
+- basic Calendar UI
+- basic recurrence
+
+#### Calendar Phase 2 — Validation and Relationships
+
+Align with Monitoring, Topic, and Entity capabilities.
+
+Add:
+
+- event validation
+- Calendar priority
+- expected news importance
+- event topics
+- event entities
+- event sources
+- event history
+
+#### Calendar Phase 3 — Official and Recurring Calendar Ingestion
+
+Align with Expanded Sources.
+
+Add:
+
+- official-calendar ingestion
+- recurring-event discovery
+- `calendar-discovery-worker`
+
+#### Calendar Phase 4 — Future Event Detection
+
+Align with Local AI and multilingual processing.
+
+Add:
+
+- `future-event-worker`
+- temporal-language detection
+- date normalization
+- AI-discovered candidates
+- candidate deduplication
+
+#### Calendar Phase 5 — Automated Event Scheduler
+
+Align with Monitoring and YouTube capabilities.
+
+Add:
+
+- temporary monitors
+- pre-event monitoring
+- source-polling escalation
+- YouTube monitoring escalation
+- `event-scheduler-worker`
+
+#### Calendar Phase 6 — Story and Event Intelligence
+
+Align with Story Clustering and Advanced Intelligence.
+
+Add:
+
+- Calendar-aware story clustering
+- `event-correlation-worker`
+- scheduled-versus-observed comparison
+- post-event analysis
+
+The detailed Calendar roadmap is maintained in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
+
 ## 28. First Development Sprint
 
 Do not begin with AI.
@@ -1542,6 +2235,11 @@ Once ingestion is stable, add monitoring.
 
 ---
 
+
+The first sprint should not attempt AI-driven Calendar automation.
+
+The Calendar should begin only after the core database, API, queue, and ingestion foundations are stable. A schema placeholder for `intelligence_calendar_events` may be created early, but recurring-event discovery, future-event AI extraction, polling escalation, and automatic monitor activation should follow the phased Calendar roadmap.
+
 ## 29. Decisions Already Made
 
 The following are considered current architectural decisions:
@@ -1567,6 +2265,21 @@ The following are considered current architectural decisions:
 
 ---
 
+
+Additional Intelligence Calendar decisions:
+
+- Intelligence Calendar and Automated Event Scheduler is a first-class subsystem.
+- UI and functional name: Intelligence Calendar.
+- Internal/database namespace: `intelligence_calendar`.
+- Calendar Event is distinct from observed real-world Event.
+- Three Calendar event types: recurring, scheduled one-time, and AI-discovered future events.
+- Four Calendar population sources: recurring-event discovery, manual entry, document extraction, and official-calendar ingestion.
+- Calendar priority is distinct from expected news importance.
+- Validated high-priority events may trigger pre-event monitoring.
+- Temporary monitors may be created and expired automatically.
+- Source polling and YouTube monitoring may be escalated temporarily around important events.
+- Significant Calendar changes must preserve history and provenance.
+
 ## 30. Decisions Requiring Benchmarking
 
 The following should remain open until tested:
@@ -1585,6 +2298,20 @@ The following should remain open until tested:
 These should be decided using actual material from the intended news sources.
 
 ---
+
+
+Calendar-specific benchmarking decisions include:
+
+- future-event extraction confidence thresholds
+- temporal-expression normalization accuracy
+- event-candidate deduplication thresholds
+- source-authority weighting
+- validation confidence thresholds
+- Calendar-event correlation thresholds
+- weight of Calendar priors in story clustering
+- pre-event monitoring windows by event type
+- source-polling escalation intervals
+- local versus OpenAI routing for ambiguous temporal reasoning
 
 ## 31. Benchmark Corpus
 
@@ -1637,6 +2364,26 @@ The benchmark should be rerun whenever models are upgraded.
 
 ---
 
+
+The benchmark corpus should also contain future-event and Calendar-specific examples.
+
+Additional tests should measure:
+
+- future-event detection recall and precision
+- explicit-date extraction
+- relative-date normalization
+- timezone resolution
+- recurring-event interpretation
+- cancellation detection
+- postponement detection
+- rescheduling detection
+- venue-change detection
+- event deduplication
+- source-authority classification
+- Calendar-event correlation
+- scheduled-versus-observed event matching
+- cross-language future-event correlation
+
 ## 32. Initial Performance Target
 
 Design target:
@@ -1665,9 +2412,30 @@ This architecture should allow ingestion volume to grow substantially without AP
 
 ---
 
+
+Calendar automation should not cause routine collection costs to grow linearly with the total number of Calendar Events.
+
+Only the subset of validated events inside an active pre-event, live-event, or post-event monitoring window should trigger escalated collection.
+
+Desired Calendar scheduling behavior:
+
+```text
+All stored Calendar Events
+        ↓
+Filter by status + time window + priority
+        ↓
+Small active event set
+        ↓
+Temporary monitors / polling escalation
+        ↓
+Automatic expiration
+        ↓
+Return sources to normal cadence
+```
+
 ## 33. Core Product Philosophy
 
-The platform should answer three progressively more intelligent questions.
+The platform should answer four progressively more intelligent questions.
 
 Level 1
 
@@ -1681,83 +2449,139 @@ Level 3
 
 What actually happened, what changed, and why should I care?
 
+Level 4
+
+What important events are expected next, and what should the platform begin watching before they happen?
+
 Traditional RSS readers primarily solve Level 1.
 
-This project is intended to solve all three.
+The news-intelligence pipeline is intended to solve Levels 1 through 3.
 
----
+The Intelligence Calendar and Automated Event Scheduler extends the platform to Level 4 by turning known and emerging future events into proactive monitoring activity.
+
+The platform should therefore operate in both directions:
+
+```text
+Reactive Intelligence
+
+Sources
+    ↓
+Documents
+    ↓
+Stories
+    ↓
+Observed Events
+```
+
+and:
+
+```text
+Proactive Intelligence
+
+Known / Predicted Events
+    ↓
+Intelligence Calendar
+    ↓
+Pre-Event Monitoring
+    ↓
+Sources
+    ↓
+Documents
+    ↓
+Stories
+    ↓
+Observed Events
+    ↓
+Calendar Outcome Update
+```
 
 ## 34. Final Architecture Summary
-```
-                           INTELLIGENCE CALENDAR
-                                  │
-                                  ▼
-                           EXPECTED EVENTS
-                                  │
-                                  ▼
-                        PRE-EVENT MONITORING
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │                           │
-                    ▼                           ▼
-             TEMPORARY MONITORS          POLLING ESCALATION
-                    │                           │
-                    └─────────────┬─────────────┘
-                                  │
-                                  ▼
-                           GLOBAL SOURCES
-                RSS / Web / Government / YouTube / Social
-                                  │
-                                  ▼
-                         INGESTION ENGINE
-                                  │
-                                  ▼
-                       NORMALIZED DOCUMENTS
-                                  │
-                                  ▼
-                    FUTURE EVENT DETECTION
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │                           │
-                    ▼                           ▼
-         INTELLIGENCE CALENDAR          KEYWORDS + TOPICS
-          EVENT CANDIDATES                  + ENTITIES
-          / EVENT UPDATES                      │
-                    │                          ▼
-                    │                 LOCAL AI PROCESSING
-                    │                          │
-                    │                          ▼
-                    │                     EMBEDDINGS
-                    │                          │
-                    │                          ▼
-                    │                 STORY CLUSTERING
-                    │                          │
-                    └──────────────┐           │
-                                   ▼           ▼
-                            EVENT CORRELATION
-                                   │
-                    ┌──────────────┴──────────────┐
-                    │                             │
-                    ▼                             ▼
-          INTELLIGENCE CALENDAR          NEW INFORMATION ENGINE
-              EVENT UPDATE                      │
-                    │                     ┌──────┴──────┐
-                    │                     ▼             ▼
-                    │                  Local AI       OpenAI
-                    │                     │             │
-                    │                     └──────┬──────┘
-                    │                            │
-                    └───────────────┬────────────┘
-                                    ▼
-                              STORY DATABASE
-                                    │
-                         ┌──────────┼──────────┐
-                         ▼          ▼          ▼
-                      Web UI      Alerts    Research
-                         │
-                         ▼
-                INTELLIGENCE CALENDAR UI
-```
-The intended result is a modern global news-intelligence platform that combines the collection breadth of an RSS and news-monitoring system with multilingual AI, local GPU processing, semantic search, cross-language story clustering, YouTube intelligence, selective frontier-model reasoning, and an Intelligence Calendar that identifies known and emerging future events, activates pre-event monitoring, escalates source collection, and correlates incoming news with expected real-world events.
 
+```text
+      RECURRING EVENT DISCOVERY
+                │
+          MANUAL EVENT ENTRY
+                │
+     AI FUTURE-EVENT EXTRACTION
+                │
+      OFFICIAL CALENDAR INGESTION
+                │
+                ▼
+       INTELLIGENCE CALENDAR
+                │
+                ▼
+         EXPECTED EVENTS
+                │
+                ▼
+       EVENT VALIDATION
+                │
+                ▼
+   CALENDAR PRIORITY + EXPECTED
+         NEWS IMPORTANCE
+                │
+                ▼
+       PRE-EVENT MONITORING
+                │
+      ┌─────────┴─────────┐
+      │                   │
+      ▼                   ▼
+TEMPORARY MONITORS   POLLING ESCALATION
+      │                   │
+      └─────────┬─────────┘
+                │
+                ▼
+         GLOBAL SOURCES
+RSS / Web / Government / YouTube / Social
+                │
+                ▼
+        INGESTION ENGINE
+                │
+                ▼
+      NORMALIZED DOCUMENTS
+                │
+                ▼
+     FUTURE EVENT DETECTION
+                │
+      ┌─────────┴─────────┐
+      │                   │
+      ▼                   ▼
+INTELLIGENCE CALENDAR   KEYWORDS + TOPICS
+ EVENT CANDIDATES           + ENTITIES
+ / EVENT UPDATES                │
+      │                         ▼
+      │                LOCAL AI PROCESSING
+      │                         │
+      │                         ▼
+      │                    EMBEDDINGS
+      │                         │
+      │                         ▼
+      │                STORY CLUSTERING
+      │                         │
+      └─────────────┐           ▼
+                    │    EVENT CORRELATION
+                    │           │
+                    ▼           ▼
+           INTELLIGENCE   NEW INFORMATION ENGINE
+              CALENDAR            │
+            EVENT UPDATE     ┌─────┴─────┐
+                    │        ▼           ▼
+                    │     Local AI     OpenAI
+                    │        │           │
+                    │        └─────┬─────┘
+                    │              │
+                    └───────┬──────┘
+                            ▼
+                      STORY DATABASE
+                            │
+                 ┌──────────┼──────────┐
+                 ▼          ▼          ▼
+              Web UI      Alerts    Research
+                 │
+                 ▼
+        INTELLIGENCE CALENDAR UI
+```
+
+The intended result is a modern global news-intelligence platform that combines the collection breadth of an RSS and news-monitoring system with multilingual AI, local GPU processing, semantic search, cross-language story clustering, YouTube intelligence, selective frontier-model reasoning, and an Intelligence Calendar that identifies known and emerging future events, validates and prioritizes them, activates pre-event monitoring, creates temporary monitors, escalates source collection, correlates incoming news with expected real-world events, and tracks what actually occurred.
+
+The Master Technical Specification defines how the Intelligence Calendar fits into the platform as a whole. Detailed subsystem behavior, database schemas, validation states, scheduler logic, APIs, monitoring templates, and UI behavior are defined in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
 
