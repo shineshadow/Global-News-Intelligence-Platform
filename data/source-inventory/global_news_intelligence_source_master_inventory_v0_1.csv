@@ -1,1 +1,11 @@
-
+Global News Intelligence Platform - Source Master Discovery Inventory,
+Source of truth,"MASTER_TECHNICAL_SPECIFICATION.md (v0.1, July 18, 2026)"
+Research date,2026-07-19
+Scope,United States; South Korea; Japan; Taiwan; China; North Korea; Philippines; Indo-Pacific regional sources
+Inventory design,Native RSS first; RSSHub/RSS-Bridge candidates; direct scraping; Playwright fallback; changedetection.io for institutional pages; YouTube/yt-dlp for video.
+Orientation metadata,Approximate monitoring metadata only; not a reliability score. Labels are used only where a broad orientation is reasonably established/useful.
+Activity verification caveat,Core sources and current RSS/government examples were web-verified in the July 2026 research pass. Remaining rows are established active sources but must pass an automated endpoint health check before production onboarding.
+RSS verification caveat,"'Availability verified' means an RSS page/feed family was verified, but exact category endpoint harvesting may still be required. Historical/legacy feeds must be health-checked before deployment."
+Phase 1,"Balanced first-onboarding set of 190 sources, within the requested 100-200 range."
+Phase 2,Expansion universe after Phase 1 ingestion health and deduplication are stable.
+Rights / licensing,Full-text storage and redistribution rights differ by source. RSS availability does not imply permission to republish full text.
