@@ -963,6 +963,9 @@ Topic classification
 Entity extraction
       │
       ▼
+Future Event Detection
+      │
+      ▼
 Relevance scoring
       │
       ▼
