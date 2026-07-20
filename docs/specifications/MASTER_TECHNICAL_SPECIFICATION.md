@@ -69,7 +69,7 @@ The platform must be capable of:
 
 1. Monitoring thousands of international news sources.
 2. Processing potentially tens of thousands of new items per day.
-3. Supporting English, Korean, Japanese, Chinese, Filipino and additional languages.
+3. Supporting English, Korean, Japanese, Chinese, Filipino, and additional languages.
 4. Monitoring RSS and Atom feeds.
 5. Generating feeds for websites lacking RSS.
 6. Scraping ordinary and JavaScript-rendered webpages.
@@ -91,12 +91,26 @@ The platform must be capable of:
 22. Correlating stories across languages.
 23. Identifying new information added to an existing story.
 24. Scoring stories for relevance and importance.
-25. Sending configurable alerts.
-26. Maintaining a searchable historical archive.
-27. Providing a Web UI.
-28. Using local AI models whenever practical.
-29. Escalating difficult tasks to OpenAI when beneficial.
-30. Automatically controlling AI API spending.
+25. Maintaining an Intelligence Calendar of known, scheduled, recurring, and AI-discovered future events.
+26. Populating the Intelligence Calendar through recurring-event research, manual entry, automatic future-event extraction from incoming documents, and official-calendar ingestion.
+27. Detecting future-event references and temporal language in incoming multilingual content.
+28. Normalizing explicit and relative dates, times, time zones, and recurrence patterns.
+29. Validating Calendar Events using source authority, corroboration, confidence scoring, and verification status.
+30. Separating Calendar monitoring priority from expected news importance.
+31. Automatically initiating pre-event monitoring for validated high-priority Calendar Events.
+32. Automatically creating and expiring temporary monitors based on upcoming Calendar Events.
+33. Temporarily escalating source polling, YouTube monitoring, keyword monitoring, and other collection activity as important events approach.
+34. Detecting changes to scheduled events, including postponements, cancellations, rescheduling, time changes, and location changes.
+35. Correlating incoming documents and evolving stories with known or expected Calendar Events.
+36. Distinguishing between scheduled Calendar Events and the real-world Events that actually occur.
+37. Tracking whether expected events occurred as scheduled, occurred with changes, were postponed, were cancelled, or did not occur.
+38. Using Calendar Events as prior intelligence signals to improve story clustering, event correlation, and new-development detection.
+39. Sending configurable news, story, event, Calendar, and operational alerts.
+40. Maintaining a searchable historical archive of documents, stories, Events, and Calendar Events.
+41. Providing a Web UI for monitoring news, stories, Events, Intelligence Calendar activity, alerts, sources, and system health.
+42. Using local AI models whenever practical.
+43. Escalating difficult tasks to OpenAI when beneficial.
+44. Automatically controlling AI API spending.
 
 ---
 
