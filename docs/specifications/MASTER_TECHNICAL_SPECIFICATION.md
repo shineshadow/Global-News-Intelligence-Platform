@@ -9,42 +9,57 @@ Version 0.1 — July 18, 2026
 
 ## 1. Project Vision
 
-Build a self-hosted, AI-assisted global news intelligence and monitoring platform capable of continuously collecting, organizing, translating, analyzing, correlating, and alerting on information.
+Build a self-hosted, AI-assisted global news intelligence and monitoring platform capable of continuously collecting, organizing, translating, analyzing, correlating, and alerting on information, while also identifying known and emerging future events, scheduling pre-event monitoring, escalating collection around critical events, and linking incoming reporting to expected and observed real-world developments.
 
 The system is intended to go significantly beyond a conventional RSS reader such as [Inoreader](https://www.inoreader.com/).
 
 The fundamental unit of the system is not merely an article or feed item. The system will distinguish between:
 
 #### Source
-- Organizations
-- Websites
-- Government agencies
-- Election commissions
-- Courts
-- Military agencies
-- YouTube Channels
-- Social Media Platforms
-- Other Publishers
+
+* Organizations
+* Websites
+* Government agencies
+* Election commissions
+* Courts
+* Military agencies
+* YouTube channels
+* Social media platforms
+* Other publishers and information sources
 
 #### Document
-- Individual articles
-- Video Transcripts
-- Social Media Platform Posts
-- Press Releases
-- Scraped Webpages
-- Other Items
+
+* Individual articles
+* Video transcripts
+* Social media posts
+* Press releases
+* Government publications
+* Official statements
+* Scraped webpages
+* Other individual items collected by the platform
 
 #### Story
-A collection of documents describing essentially the same underlying news or development regardless of source, type or language.
+
+A collection of documents describing essentially the same underlying news or development, regardless of source, content type, or language. A story may evolve over time as new documents and developments are discovered.
+
+#### Calendar Event
+
+A known, scheduled, recurring, or AI-discovered future occurrence tracked by the Intelligence Calendar. Calendar Events may trigger pre-event monitoring, temporary monitors, source-polling escalation, and other automated collection activities before and during the expected occurrence.
 
 #### Event
-The real-world occurrence represented by one or more evolving stories.
+
+The real-world occurrence represented by one or more evolving stories. An Event may originate from a previously known Calendar Event or may be identified only after relevant documents and stories begin to emerge.
 
 #### This distinction enables the system to:
-- Consolidate dozens of articles into a single evolving story.
-- Recognize cross-language reporting about the same event.
-- Genuinely identify new developments.
-- Practically eliminate repetitive alerts.
+
+* Consolidate dozens or hundreds of documents into a single evolving story.
+* Recognize cross-language reporting about the same story or real-world event.
+* Correlate incoming reporting with known or expected Calendar Events.
+* Distinguish between what was scheduled or expected and what actually occurred.
+* Identify genuinely new developments within an existing story or event.
+* Proactively increase monitoring before important known events occur.
+* Automatically connect documents, stories, and observed events to the Intelligence Calendar.
+* Practically eliminate repetitive alerts while preserving alerts for meaningful new developments.
 
 ---
 
@@ -1660,42 +1675,75 @@ This project is intended to solve all three.
 
 ## 34. Final Architecture Summary
 ```
-GLOBAL SOURCES
-RSS / Web / Government / YouTube / Social
-                │
-                ▼
-          INGESTION ENGINE
-                │
-                ▼
-       NORMALIZED DOCUMENTS
-                │
-                ▼
-   KEYWORDS + TOPICS + ENTITIES
-                │
-                ▼
-       LOCAL AI PROCESSING
-                │
-                ▼
-          EMBEDDINGS
-                │
-                ▼
-        STORY CLUSTERING
-                │
-                ▼
-      NEW INFORMATION ENGINE
-                │
-          ┌─────┴─────┐
-          ▼           ▼
-       Local AI     OpenAI
-          │           │
-          └─────┬─────┘
-                ▼
-          STORY DATABASE
-                │
-      ┌─────────┼─────────┐
-      ▼         ▼         ▼
-   Web UI     Alerts     Research
+                           INTELLIGENCE CALENDAR
+                                  │
+                                  ▼
+                           EXPECTED EVENTS
+                                  │
+                                  ▼
+                        PRE-EVENT MONITORING
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │                           │
+                    ▼                           ▼
+             TEMPORARY MONITORS          POLLING ESCALATION
+                    │                           │
+                    └─────────────┬─────────────┘
+                                  │
+                                  ▼
+                           GLOBAL SOURCES
+                RSS / Web / Government / YouTube / Social
+                                  │
+                                  ▼
+                         INGESTION ENGINE
+                                  │
+                                  ▼
+                       NORMALIZED DOCUMENTS
+                                  │
+                                  ▼
+                    FUTURE EVENT DETECTION
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │                           │
+                    ▼                           ▼
+         INTELLIGENCE CALENDAR          KEYWORDS + TOPICS
+          EVENT CANDIDATES                  + ENTITIES
+          / EVENT UPDATES                      │
+                    │                          ▼
+                    │                 LOCAL AI PROCESSING
+                    │                          │
+                    │                          ▼
+                    │                     EMBEDDINGS
+                    │                          │
+                    │                          ▼
+                    │                 STORY CLUSTERING
+                    │                          │
+                    └──────────────┐           │
+                                   ▼           ▼
+                            EVENT CORRELATION
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                    ▼                             ▼
+          INTELLIGENCE CALENDAR          NEW INFORMATION ENGINE
+              EVENT UPDATE                      │
+                    │                     ┌──────┴──────┐
+                    │                     ▼             ▼
+                    │                  Local AI       OpenAI
+                    │                     │             │
+                    │                     └──────┬──────┘
+                    │                            │
+                    └───────────────┬────────────┘
+                                    ▼
+                              STORY DATABASE
+                                    │
+                         ┌──────────┼──────────┐
+                         ▼          ▼          ▼
+                      Web UI      Alerts    Research
+                         │
+                         ▼
+                INTELLIGENCE CALENDAR UI
 ```
-The intended result is a modern global news-intelligence platform that combines the collection breadth of an RSS/news-monitoring system with multilingual AI, local GPU processing, semantic search, cross-language story clustering, YouTube intelligence, and selective frontier-model reasoning.
+The intended result is a modern global news-intelligence platform that combines the collection breadth of an RSS and news-monitoring system with multilingual AI, local GPU processing, semantic search, cross-language story clustering, YouTube intelligence, selective frontier-model reasoning, and an Intelligence Calendar that identifies known and emerging future events, activates pre-event monitoring, escalates source collection, and correlates incoming news with expected real-world events.
 
 
