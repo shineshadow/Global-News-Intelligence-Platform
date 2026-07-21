@@ -7,7 +7,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.database import engine
+from app.database import async_session_factory, engine
 from app.redis_client import redis_client
 
 
@@ -45,8 +45,8 @@ async def health_check(response: Response) -> HealthResponse:
     redis_status = "ok"
 
     try:
-        async with engine.connect() as connection:
-            await connection.execute(text("SELECT 1"))
+        async with async_session_factory() as session:
+            await session.execute(text("SELECT 1"))
     except SQLAlchemyError:
         application_status = "degraded"
         database_status = "unavailable"
