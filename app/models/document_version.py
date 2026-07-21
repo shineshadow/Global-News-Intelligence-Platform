@@ -3,9 +3,11 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -18,36 +20,33 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
-    from app.models.document_version import DocumentVersion    
-    from app.models.source import Source
-    from app.models.source_endpoint import SourceEndpoint
+    from app.models.document import Document
 
 
-class Document(Base):
-    """The normalized current version of a collected item."""
+class DocumentVersion(Base):
+    """An immutable historical snapshot of a document."""
 
-    __tablename__ = "documents"
+    __tablename__ = "document_versions"
 
     __table_args__ = (
         UniqueConstraint(
-            "source_endpoint_id",
-            "external_id",
-            name="uq_documents_endpoint_external_id",
+            "document_id",
+            "version_number",
+            name="uq_document_versions_document_version",
+        ),
+        UniqueConstraint(
+            "document_id",
+            "content_hash",
+            name="uq_document_versions_document_hash",
+        ),
+        CheckConstraint(
+            "version_number >= 1",
+            name="version_number_positive",
         ),
         Index(
-            "ix_documents_source_published_at",
-            "source_id",
-            "published_at",
-        ),
-        Index(
-            "ix_documents_endpoint_published_at",
-            "source_endpoint_id",
-            "published_at",
-        ),
-        Index(
-            "ix_documents_source_type_published_at",
-            "source_type",
-            "published_at",
+            "ix_document_versions_document_created_at",
+            "document_id",
+            "created_at",
         ),
     )
 
@@ -57,36 +56,19 @@ class Document(Base):
         autoincrement=True,
     )
 
-    source_id: Mapped[int] = mapped_column(
+    document_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
-            "sources.id",
-            ondelete="RESTRICT",
+            "documents.id",
+            ondelete="CASCADE",
         ),
         nullable=False,
         index=True,
     )
 
-    source_endpoint_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        ForeignKey(
-            "source_endpoints.id",
-            ondelete="SET NULL",
-        ),
-        nullable=True,
-        index=True,
-    )
-
-    source_type: Mapped[str] = mapped_column(
-        String(30),
+    version_number: Mapped[int] = mapped_column(
+        Integer,
         nullable=False,
-        server_default="rss",
-        index=True,
-    )
-
-    external_id: Mapped[str | None] = mapped_column(
-        String(2048),
-        nullable=True,
     )
 
     canonical_url: Mapped[str | None] = mapped_column(
@@ -112,13 +94,11 @@ class Document(Base):
     language: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
-        index=True,
     )
 
     country: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
-        index=True,
     )
 
     author: Mapped[str | None] = mapped_column(
@@ -129,7 +109,6 @@ class Document(Base):
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        index=True,
     )
 
     source_updated_at: Mapped[datetime | None] = mapped_column(
@@ -140,8 +119,6 @@ class Document(Base):
     retrieved_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=func.now(),
-        index=True,
     )
 
     content_hash: Mapped[str] = mapped_column(
@@ -150,7 +127,14 @@ class Document(Base):
         index=True,
     )
 
-    document_metadata: Mapped[dict[str, Any]] = mapped_column(
+    changed_fields: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
+
+    version_metadata: Mapped[dict[str, Any]] = mapped_column(
         "metadata",
         JSONB,
         nullable=False,
@@ -164,31 +148,13 @@ class Document(Base):
         server_default=func.now(),
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
+    document: Mapped["Document"] = relationship(
+        back_populates="versions",
     )
-
-    source: Mapped["Source"] = relationship(
-        back_populates="documents",
-    )
-
-    source_endpoint: Mapped["SourceEndpoint | None"] = relationship(
-        back_populates="documents",
-    )
-
-    versions: Mapped[list["DocumentVersion"]] = relationship(
-        back_populates="document",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-        order_by="DocumentVersion.version_number",
-    )    
 
     def __repr__(self) -> str:
         return (
-            f"Document(id={self.id!r}, "
-            f"source_id={self.source_id!r}, "
-            f"title={self.title_original!r})"
+            f"DocumentVersion(id={self.id!r}, "
+            f"document_id={self.document_id!r}, "
+            f"version_number={self.version_number!r})"
         )
