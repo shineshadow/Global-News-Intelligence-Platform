@@ -423,17 +423,22 @@ PHP and JavaScript may still be used where appropriate.
 
 FastAPI.
 
+FastAPI remains the authoritative application backend for both the intelligence-processing system and the Web UI.
+
 Responsibilities:
 
-- REST API
+- REST APIs
 - internal APIs
+- authentication and authorization
 - source administration
 - search APIs
 - story APIs
 - alert APIs
-- Web UI backend
+- Web UI routes
+- Jinja template rendering
+- HTMX partial-response endpoints
 - AI router integration
-
+- application services and business logic
 
 Intelligence Calendar responsibilities include:
 
@@ -446,9 +451,9 @@ Intelligence Calendar responsibilities include:
 - pre-event monitoring controls
 - Calendar dashboard integration
 
+FastAPI and PostgreSQL must remain the authoritative application and data model. The Web UI must consume this model directly rather than introducing a competing CMS or frontend-owned data model.
+
 ---
-
-
 
 ### 5.4 Primary Database
 
@@ -464,7 +469,6 @@ Initial responsibilities:
 - JSON metadata
 - full-text search
 - embedding storage
-
 
 The database will also store:
 
@@ -482,9 +486,9 @@ The database will also store:
 - scheduled versus observed outcomes
 - durable scheduler state where required
 
+PostgreSQL is the single authoritative data store for the operator interface, administrative interface, APIs, workers, and intelligence-processing pipeline.
+
 ---
-
-
 
 ### 5.5 Vector Extension
 
@@ -525,7 +529,6 @@ Responsibilities:
 - temporary task state
 - counters
 
-
 Calendar-related Redis responsibilities may include:
 
 - event-scheduler queue state
@@ -535,8 +538,6 @@ Calendar-related Redis responsibilities may include:
 - rate-limit coordination during temporary polling escalation
 
 ---
-
-
 
 ### 5.8 Background Processing
 
@@ -577,6 +578,104 @@ Calendar worker responsibilities include:
 Periodic scheduling may use Celery Beat or an equivalent scheduler, but critical schedules should be stored durably and jobs should be idempotent so that worker restarts do not silently lose Calendar actions.
 
 Workers can later be distributed across multiple servers.
+
+---
+
+### 5.9 Web UI Architecture
+
+The Web UI will be a custom Intelligence Operations Console assembled from mature open-source components rather than built entirely from low-level primitives.
+
+The initial UI stack is:
+
+| Function | Technology |
+| --- | --- |
+| Application backend and APIs | FastAPI |
+| Server-side HTML templating | Jinja2 |
+| Dynamic server interaction | HTMX 2.x |
+| Lightweight browser behavior | Alpine.js |
+| Application shell and design system | Tabler |
+| Large interactive data tables | Tabulator |
+| Intelligence Calendar visualization | FullCalendar Standard |
+| Analytics and charts | Apache ECharts |
+| Internal CRUD and maintenance interface | SQLAdmin |
+
+Recommended architecture:
+
+```text
+                         WEB UI
+                            │
+                            ▼
+                          TABLER
+                    Application Shell
+                            │
+          ┌─────────────────┼──────────────────┐
+          │                 │                  │
+          ▼                 ▼                  ▼
+        JINJA             HTMX              ALPINE
+    HTML rendering    Server actions    Browser behavior
+          │
+          ├─────────────────┬──────────────────┐
+          ▼                 ▼                  ▼
+      TABULATOR        FULLCALENDAR         ECHARTS
+        Tables           Calendar           Analytics
+          │                 │                  │
+          └─────────────────┼──────────────────┘
+                            ▼
+                         FASTAPI
+                            │
+                            ▼
+                       POSTGRESQL
+```
+
+The application should use progressive enhancement. Core screens should remain usable through server-rendered HTML, while HTMX and Alpine.js add responsive interaction without requiring a full single-page application or a mandatory Node.js build pipeline.
+
+A React or Next.js frontend should not be introduced initially. A richer client-side component may be added later only for a screen whose demonstrated complexity cannot be handled cleanly by the selected server-rendered stack.
+
+---
+
+### 5.10 Operator and Administrative Interfaces
+
+The platform should distinguish between two user-interface layers:
+
+```text
+                    PLATFORM
+                       │
+          ┌────────────┴────────────┐
+          ▼                         ▼
+   OPERATOR INTERFACE          ADMIN INTERFACE
+
+Tabler + Jinja + HTMX          SQLAdmin
+Custom intelligence           Low-level CRUD and
+workflows and analysis        maintenance operations
+```
+
+The operator interface is the primary product interface and must provide the specialized workflows that make the platform unique.
+
+SQLAdmin may provide rapid internal CRUD access for:
+
+- sources
+- source endpoints
+- topics
+- entities
+- monitor rules
+- Intelligence Calendar events
+- Calendar monitor templates
+- users
+- AI provider settings
+
+SQLAdmin is not a replacement for the operator-facing workflow UI. It is an internal maintenance and administrative tool.
+
+---
+
+### 5.11 CMS Decision
+
+Drupal will not be used as the primary application or Web UI layer.
+
+Although Drupal provides flexible content types and fields, adopting it would introduce a second application framework, a second entity model, additional authentication and permission concerns, and a competing application lifecycle beside FastAPI and PostgreSQL.
+
+The Global News Intelligence Platform is primarily an intelligence operations console for monitoring, filtering, searching, investigating, correlating, reviewing, approving, configuring, and analyzing information. It is not primarily a conventional content-management and webpage-publishing system.
+
+The platform will obtain Drupal-like structured administration through PostgreSQL models, SQLAlchemy, custom FastAPI workflows, and SQLAdmin without introducing a separate CMS as the authoritative data layer.
 
 ## 6. Source Acquisition Layer
 
@@ -1655,34 +1754,196 @@ Critical
 
 ## 21. Web UI
 
-Initial frontend:
+### 21.1 UI Design Philosophy
 
-- FastAPI
-- Jinja
-- HTMX
-- optional Alpine.js
+The Web UI will not be built completely from scratch, and it will not use Drupal as the primary application layer.
 
-A separate React or Next.js frontend may be introduced later.
+The platform will build the intelligence-specific screens and workflows while reusing mature open-source components for common interface primitives.
 
-Initial sections:
+Guiding principle:
+
+> Build the intelligence application itself, but assemble the interface from mature open-source components.
+
+The Web UI is best understood as an:
 
 ```text
-Dashboard
-Breaking
-Intelligence Calendar
-Stories
-Documents
-Alerts
-Sources
-Countries
-Topics
-YouTube
-Monitors
-Entities
-Search
-AI Analysis
-System
+Intelligence Operations Console
 ```
+
+Its primary functions are:
+
+- monitoring
+- filtering
+- searching
+- investigating
+- correlating
+- reviewing
+- validating
+- approving
+- configuring
+- analyzing
+
+It is not primarily designed for conventional webpage publishing or editorial content management.
+
+---
+
+### 21.2 UI Technology Stack
+
+The initial frontend stack is:
+
+- FastAPI
+- Jinja2
+- HTMX 2.x
+- Alpine.js
+- Tabler
+- Tabulator
+- FullCalendar Standard
+- Apache ECharts
+- SQLAdmin for internal administrative CRUD
+
+A separate React or Next.js frontend should not be introduced initially.
+
+The server-rendered architecture should remain the default unless an individual screen later demonstrates a clear need for a richer client-side implementation.
+
+---
+
+### 21.3 Application Shell
+
+Tabler will provide the primary visual shell and design system, including:
+
+- responsive navigation
+- sidebars
+- top navigation
+- cards
+- forms
+- buttons
+- badges
+- tabs
+- modals
+- dropdowns
+- pagination
+- responsive layouts
+- status indicators
+- light and dark modes
+
+The platform will customize Tabler to create a consistent Global News Intelligence visual language without hand-building every general-purpose interface component.
+
+Example structure:
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ GLOBAL NEWS INTELLIGENCE                         Alerts User │
+├────────────────┬─────────────────────────────────────────────┤
+│ Dashboard      │                                             │
+│ Breaking       │         MAIN APPLICATION AREA               │
+│ Intelligence   │                                             │
+│ Calendar       │                                             │
+│ Stories        │                                             │
+│ Documents      │                                             │
+│ Alerts         │                                             │
+│ Sources        │                                             │
+│ Countries      │                                             │
+│ Topics         │                                             │
+│ YouTube        │                                             │
+│ Monitors       │                                             │
+│ Entities       │                                             │
+│ Research       │                                             │
+│ AI Analysis    │                                             │
+│ System         │                                             │
+└────────────────┴─────────────────────────────────────────────┘
+```
+
+---
+
+### 21.4 Server-Rendered Interaction Model
+
+Jinja2 will render full pages, layouts, components, and partial templates.
+
+HTMX will handle server interactions such as:
+
+- filtering result sets
+- sorting and paging
+- expanding related documents
+- changing story status
+- validating Calendar candidates
+- activating monitors
+- loading source-health details
+- updating dashboard cards
+- refreshing alert panels
+
+HTMX endpoints should normally return HTML fragments rather than requiring a second client-side application state model.
+
+Alpine.js will handle lightweight browser-only behavior such as:
+
+- opening and closing panels
+- dropdown state
+- modal state
+- expandable sections
+- local tabs
+- client-side toggles
+- keyboard shortcuts
+- temporary selections
+
+Core workflows should remain functional without depending on a large JavaScript application bundle.
+
+---
+
+### 21.5 Large Data Tables
+
+Tabulator should be used for data-heavy management and investigation screens such as:
+
+- sources
+- source endpoints
+- documents
+- stories
+- Intelligence Calendar candidates
+- AI jobs
+- alerts
+- monitor matches
+- failed workers
+- YouTube channels
+- source health
+
+Required capabilities may include:
+
+- server-side filtering
+- server-side pagination
+- sorting
+- column visibility
+- row selection
+- inline editing where safe
+- virtualized rendering
+- saved views
+- CSV export
+
+The backend must remain responsible for authorization, filtering constraints, validation, and large-dataset query execution.
+
+---
+
+### 21.6 Intelligence Calendar UI
+
+FullCalendar Standard will provide the visual calendar primitives for the Intelligence Calendar, including:
+
+- month view
+- week view
+- day view
+- date navigation
+- event positioning
+- event rendering
+- selectable date ranges
+
+The custom FastAPI application remains responsible for:
+
+- event intelligence
+- validation
+- confidence
+- Calendar priority
+- expected news importance
+- pre-event monitoring
+- temporary monitors
+- source-polling escalation
+- story correlation
+- scheduled-versus-observed outcomes
 
 The Intelligence Calendar should provide views such as:
 
@@ -1724,6 +1985,116 @@ Calendar Event detail pages should expose:
 - relevant YouTube channels
 - event history
 - observed outcome
+
+---
+
+### 21.7 Analytics and Visualization
+
+Apache ECharts should be used for interactive dashboards and analytical visualizations.
+
+Examples include:
+
+- documents per hour
+- story volume by topic
+- source activity by country
+- language distribution
+- alert volume
+- AI costs
+- worker performance
+- source failures
+- Calendar event activity
+- cross-country coverage trends
+- narrative or topic changes over time
+
+Charts must retrieve governed data from FastAPI APIs and should not become an independent analytics data layer.
+
+---
+
+### 21.8 Internal Administrative Interface
+
+SQLAdmin may provide a separate internal interface at a protected route such as:
+
+```text
+/admin
+```
+
+It may be used for low-level management of:
+
+- sources
+- source endpoints
+- topics
+- entities
+- monitor rules
+- Intelligence Calendar events
+- Calendar templates
+- users
+- provider configuration
+
+The SQLAdmin interface must be permission-restricted and should not be treated as the primary operator interface.
+
+---
+
+### 21.9 Main Navigation
+
+Initial sections:
+
+```text
+Dashboard
+Breaking
+Intelligence Calendar
+Stories
+Documents
+Alerts
+Sources
+Countries
+Topics
+YouTube
+Monitors
+Entities
+Search
+Research
+AI Analysis
+System
+```
+
+---
+
+### 21.10 Custom Product Screens
+
+The following screens and workflows are unique to the platform and must be built specifically for it:
+
+- Breaking intelligence view
+- evolving Story interface
+- new-development comparison view
+- source-management workflow
+- source-health workflow
+- Intelligence Calendar validation and scheduling workflow
+- monitor builder
+- event-to-document and event-to-story views
+- cross-language reporting comparison
+- YouTube transcript intelligence view
+- AI Analysis interface
+- research workspace
+- operational worker and ingestion-health views
+
+Open-source components should provide reusable presentation and interaction primitives, but they should not dictate the intelligence domain model or workflow design.
+
+---
+
+### 21.11 Responsive and Accessible Operation
+
+The UI should support desktop-first intelligence work while remaining usable on tablets and mobile devices for alerts, Calendar review, story review, and basic administration.
+
+The interface should support:
+
+- responsive layouts
+- keyboard navigation where practical
+- visible focus states
+- semantic HTML
+- accessible labels
+- dark mode
+- compact high-density views
+- user-configurable table columns and saved filters
 
 ## 22. Search
 
@@ -1891,7 +2262,40 @@ news-intelligence/
 │   ├── schemas/
 │   ├── services/
 │   ├── repositories/
+│   ├── admin/
+│   │   ├── views/
+│   │   ├── authentication/
+│   │   └── configuration/
 │   └── web/
+│       ├── routes/
+│       ├── view_models/
+│       ├── templates/
+│       │   ├── layouts/
+│       │   ├── pages/
+│       │   ├── partials/
+│       │   ├── components/
+│       │   └── errors/
+│       ├── static/
+│       │   ├── css/
+│       │   ├── js/
+│       │   ├── images/
+│       │   └── vendor/
+│       │       ├── tabler/
+│       │       ├── htmx/
+│       │       ├── alpine/
+│       │       ├── tabulator/
+│       │       ├── fullcalendar/
+│       │       └── echarts/
+│       └── ui/
+│           ├── dashboard/
+│           ├── breaking/
+│           ├── stories/
+│           ├── documents/
+│           ├── sources/
+│           ├── monitors/
+│           ├── calendar/
+│           ├── research/
+│           └── system/
 │
 ├── ingestion/
 │   ├── rss/
@@ -1941,11 +2345,30 @@ news-intelligence/
 ├── migrations/
 │
 ├── tests/
+│   ├── api/
+│   ├── services/
+│   ├── workers/
+│   ├── web/
+│   ├── ui/
+│   └── calendar/
+│
+├── docs/
+│   ├── architecture/
+│   │   └── WEB_UI_IMPLEMENTATION_STRATEGY.md
+│   └── specifications/
 │
 └── config/
 ```
 
-The detailed Intelligence Calendar implementation should remain modular so that calendar discovery, validation, scheduling, and event correlation can evolve independently.
+The Web UI should remain modular by product area. Jinja layouts, reusable partials, and UI components should be separated from page-specific templates.
+
+Third-party browser libraries may initially be vendored under `app/web/static/vendor/` or served through a controlled asset pipeline. The initial architecture should not require a Node.js build system merely to operate the application.
+
+If a build pipeline is later introduced for asset optimization, it should remain an implementation detail and must not move application business logic into an independent frontend data model.
+
+The detailed Intelligence Calendar implementation should remain modular so that Calendar discovery, validation, scheduling, monitoring, and event correlation can evolve independently.
+
+The detailed Web UI rationale and component responsibilities are maintained in `docs/architecture/WEB_UI_IMPLEMENTATION_STRATEGY.md`.
 
 ## 27. Development Roadmap
 
@@ -2263,10 +2686,27 @@ The following are considered current architectural decisions:
 - Topic classification
 - YouTube as a first-class source
 
----
+### Web UI Decisions
 
+- The Web UI will be a custom Intelligence Operations Console assembled from mature open-source components.
+- FastAPI and PostgreSQL remain the single authoritative application and data model.
+- Jinja2 will provide server-side HTML templating.
+- HTMX 2.x will provide dynamic server interaction and partial-page updates.
+- Alpine.js will provide lightweight browser-side behavior.
+- Tabler will provide the primary application shell and design system.
+- Tabulator will provide large interactive data tables.
+- FullCalendar Standard will provide Intelligence Calendar visualization.
+- Apache ECharts will provide dashboards and analytical charts.
+- SQLAdmin may provide a separate, permission-restricted internal CRUD and maintenance interface.
+- The operator interface and administrative interface are separate concerns.
+- Drupal will not be used as the primary application, CMS, or authoritative data layer.
+- React or Next.js will not be introduced initially.
+- Server-rendered HTML and progressive enhancement are the default UI architecture.
+- A richer client-side component may be introduced later only where demonstrated complexity justifies it.
+- The initial Web UI should not require a mandatory Node.js build pipeline.
+- Open-source UI components will provide common interface primitives, while intelligence-specific screens and workflows will be custom-built.
 
-Additional Intelligence Calendar decisions:
+### Intelligence Calendar Decisions
 
 - Intelligence Calendar and Automated Event Scheduler is a first-class subsystem.
 - UI and functional name: Intelligence Calendar.
