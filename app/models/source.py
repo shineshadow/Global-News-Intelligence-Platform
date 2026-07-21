@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.document import Document
     from app.models.source_endpoint import SourceEndpoint
 
 class Source(Base):
@@ -97,6 +98,11 @@ class Source(Base):
     endpoints: Mapped[list["SourceEndpoint"]] = relationship(
         back_populates="source",
         cascade="all, delete-orphan",
+        passive_deletes=True,
+    ) 
+       
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="source",
         passive_deletes=True,
     )    
 

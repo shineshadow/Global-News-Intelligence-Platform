@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.document import Document
     from app.models.source import Source
 
 
@@ -160,6 +161,11 @@ class SourceEndpoint(Base):
     source: Mapped["Source"] = relationship(
         back_populates="endpoints",
     )
+
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="source_endpoint",
+        passive_deletes=True,
+    )    
 
     def __repr__(self) -> str:
         return (
