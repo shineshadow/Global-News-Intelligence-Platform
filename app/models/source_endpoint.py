@@ -21,6 +21,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.document import Document
+    from app.models.ingestion_run import IngestionRun
     from app.models.source import Source
 
 
@@ -165,7 +166,12 @@ class SourceEndpoint(Base):
     documents: Mapped[list["Document"]] = relationship(
         back_populates="source_endpoint",
         passive_deletes=True,
-    )    
+    )   
+
+    ingestion_runs: Mapped[list["IngestionRun"]] = relationship(
+        back_populates="source_endpoint",
+        passive_deletes=True,
+    )     
 
     def __repr__(self) -> str:
         return (

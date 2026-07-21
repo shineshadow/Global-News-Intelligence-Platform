@@ -9,6 +9,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.document import Document
+    from app.models.ingestion_run import IngestionRun    
     from app.models.source_endpoint import SourceEndpoint
 
 class Source(Base):
@@ -100,11 +101,16 @@ class Source(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     ) 
-       
+
     documents: Mapped[list["Document"]] = relationship(
         back_populates="source",
         passive_deletes=True,
-    )    
+    )   
+
+    ingestion_runs: Mapped[list["IngestionRun"]] = relationship(
+        back_populates="source",
+        passive_deletes=True,
+    )     
 
     def __repr__(self) -> str:
         return (
