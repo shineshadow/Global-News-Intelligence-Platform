@@ -1,12 +1,14 @@
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import BigInteger, DateTime, Index, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
+if TYPE_CHECKING:
+    from app.models.source_endpoint import SourceEndpoint
 
 class Source(Base):
     """An organization or publisher monitored by the platform."""
@@ -91,6 +93,12 @@ class Source(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+    endpoints: Mapped[list["SourceEndpoint"]] = relationship(
+        back_populates="source",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )    
 
     def __repr__(self) -> str:
         return (
