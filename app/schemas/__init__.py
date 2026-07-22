@@ -1,3 +1,4 @@
+from app.schemas.error import ErrorBody, ErrorResponse
 from app.schemas.source import (
     SourceCreate,
     SourcePriority,
@@ -14,6 +15,8 @@ from app.schemas.source_endpoint import (
 
 __all__ = [
     "EndpointStatus",
+    "ErrorBody",
+    "ErrorResponse",
     "SourceCreate",
     "SourceEndpointCreate",
     "SourceEndpointRead",

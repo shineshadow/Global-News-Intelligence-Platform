@@ -10,6 +10,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.database import async_session_factory, engine
 from app.redis_client import redis_client
 
+from app.api.exception_handlers import register_exception_handlers
+from app.api.router import api_router
+
 
 class HealthResponse(BaseModel):
     """Health status returned by the application."""
@@ -35,6 +38,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+register_exception_handlers(app)
+app.include_router(api_router)
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check(response: Response) -> HealthResponse:
