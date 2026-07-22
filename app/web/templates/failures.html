@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}
+Feed Failures — Global News Intelligence
+{% endblock %}
+
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+
+        <div class="page-pretitle">
+            Diagnostics
+        </div>
+
+        <h2 class="page-title">
+            Failing & Degraded Feeds
+        </h2>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="card">
+
+    <div class="card-header">
+        <h3 class="card-title">
+            Feed Diagnostics
+        </h3>
+    </div>
+
+    <div hx-get="/web/partials/failing-feeds" hx-trigger="every 60s, pollQueued from:body" hx-swap="innerHTML">
+        {% include "partials/failing_feeds_table.html" %}
+    </div>
+
+</div>
+
+{% endblock %}

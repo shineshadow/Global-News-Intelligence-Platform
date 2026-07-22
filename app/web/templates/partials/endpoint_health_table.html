@@ -1,0 +1,107 @@
+{% from "macros/status.html" import badge %}
+
+<div class="table-responsive">
+    <table class="table table-vcenter card-table">
+
+        <thead>
+            <tr>
+                <th>Endpoint</th>
+                <th>Health</th>
+                <th>HTTP</th>
+                <th>Documents</th>
+                <th>Last Success</th>
+                <th>Next Poll</th>
+                <th>Control</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for endpoint in endpoints %}
+            <tr>
+
+                <td>
+                    <div class="fw-bold">
+                        {{ endpoint.endpoint_name }}
+                    </div>
+
+                    <div class="text-secondary small endpoint-url">
+                        {{ endpoint.url }}
+                    </div>
+
+                    {% if endpoint.redirected %}
+                    <div class="text-yellow small">
+                        Redirects to:
+                        {{ endpoint.final_url }}
+                    </div>
+                    {% endif %}
+
+                    {% if endpoint.parse_warning %}
+                    <div class="text-yellow small">
+                        Parser warning:
+                        {{ endpoint.parse_warning }}
+                    </div>
+                    {% endif %}
+
+                    {% if endpoint.last_error %}
+                    <div class="text-red small">
+                        {{ endpoint.last_error }}
+                    </div>
+                    {% endif %}
+                </td>
+
+                <td>
+                    {{ badge(endpoint.health_status) }}
+                </td>
+
+                <td>
+                    {{ endpoint.last_http_status or "—" }}
+                </td>
+
+                <td>
+                    {{ endpoint.document_count | number }}
+                </td>
+
+                <td class="text-nowrap">
+                    {{
+                    endpoint.last_success_at
+                    | datetime_utc
+                    }}
+                </td>
+
+                <td class="text-nowrap">
+                    {{
+                    endpoint.next_poll_at
+                    | datetime_utc
+                    }}
+                </td>
+
+                <td>
+                    <div id="poll-control-{{ endpoint.endpoint_id }}">
+
+                        {% if endpoint.endpoint_status == "active" %}
+
+                        <button type="button" class="btn btn-sm btn-primary" hx-post="{{ url_for(
+                    'web_poll_endpoint',
+                    endpoint_id=endpoint.endpoint_id
+                ) }}" hx-target="#poll-control-{{ endpoint.endpoint_id }}" hx-swap="innerHTML" hx-disabled-elt="this">
+                            Poll now
+                        </button>
+
+                        {% else %}
+
+                        <span class="text-secondary">
+                            Disabled
+                        </span>
+
+                        {% endif %}
+
+                    </div>
+                </td>
+
+            </tr>
+            {% endfor %}
+
+        </tbody>
+    </table>
+</div>

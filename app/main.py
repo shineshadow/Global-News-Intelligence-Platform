@@ -13,6 +13,12 @@ from app.redis_client import redis_client
 from app.api.exception_handlers import register_exception_handlers
 from app.api.router import api_router
 
+from pathlib import Path
+
+from fastapi.staticfiles import StaticFiles
+
+from app.web.routes import router as web_router
+
 
 class HealthResponse(BaseModel):
     """Health status returned by the application."""
@@ -39,6 +45,7 @@ app = FastAPI(
 )
 
 register_exception_handlers(app)
+app.include_router(web_router)
 app.include_router(api_router)
 
 @app.get("/health", response_model=HealthResponse)
@@ -70,3 +77,16 @@ async def health_check(response: Response) -> HealthResponse:
         database=database_status,
         redis=redis_status,
     )
+
+WEB_DIR = (
+    Path(__file__).resolve().parent
+    / "web"
+)
+
+app.mount(
+    "/static",
+    StaticFiles(
+        directory=WEB_DIR / "static",
+    ),
+    name="static",
+)

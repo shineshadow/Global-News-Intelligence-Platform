@@ -1,0 +1,25 @@
+{% macro badge(value) %}
+{% set styles = {
+"healthy": "bg-green-lt",
+"succeeded": "bg-green-lt",
+"active": "bg-green-lt",
+"queued": "bg-blue-lt",
+
+"degraded": "bg-yellow-lt",
+"partial": "bg-yellow-lt",
+"stale": "bg-yellow-lt",
+"never_polled": "bg-blue-lt",
+
+"failing": "bg-red-lt",
+"failed": "bg-red-lt",
+"verification_failed": "bg-red-lt",
+
+"disabled": "bg-secondary-lt",
+"no_endpoints": "bg-secondary-lt",
+"running": "bg-blue-lt"
+} %}
+
+<span class="badge {{ styles.get(value, 'bg-secondary-lt') }}">
+    {{ value | replace("_", " ") | title }}
+</span>
+{% endmacro %}

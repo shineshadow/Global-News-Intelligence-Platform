@@ -1,0 +1,69 @@
+{% from "macros/status.html" import badge %}
+
+{% if failures %}
+
+<div class="table-responsive">
+    <table class="table table-vcenter card-table">
+
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Status</th>
+                <th>HTTP</th>
+                <th>Failures</th>
+                <th>Last Success</th>
+                <th>Error</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for feed in failures %}
+            <tr>
+                <td>
+                    <a href="{{ url_for(
+                'web_source_detail',
+                source_id=feed.source_id
+            ) }}">
+                        {{ feed.source_name }}
+                    </a>
+
+                    <div class="text-secondary small">
+                        {{ feed.endpoint_name }}
+                    </div>
+                </td>
+
+                <td>
+                    {{ badge(feed.health_status) }}
+                </td>
+
+                <td>
+                    {{ feed.last_http_status or "—" }}
+                </td>
+
+                <td>
+                    {{ feed.consecutive_failures }}
+                </td>
+
+                <td class="text-nowrap">
+                    {{ feed.last_success_at | datetime_utc }}
+                </td>
+
+                <td class="error-cell">
+                    {{ feed.last_error or
+                    feed.parse_warning or "—" }}
+                </td>
+            </tr>
+            {% endfor %}
+
+        </tbody>
+    </table>
+</div>
+
+{% else %}
+
+<div class="card-body text-center text-secondary">
+    No failing or degraded feeds.
+</div>
+
+{% endif %}

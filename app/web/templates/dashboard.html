@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}
+Operations Dashboard — Global News Intelligence
+{% endblock %}
+
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+
+        <div class="row g-2 align-items-center">
+            <div class="col">
+
+                <div class="page-pretitle">
+                    Global News Intelligence Platform
+                </div>
+
+                <h2 class="page-title">
+                    Operations Dashboard
+                </h2>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+<div id="summary-cards" hx-get="/web/partials/summary" hx-trigger="every 30s, pollQueued from:body" hx-swap="innerHTML">
+    {% include "partials/summary_cards.html" %}
+</div>
+
+
+<div class="row row-cards mt-3">
+
+    <div class="col-lg-7">
+        <div class="card">
+
+            <div class="card-header">
+                <h3 class="card-title">
+                    Recent Ingestion Runs
+                </h3>
+
+                <div class="card-actions">
+                    <a href="{{ url_for('web_runs') }}">
+                        View all
+                    </a>
+                </div>
+            </div>
+
+            <div hx-get="/web/partials/recent-runs" hx-trigger="every 30s, pollQueued from:body" hx-swap="innerHTML">
+                {% include "partials/recent_runs_table.html" %}
+            </div>
+
+        </div>
+    </div>
+
+
+    <div class="col-lg-5">
+        <div class="card">
+
+            <div class="card-header">
+                <h3 class="card-title">
+                    Feed Problems
+                </h3>
+
+                <div class="card-actions">
+                    <a href="{{ url_for('web_failures') }}">
+                        View all
+                    </a>
+                </div>
+            </div>
+
+            <div hx-get="/web/partials/failing-feeds" hx-trigger="every 60s, pollQueued from:body" hx-swap="innerHTML">
+                {% include "partials/failing_feeds_table.html" %}
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

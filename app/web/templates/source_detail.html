@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ source.name }} — Global News Intelligence
+{% endblock %}
+
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+
+        <div class="page-pretitle">
+            {{ source.country }}
+        </div>
+
+        <h2 class="page-title">
+            {{ source.name }}
+        </h2>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="row row-cards mb-3">
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card">
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Documents
+                </div>
+
+                <div class="h1">
+                    {{ stats.document_count | number }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card">
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Versions
+                </div>
+
+                <div class="h1">
+                    {{ stats.document_version_count | number }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card">
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Ingestion Runs
+                </div>
+
+                <div class="h1">
+                    {{ stats.ingestion_run_count | number }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card">
+            <div class="card-body">
+
+                <div class="text-secondary">
+                    Documents — 24h
+                </div>
+
+                <div class="h1">
+                    {{ stats.documents_last_24h | number }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>
+
+
+<div class="card">
+
+    <div class="card-header">
+        <h3 class="card-title">
+            Endpoint Health
+        </h3>
+    </div>
+
+    <div id="endpoint-health" hx-get="/web/partials/sources/{{ source.id }}/endpoints"
+        hx-trigger="every 30s, pollQueued from:body" hx-swap="innerHTML">
+        {% include "partials/endpoint_health_table.html" %}
+    </div>
+
+</div>
+
+{% endblock %}

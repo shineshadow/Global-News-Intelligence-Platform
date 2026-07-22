@@ -1,0 +1,145 @@
+<div class="row row-cards">
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="text-secondary">
+                    Active Endpoints
+                </div>
+
+                <div class="h1 mb-0">
+                    {{ summary.endpoints_active | number }}
+                </div>
+
+                <div class="text-secondary mt-1">
+                    {{ summary.endpoints_total | number }}
+                    total
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="text-secondary">
+                    Healthy Feeds
+                </div>
+
+                <div class="h1 mb-0">
+                    {{ summary.endpoints_healthy | number }}
+                </div>
+
+                <div class="text-secondary mt-1">
+                    {{ summary.endpoints_failing +
+                    summary.endpoints_degraded }}
+                    failing / degraded
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="text-secondary">
+                    Documents
+                </div>
+
+                <div class="h1 mb-0">
+                    {{ summary.documents_total | number }}
+                </div>
+
+                <div class="text-secondary mt-1">
+                    +{{ summary.documents_last_24h | number }}
+                    last 24h
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="text-secondary">
+                    Ingestion Runs — 24h
+                </div>
+
+                <div class="h1 mb-0">
+                    {{ summary.runs_last_24h | number }}
+                </div>
+
+                <div class="text-secondary mt-1">
+                    {{ summary.failed_runs_last_24h }}
+                    failed ·
+                    {{ summary.http_304_last_24h }}
+                    HTTP 304
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="row row-cards mt-1">
+
+    <div class="col-md-3">
+        <div class="card card-sm">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-secondary">
+                            Items Created — 24h
+                        </div>
+                        <div class="h2 mb-0">
+                            {{ summary.items_created_last_24h | number }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-sm">
+            <div class="card-body">
+                <div class="text-secondary">
+                    Updated
+                </div>
+
+                <div class="h2 mb-0">
+                    {{ summary.items_updated_last_24h | number }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-sm">
+            <div class="card-body">
+                <div class="text-secondary">
+                    Unchanged
+                </div>
+
+                <div class="h2 mb-0">
+                    {{ summary.items_unchanged_last_24h | number }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-sm">
+            <div class="card-body">
+                <div class="text-secondary">
+                    Failed Items
+                </div>
+
+                <div class="h2 mb-0">
+                    {{ summary.items_failed_last_24h | number }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>

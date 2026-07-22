@@ -1,0 +1,68 @@
+{% from "macros/status.html" import badge %}
+
+<div class="table-responsive">
+    <table class="table table-vcenter card-table">
+
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Status</th>
+                <th>HTTP</th>
+                <th>Seen</th>
+                <th>New</th>
+                <th>Updated</th>
+                <th>Failed</th>
+                <th>Finished</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for item in runs %}
+            <tr>
+                <td>
+                    {{ item.source_name }}
+
+                    {% if item.endpoint_name %}
+                    <div class="text-secondary small">
+                        {{ item.endpoint_name }}
+                    </div>
+                    {% endif %}
+                </td>
+
+                <td>
+                    {{ badge(item.run.status) }}
+                </td>
+
+                <td>
+                    {{ item.run.http_status or "—" }}
+                </td>
+
+                <td>
+                    {{ item.run.items_seen }}
+                </td>
+
+                <td>
+                    {{ item.run.items_created }}
+                </td>
+
+                <td>
+                    {{ item.run.items_updated }}
+                </td>
+
+                <td>
+                    {{ item.run.items_failed }}
+                </td>
+
+                <td class="text-nowrap">
+                    {{
+                    item.run.finished_at
+                    | datetime_utc
+                    }}
+                </td>
+            </tr>
+            {% endfor %}
+
+        </tbody>
+    </table>
+</div>

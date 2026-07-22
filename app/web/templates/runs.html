@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}
+Ingestion Runs — Global News Intelligence
+{% endblock %}
+
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+
+        <div class="row align-items-center">
+
+            <div class="col">
+                <div class="page-pretitle">
+                    Ingestion
+                </div>
+
+                <h2 class="page-title">
+                    Ingestion Runs
+                </h2>
+            </div>
+
+            <div class="col-auto ms-auto">
+                <form method="get">
+
+                    <select name="status" class="form-select" onchange="this.form.submit()">
+                        <option value="">
+                            All statuses
+                        </option>
+
+                        {% for value in [
+                        "running",
+                        "succeeded",
+                        "partial",
+                        "failed"
+                        ] %}
+
+                        <option value="{{ value }}" {% if selected_status==value %} selected {% endif %}>
+                            {{ value | title }}
+                        </option>
+
+                        {% endfor %}
+                    </select>
+
+                </form>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="card">
+
+    <div class="card-header">
+        <h3 class="card-title">
+            Most Recent 100 Runs
+        </h3>
+    </div>
+
+    {% include "partials/recent_runs_table.html" %}
+
+</div>
+
+{% endblock %}

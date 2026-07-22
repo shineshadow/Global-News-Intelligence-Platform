@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "macros/status.html" import badge %}
+
+{% block title %}
+Sources — Global News Intelligence
+{% endblock %}
+
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+
+        <div class="page-pretitle">
+            Source Management
+        </div>
+
+        <h2 class="page-title">
+            Sources
+        </h2>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="card">
+
+    <div class="card-header">
+        <h3 class="card-title">
+            {{ sources | length }}
+            Sources
+        </h3>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Country</th>
+                    <th>Priority</th>
+                    <th>Health</th>
+                    <th>Endpoints</th>
+                    <th>Documents</th>
+                    <th>Last Success</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for source in sources %}
+                <tr>
+
+                    <td>
+                        <a class="fw-bold" href="{{ url_for(
+                        'web_source_detail',
+                        source_id=source.id
+                    ) }}">
+                            {{ source.name }}
+                        </a>
+                    </td>
+
+                    <td>
+                        {{ source.country }}
+                    </td>
+
+                    <td>
+                        {{ source.priority | title }}
+                    </td>
+
+                    <td>
+                        {{ badge(source.health_status) }}
+                    </td>
+
+                    <td>
+                        {{ source.active_endpoint_count }}
+                        /
+                        {{ source.endpoint_count }}
+                    </td>
+
+                    <td>
+                        {{ source.document_count | number }}
+                    </td>
+
+                    <td class="text-nowrap">
+                        {{
+                        source.latest_success_at
+                        | datetime_utc
+                        }}
+                    </td>
+
+                </tr>
+                {% endfor %}
+
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+{% endblock %}

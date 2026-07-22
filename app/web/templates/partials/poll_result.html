@@ -1,0 +1,26 @@
+{% if state == "queued" %}
+
+<div class="small text-green mb-1">
+    {{ message }}
+</div>
+
+{% elif state == "warning" %}
+
+<div class="small text-yellow mb-1">
+    {{ message }}
+</div>
+
+{% else %}
+
+<div class="small text-red mb-1">
+    {{ message }}
+</div>
+
+{% endif %}
+
+<button type="button" class="btn btn-sm btn-primary" hx-post="{{ url_for(
+        'web_poll_endpoint',
+        endpoint_id=endpoint_id
+    ) }}" hx-target="#poll-control-{{ endpoint_id }}" hx-swap="innerHTML" hx-disabled-elt="this">
+    Poll again
+</button>
