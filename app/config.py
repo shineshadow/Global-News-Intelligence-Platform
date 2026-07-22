@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str
     redis_url: str
+    test_database_url: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
