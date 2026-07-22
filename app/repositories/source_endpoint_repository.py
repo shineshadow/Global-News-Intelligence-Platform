@@ -96,3 +96,18 @@ async def update_source_endpoint(
     await session.refresh(endpoint)
 
     return endpoint
+
+
+async def get_source_endpoint_by_id_for_update(
+    session: AsyncSession,
+    endpoint_id: int,
+) -> SourceEndpoint | None:
+    """Return and lock an endpoint for the current transaction."""
+
+    statement = (
+        select(SourceEndpoint)
+        .where(SourceEndpoint.id == endpoint_id)
+        .with_for_update()
+    )
+
+    return await session.scalar(statement)

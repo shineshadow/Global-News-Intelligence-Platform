@@ -189,3 +189,9 @@ async def client() -> AsyncIterator[AsyncClient]:
         yield test_client
 
     app.dependency_overrides.clear()
+
+@pytest.fixture
+def database_session_factory():
+    """Expose the isolated test session factory."""
+
+    return test_session_factory
