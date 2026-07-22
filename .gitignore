@@ -12,3 +12,9 @@ htmlcov/
 .coverage
 coverage.xml
 htmlcov/
+
+# Celery runtime files
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
+celeryd.pid

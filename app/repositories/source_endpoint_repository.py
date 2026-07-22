@@ -1,9 +1,9 @@
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import SourceEndpoint
+from app.models import Source, SourceEndpoint
 
 
 async def get_source_endpoint_by_id(
@@ -111,3 +111,44 @@ async def get_source_endpoint_by_id_for_update(
     )
 
     return await session.scalar(statement)
+
+
+async def list_due_source_endpoint_ids(
+    session: AsyncSession,
+    *,
+    limit: int = 500,
+) -> list[int]:
+    """
+    Return active RSS/Atom endpoints that are due for polling.
+
+    A never-polled endpoint has next_poll_at = NULL and is therefore
+    immediately eligible.
+    """
+
+    statement = (
+        select(SourceEndpoint.id)
+        .join(
+            Source,
+            Source.id == SourceEndpoint.source_id,
+        )
+        .where(
+            Source.status == "active",
+            SourceEndpoint.status == "active",
+            SourceEndpoint.endpoint_type.in_(
+                ("rss", "atom")
+            ),
+            or_(
+                SourceEndpoint.next_poll_at.is_(None),
+                SourceEndpoint.next_poll_at <= func.now(),
+            ),
+        )
+        .order_by(
+            SourceEndpoint.next_poll_at.asc().nullsfirst(),
+            SourceEndpoint.id.asc(),
+        )
+        .limit(limit)
+    )
+
+    result = await session.scalars(statement)
+
+    return list(result.all())
