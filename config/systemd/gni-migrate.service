@@ -1,0 +1,21 @@
+[Unit]
+Description=Global News Intelligence database migrations
+Wants=network-online.target
+After=network-online.target postgresql.service redis-server.service
+
+[Service]
+Type=oneshot
+
+User=shine
+Group=shine
+
+WorkingDirectory=/home/shine/python/Projects/Global-News-Intelligence-Platform
+
+EnvironmentFile=/etc/global-news-intelligence/gni.env
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/home/shine/python/Projects/Global-News-Intelligence-Platform/.venv/bin/python -m alembic upgrade head
+
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0027

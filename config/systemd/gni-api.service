@@ -1,0 +1,31 @@
+[Unit]
+Description=Global News Intelligence FastAPI
+Wants=network-online.target
+Requires=gni-migrate.service
+After=network-online.target gni-migrate.service
+
+[Service]
+Type=simple
+
+User=shine
+Group=shine
+
+WorkingDirectory=/home/shine/python/Projects/Global-News-Intelligence-Platform
+
+EnvironmentFile=/etc/global-news-intelligence/gni.env
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/home/shine/python/Projects/Global-News-Intelligence-Platform/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+Restart=on-failure
+RestartSec=5
+
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

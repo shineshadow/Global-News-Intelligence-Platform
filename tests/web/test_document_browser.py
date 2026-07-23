@@ -294,6 +294,100 @@ async def test_document_browser_time_filter(
     assert "Old Article" not in response.text
 
 
+async def test_document_browser_search(
+    client,
+    database_session_factory,
+) -> None:
+    source_id, endpoint_id = (
+        await create_source_endpoint(
+            client
+        )
+    )
+
+    now = datetime.now(UTC)
+
+    await create_document(
+        database_session_factory,
+        source_id=source_id,
+        endpoint_id=endpoint_id,
+        title="China Trade Negotiations",
+        country="United States",
+        language="en",
+        published_at=now,
+    )
+
+    await create_document(
+        database_session_factory,
+        source_id=source_id,
+        endpoint_id=endpoint_id,
+        title="Local Weather Report",
+        country="United States",
+        language="en",
+        published_at=now,
+    )
+
+    response = await client.get(
+        "/web/documents",
+        params={
+            "q": "China",
+            "time": "all",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert (
+        "China Trade Negotiations"
+        in response.text
+    )
+
+    assert (
+        "Local Weather Report"
+        not in response.text
+    )    
+
+
+async def test_document_browser_accepts_blank_source_filter(
+    client,
+    database_session_factory,
+) -> None:
+    source_id, endpoint_id = (
+        await create_source_endpoint(
+            client,
+            country="Japan",
+            language="ja",
+        )
+    )
+
+    await create_document(
+        database_session_factory,
+        source_id=source_id,
+        endpoint_id=endpoint_id,
+        title="Blank Source Filter Test",
+        country="Japan",
+        language="ja",
+        published_at=datetime.now(UTC),
+    )
+
+    response = await client.get(
+        "/web/documents",
+        params={
+            "source_id": "",
+            "country": "Japan",
+            "language": "",
+            "time": "all",
+            "q": "",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert (
+        "Blank Source Filter Test"
+        in response.text
+    )
+
+
 async def test_document_detail_page(
     client,
     database_session_factory,

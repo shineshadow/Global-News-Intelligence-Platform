@@ -71,7 +71,7 @@ async def documents_page(
     request: Request,
     session: DatabaseSession,
 
-    source_id: int | None = None,
+    source_id: str | None = None,
     country: str | None = None,
     language: str | None = None,
 
@@ -98,9 +98,18 @@ async def documents_page(
         le=100,
     ),
 ):
+    
+    parsed_source_id: int | None = None
+
+    if source_id:
+        try:
+            parsed_source_id = int(source_id)
+        except ValueError:
+            parsed_source_id = None
+
     result = await browse_documents(
         session,
-        source_id=source_id,
+        source_id=parsed_source_id,
         country=country,
         language=language,
         time_window=time_window,
@@ -115,7 +124,7 @@ async def documents_page(
     if result.has_previous:
         previous_url = build_browser_url(
             request,
-            source_id=source_id,
+            source_id=parsed_source_id,
             country=country,
             language=language,
             time_window=time_window,
@@ -127,7 +136,7 @@ async def documents_page(
     if result.has_next:
         next_url = build_browser_url(
             request,
-            source_id=source_id,
+            source_id=parsed_source_id,
             country=country,
             language=language,
             time_window=time_window,
@@ -140,7 +149,7 @@ async def documents_page(
         "active_page": "documents",
         "result": result,
 
-        "source_id": source_id,
+        "source_id": parsed_source_id,
         "country": country or "",
         "language": language or "",
         "time_window": time_window,

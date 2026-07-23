@@ -122,25 +122,39 @@ async def get_document_filter_options(
 
     country_rows = (
         await session.scalars(
-            select(Document.country)
+            select(Source.country)
+            .join(
+                Document,
+                Document.source_id == Source.id,
+            )
             .where(
-                Document.country.is_not(None),
-                Document.country != "",
+                Source.country.is_not(None),
+                Source.country != "",
             )
             .distinct()
-            .order_by(Document.country)
+            .order_by(Source.country)
         )
     ).all()
 
+    effective_language = func.coalesce(
+        Document.language,
+        Source.primary_language,
+    )
+
     language_rows = (
         await session.scalars(
-            select(Document.language)
+            select(effective_language)
+            .select_from(Document)
+            .join(
+                Source,
+                Source.id == Document.source_id,
+            )
             .where(
-                Document.language.is_not(None),
-                Document.language != "",
+                effective_language.is_not(None),
+                effective_language != "",
             )
             .distinct()
-            .order_by(Document.language)
+            .order_by(effective_language)
         )
     ).all()
 
@@ -174,6 +188,11 @@ async def browse_documents(
         Document.retrieved_at,
     )
 
+    effective_language = func.coalesce(
+        Document.language,
+        Source.primary_language,
+    )
+
     conditions = []
 
     if source_id is not None:
@@ -183,12 +202,12 @@ async def browse_documents(
 
     if country:
         conditions.append(
-            Document.country == country
+            Source.country == country
         )
 
     if language:
         conditions.append(
-            Document.language == language
+            effective_language == language
         )
 
     cutoff = _time_cutoff(time_window)
@@ -217,6 +236,11 @@ async def browse_documents(
 
     count_statement = (
         select(func.count(Document.id))
+        .select_from(Document)
+        .join(
+            Source,
+            Source.id == Document.source_id,
+        )
     )
 
     if conditions:

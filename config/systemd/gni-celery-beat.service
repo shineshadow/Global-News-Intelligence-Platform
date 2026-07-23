@@ -1,0 +1,34 @@
+[Unit]
+Description=Global News Intelligence Celery Beat
+Wants=network-online.target
+Requires=gni-migrate.service
+After=network-online.target gni-migrate.service redis-server.service
+
+[Service]
+Type=simple
+
+User=shine
+Group=shine
+
+WorkingDirectory=/home/shine/python/Projects/Global-News-Intelligence-Platform
+
+EnvironmentFile=/etc/global-news-intelligence/gni.env
+Environment=PYTHONUNBUFFERED=1
+
+StateDirectory=global-news-intelligence
+StateDirectoryMode=0750
+
+ExecStart=/home/shine/python/Projects/Global-News-Intelligence-Platform/.venv/bin/celery -A workers.celery_app:celery_app beat --loglevel=INFO --schedule=/var/lib/global-news-intelligence/celerybeat-schedule
+
+Restart=on-failure
+RestartSec=5
+
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
