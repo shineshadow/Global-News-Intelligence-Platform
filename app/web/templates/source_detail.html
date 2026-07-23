@@ -9,13 +9,71 @@
 <div class="page-header d-print-none">
     <div class="container-xl">
 
-        <div class="page-pretitle">
-            {{ source.country }}
-        </div>
+        <div class="row g-2 align-items-center">
 
-        <h2 class="page-title">
-            {{ source.name }}
-        </h2>
+            <div class="col">
+                <div class="page-pretitle">
+                    {{ source.country }}
+                </div>
+
+                <h2 class="page-title">
+                    {{ source.name }}
+                </h2>
+
+                <div class="text-secondary mt-1">
+                    Status:
+                    <strong>
+                        {{ source.status | title }}
+                    </strong>
+                </div>
+            </div>
+
+
+            <div class="col-auto ms-auto">
+                <div class="btn-list">
+
+                    <a class="btn" href="{{ url_for(
+                    'web_source_edit',
+                    source_id=source.id
+                ) }}">
+                        Edit Source
+                    </a>
+
+                    <a class="btn btn-primary" href="{{ url_for(
+                    'web_endpoint_new',
+                    source_id=source.id
+                ) }}">
+                        Add Endpoint
+                    </a>
+
+                    {% if source.status == "active" %}
+
+                    <form method="post" action="{{ url_for(
+                    'web_source_disable',
+                    source_id=source.id
+                ) }}">
+                        <button class="btn btn-warning" type="submit">
+                            Disable Source
+                        </button>
+                    </form>
+
+                    {% else %}
+
+                    <form method="post" action="{{ url_for(
+                    'web_source_enable',
+                    source_id=source.id
+                ) }}">
+                        <button class="btn btn-success" type="submit">
+                            Enable Source
+                        </button>
+                    </form>
+
+                    {% endif %}
+
+                </div>
+            </div>
+
+        </div>
 
     </div>
 </div>
@@ -23,6 +81,50 @@
 
 
 {% block content %}
+
+{% if request.query_params.get("created") %}
+<div class="alert alert-success">
+    Source created.
+</div>
+{% endif %}
+
+{% if request.query_params.get("updated") %}
+<div class="alert alert-success">
+    Source updated.
+</div>
+{% endif %}
+
+{% if request.query_params.get("verified") %}
+<div class="alert alert-success">
+    Endpoint verification passed. The endpoint is
+    active and eligible for scheduled polling.
+</div>
+{% endif %}
+
+{% if request.query_params.get(
+"verification_failed"
+) %}
+<div class="alert alert-danger">
+    Endpoint verification failed. The endpoint remains
+    disabled. Review the diagnostic below.
+</div>
+{% endif %}
+
+{% if request.query_params.get(
+"endpoint_enable_blocked"
+) %}
+<div class="alert alert-warning">
+    The endpoint cannot be enabled until it passes
+    verification.
+</div>
+{% endif %}
+
+{% if request.query_params.get("disabled") %}
+<div class="alert alert-warning">
+    Source disabled. Its endpoints will not be
+    scheduled.
+</div>
+{% endif %}
 
 <div class="row row-cards mb-3">
 

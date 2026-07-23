@@ -26,11 +26,21 @@ from app.services.web_ui_service import (
     list_run_overviews,
     list_source_overviews,
 )
+from app.web.lifecycle_routes import (
+    router as lifecycle_router,
+)
 from app.web.templating import templates
 
 
 router = APIRouter(
     include_in_schema=False,
+)
+
+# Lifecycle routes contain fixed paths such as
+# /web/sources/new. Include them before dynamic
+# routes such as /web/sources/{source_id}.
+router.include_router(
+    lifecycle_router
 )
 
 

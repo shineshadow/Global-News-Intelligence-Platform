@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if mode == "create" %}
+New Source
+{% else %}
+Edit {{ source.name }}
+{% endif %}
+— Global News Intelligence
+{% endblock %}
+
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+
+        <div class="page-pretitle">
+            Source Management
+        </div>
+
+        <h2 class="page-title">
+            {% if mode == "create" %}
+            New Source
+            {% else %}
+            Edit {{ source.name }}
+            {% endif %}
+        </h2>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="row">
+    <div class="col-lg-8">
+
+        <div class="card">
+            <div class="card-body">
+
+                <form method="post" action="
+    {% if mode == 'create' %}
+        {{ url_for('web_source_create') }}
+    {% else %}
+        {{ url_for(
+            'web_source_update',
+            source_id=source.id
+        ) }}
+    {% endif %}
+    ">
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Name
+                        </label>
+
+                        <input class="form-control
+            {% if errors.name %}is-invalid{% endif %}" name="name" value="{{ form.get('name', '') }}" required>
+
+                        {% if errors.name %}
+                        <div class="invalid-feedback">
+                            {{ errors.name }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Native Name
+                        </label>
+
+                        <input class="form-control" name="native_name" value="{{ form.get('native_name', '') }}">
+                    </div>
+
+
+                    <div class="row">
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                Country / Region
+                            </label>
+
+                            <input class="form-control" name="country" value="{{ form.get('country', '') }}" required>
+                        </div>
+
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                Primary Language
+                            </label>
+
+                            <input class="form-control" name="primary_language" value="{{ form.get(
+                    'primary_language',
+                    ''
+                ) }}" required>
+                        </div>
+
+                    </div>
+
+
+                    <div class="row">
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                Source Type
+                            </label>
+
+                            <select class="form-select" name="source_type">
+                                {% for value, label in [
+                                ("news", "News Publisher"),
+                                ("news_agency", "News Agency"),
+                                ("government", "Government"),
+                                ("court", "Court"),
+                                ("legislature", "Legislature"),
+                                ("research", "Research / Think Tank"),
+                                ("international_organization",
+                                "International Organization")
+                                ] %}
+
+                                <option value="{{ value }}" {% if form.get( 'source_type' )==value %} selected {% endif
+                                    %}>
+                                    {{ label }}
+                                </option>
+
+                                {% endfor %}
+                            </select>
+                        </div>
+
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                Priority
+                            </label>
+
+                            <select class="form-select" name="priority">
+                                {% for value in [
+                                "low",
+                                "normal",
+                                "high",
+                                "critical"
+                                ] %}
+
+                                <option value="{{ value }}" {% if form.get( 'priority' )==value %} selected {% endif %}>
+                                    {{ value | title }}
+                                </option>
+
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                    </div>
+
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Website URL
+                        </label>
+
+                        <input type="url" class="form-control
+            {% if errors.website_url %}
+            is-invalid
+            {% endif %}" name="website_url" value="{{ form.get(
+                'website_url',
+                ''
+            ) }}">
+
+                        {% if errors.website_url %}
+                        <div class="invalid-feedback">
+                            {{ errors.website_url }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+
+                    <div class="d-flex gap-2">
+
+                        <button type="submit" class="btn btn-primary">
+                            Save Source
+                        </button>
+
+                        <a class="btn" href="
+            {% if source %}
+                {{ url_for(
+                    'web_source_detail',
+                    source_id=source.id
+                ) }}
+            {% else %}
+                {{ url_for('web_sources') }}
+            {% endif %}
+            ">
+                            Cancel
+                        </a>
+
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

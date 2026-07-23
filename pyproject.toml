@@ -29,6 +29,7 @@ dependencies = [
     "redis>=5,<7",
     "httpx",
     "jinja2>=3.1,<4",
+    "python-multipart==0.0.32",
 ]
 
 

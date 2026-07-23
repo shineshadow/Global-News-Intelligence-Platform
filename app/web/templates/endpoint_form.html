@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if mode == "create" %}
+Add Endpoint
+{% else %}
+Edit Endpoint
+{% endif %}
+— {{ source.name }}
+{% endblock %}
+
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+
+        <div class="page-pretitle">
+            {{ source.name }}
+        </div>
+
+        <h2 class="page-title">
+            {% if mode == "create" %}
+            Add RSS / Atom Endpoint
+            {% else %}
+            Edit Endpoint
+            {% endif %}
+        </h2>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="row">
+    <div class="col-lg-8">
+
+        <div class="card">
+            <div class="card-body">
+
+                <div class="alert alert-info">
+                    New endpoints and endpoints whose URL changes
+                    remain disabled until they pass verification.
+                </div>
+
+                <form method="post" action="
+    {% if mode == 'create' %}
+        {{ url_for(
+            'web_endpoint_create',
+            source_id=source.id
+        ) }}
+    {% else %}
+        {{ url_for(
+            'web_endpoint_update',
+            endpoint_id=endpoint.id
+        ) }}
+    {% endif %}
+    ">
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Endpoint Name
+                        </label>
+
+                        <input class="form-control" name="name" value="{{ form.get('name', '') }}" required>
+                    </div>
+
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Type
+                        </label>
+
+                        <select class="form-select" name="endpoint_type">
+                            <option value="rss" {% if form.get( 'endpoint_type' )=='rss' %} selected {% endif %}>
+                                RSS
+                            </option>
+
+                            <option value="atom" {% if form.get( 'endpoint_type' )=='atom' %} selected {% endif %}>
+                                Atom
+                            </option>
+                        </select>
+                    </div>
+
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Feed URL
+                        </label>
+
+                        <input type="url" class="form-control
+            {% if errors.url %}
+            is-invalid
+            {% endif %}" name="url" value="{{ form.get('url', '') }}" required>
+
+                        {% if errors.url %}
+                        <div class="invalid-feedback">
+                            {{ errors.url }}
+                        </div>
+                        {% endif %}
+
+                        {% if mode == "edit" %}
+                        <div class="form-hint">
+                            Changing this URL automatically disables
+                            the endpoint and clears its old HTTP
+                            validators until verification succeeds.
+                        </div>
+                        {% endif %}
+                    </div>
+
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Poll Interval — seconds
+                        </label>
+
+                        <input type="number" min="60" class="form-control" name="poll_interval_seconds" value="{{ form.get(
+                'poll_interval_seconds',
+                '900'
+            ) }}" required>
+
+                        <div class="form-hint">
+                            900 seconds = 15 minutes.
+                        </div>
+                    </div>
+
+
+                    <div class="d-flex gap-2">
+
+                        <button type="submit" name="action" value="save_verify" class="btn btn-primary">
+                            Save & Verify
+                        </button>
+
+                        <button type="submit" name="action" value="save" class="btn">
+                            Save Only
+                        </button>
+
+                        <a class="btn btn-link" href="{{ url_for(
+                'web_source_detail',
+                source_id=source.id
+            ) }}">
+                            Cancel
+                        </a>
+
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
