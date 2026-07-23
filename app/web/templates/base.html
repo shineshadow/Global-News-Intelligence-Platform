@@ -61,7 +61,7 @@
                             {% if active_page == 'dashboard' %}
                             active
                             {% endif %}
-                        ">
+                            ">
                                 <a class="nav-link" href="{{ url_for('web_dashboard') }}">
                                     Dashboard
                                 </a>
@@ -71,9 +71,19 @@
                             {% if active_page == 'sources' %}
                             active
                             {% endif %}
-                        ">
+                            ">
                                 <a class="nav-link" href="{{ url_for('web_sources') }}">
                                     Sources
+                                </a>
+                            </li>
+
+                            <li class="nav-item
+                                {% if active_page == 'documents' %}
+                                active
+                                {% endif %}
+                            ">
+                                <a class="nav-link" href="{{ url_for('web_documents') }}">
+                                    News Feed
                                 </a>
                             </li>
 
@@ -81,7 +91,7 @@
                             {% if active_page == 'runs' %}
                             active
                             {% endif %}
-                        ">
+                            ">
                                 <a class="nav-link" href="{{ url_for('web_runs') }}">
                                     Ingestion Runs
                                 </a>
@@ -91,7 +101,7 @@
                             {% if active_page == 'failures' %}
                             active
                             {% endif %}
-                        ">
+                            ">
                                 <a class="nav-link" href="{{ url_for('web_failures') }}">
                                     Failures
                                 </a>

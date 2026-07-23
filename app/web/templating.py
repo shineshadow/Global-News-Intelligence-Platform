@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -31,9 +32,26 @@ def datetime_utc(
 def number(value: int | None) -> str:
     return f"{value or 0:,}"
 
+def json_pretty(
+    value,
+) -> str:
+    if value is None:
+        return "{}"
+
+    return json.dumps(
+        value,
+        indent=2,
+        ensure_ascii=False,
+        default=str,
+    )
+
 
 templates.env.filters["datetime_utc"] = (
     datetime_utc
 )
 
 templates.env.filters["number"] = number
+
+templates.env.filters["json_pretty"] = (
+    json_pretty
+)

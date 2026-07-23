@@ -29,6 +29,11 @@ from app.services.web_ui_service import (
 from app.web.lifecycle_routes import (
     router as lifecycle_router,
 )
+
+from app.web.document_routes import (
+    router as document_router,
+)
+
 from app.web.templating import templates
 
 
@@ -41,6 +46,10 @@ router = APIRouter(
 # routes such as /web/sources/{source_id}.
 router.include_router(
     lifecycle_router
+)
+
+router.include_router(
+    document_router
 )
 
 

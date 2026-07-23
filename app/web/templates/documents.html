@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}
+News Feed — Global News Intelligence
+{% endblock %}
+
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+
+        <div class="page-pretitle">
+            Intelligence Collection
+        </div>
+
+        <h2 class="page-title">
+            News Feed
+        </h2>
+
+    </div>
+</div>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="card mb-3">
+
+    <div class="card-body">
+
+        <form id="document-filter-form" method="get" action="{{ url_for('web_documents') }}"
+            hx-get="{{ url_for('web_documents') }}" hx-target="#document-results" hx-swap="innerHTML"
+            hx-push-url="true">
+
+            <div class="row g-2">
+
+
+                <div class="col-lg-3">
+
+                    <label class="form-label">
+                        Source
+                    </label>
+
+                    <select class="form-select" name="source_id">
+
+                        <option value="">
+                            All sources
+                        </option>
+
+                        {% for source in options.sources %}
+
+                        <option value="{{ source.id }}" {% if source_id==source.id %} selected {% endif %}>
+                            {{ source.name }}
+                        </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                <div class="col-lg-2">
+
+                    <label class="form-label">
+                        Country / Region
+                    </label>
+
+                    <select class="form-select" name="country">
+
+                        <option value="">
+                            All
+                        </option>
+
+                        {% for value in options.countries %}
+
+                        <option value="{{ value }}" {% if country==value %} selected {% endif %}>
+                            {{ value }}
+                        </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                <div class="col-lg-2">
+
+                    <label class="form-label">
+                        Language
+                    </label>
+
+                    <select class="form-select" name="language">
+
+                        <option value="">
+                            All
+                        </option>
+
+                        {% for value in options.languages %}
+
+                        <option value="{{ value }}" {% if language==value %} selected {% endif %}>
+                            {{ value }}
+                        </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                <div class="col-lg-2">
+
+                    <label class="form-label">
+                        Time
+                    </label>
+
+                    <select class="form-select" name="time">
+
+                        {% for value, label in [
+                        ("24h", "Last 24 hours"),
+                        ("7d", "Last 7 days"),
+                        ("30d", "Last 30 days"),
+                        ("all", "All time")
+                        ] %}
+
+                        <option value="{{ value }}" {% if time_window==value %} selected {% endif %}>
+                            {{ label }}
+                        </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                <div class="col-lg-3">
+
+                    <label class="form-label">
+                        Search
+                    </label>
+
+                    <input class="form-control" type="search" name="q" value="{{ q }}" placeholder="Title or summary">
+
+                </div>
+
+            </div>
+
+
+            <div class="d-flex gap-2 mt-3">
+
+                <button type="submit" class="btn btn-primary">
+                    Apply Filters
+                </button>
+
+                <a class="btn" href="{{ url_for('web_documents') }}">
+                    Clear
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+
+<div id="document-results">
+
+    {% include "partials/document_list.html" %}
+
+</div>
+
+{% endblock %}

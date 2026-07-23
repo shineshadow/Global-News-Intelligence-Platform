@@ -1,0 +1,628 @@
+{% extends "base.html" %}
+{% from "macros/status.html" import badge %}
+
+{% block title %}
+{{ detail.document.title_original or "Document" }}
+— Global News Intelligence
+{% endblock %}
+
+
+{% block page_header %}
+
+<div class="page-header d-print-none">
+
+    <div class="container-xl">
+
+        <div class="row g-2 align-items-start">
+
+            <div class="col">
+
+                <div class="page-pretitle">
+
+                    <a href="{{ url_for(
+            'web_source_detail',
+            source_id=detail.source.id
+        ) }}">
+                        {{ detail.source.name }}
+                    </a>
+
+                </div>
+
+                <h2 class="page-title">
+                    {{
+                    detail.document.title_original
+                    or "(Untitled document)"
+                    }}
+                </h2>
+
+
+                <div class="mt-2">
+
+                    {% if detail.document.country %}
+                    <span class="badge bg-secondary-lt">
+                        {{ detail.document.country }}
+                    </span>
+                    {% endif %}
+
+                    {% if detail.document.language %}
+                    <span class="badge bg-secondary-lt">
+                        {{ detail.document.language }}
+                    </span>
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+
+            <div class="col-auto">
+
+                {% if detail.document.canonical_url %}
+
+                <a class="btn btn-primary" href="{{ detail.document.canonical_url }}" target="_blank"
+                    rel="noopener noreferrer">
+                    Open Original Article
+                </a>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block content %}
+
+
+<div class="row row-cards">
+
+
+    <div class="col-lg-8">
+
+
+        <div class="card mb-3">
+
+            <div class="card-header">
+                <h3 class="card-title">
+                    Original Content
+                </h3>
+            </div>
+
+            <div class="card-body">
+
+
+                {% if detail.document.summary_original %}
+
+                <h4>Summary</h4>
+
+                <div class="document-original mb-4">
+                    {{ detail.document.summary_original }}
+                </div>
+
+                {% endif %}
+
+
+                {% if detail.document.content_original %}
+
+                <h4>Feed-Provided Content</h4>
+
+                <pre class="document-original-content">{{ detail.document.content_original }}</pre>
+
+                {% else %}
+
+                <div class="text-secondary">
+                    This feed did not provide full article content.
+                    Use the original article link to view the publisher's page.
+                </div>
+
+                {% endif %}
+
+
+            </div>
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Version History
+                </h3>
+
+                <div class="card-actions">
+                    {{ detail.versions | length }}
+                    historical versions
+                </div>
+
+            </div>
+
+
+            {% if detail.versions %}
+
+            <div class="card-body">
+
+                {% for version in detail.versions %}
+
+                <details class="document-version mb-3">
+
+                    <summary class="fw-bold">
+
+                        Version {{ version.version_number }}
+
+                        —
+
+                        {{ version.created_at | datetime_utc }}
+
+                    </summary>
+
+
+                    <div class="mt-3 ps-3">
+
+                        {% if version.changed_fields %}
+
+                        <div class="mb-2">
+
+                            <strong>
+                                Changed fields:
+                            </strong>
+
+                            {{
+                            version.changed_fields
+                            | join(", ")
+                            }}
+
+                        </div>
+
+                        {% endif %}
+
+
+                        <dl class="row">
+
+                            <dt class="col-sm-3">
+                                Content hash
+                            </dt>
+
+                            <dd class="col-sm-9 font-monospace">
+                                {{ version.content_hash }}
+                            </dd>
+
+
+                            <dt class="col-sm-3">
+                                Retrieved
+                            </dt>
+
+                            <dd class="col-sm-9">
+                                {{
+                                version.retrieved_at
+                                | datetime_utc
+                                }}
+                            </dd>
+
+
+                            <dt class="col-sm-3">
+                                Published
+                            </dt>
+
+                            <dd class="col-sm-9">
+                                {{
+                                version.published_at
+                                | datetime_utc
+                                }}
+                            </dd>
+
+                        </dl>
+
+
+                        {% if version.title_original %}
+
+                        <h4>
+                            {{ version.title_original }}
+                        </h4>
+
+                        {% endif %}
+
+
+                        {% if version.summary_original %}
+
+                        <div class="document-original mb-3">
+                            {{ version.summary_original }}
+                        </div>
+
+                        {% endif %}
+
+
+                        {% if version.content_original %}
+
+                        <pre class="document-original-content">{{ version.content_original }}</pre>
+
+                        {% endif %}
+
+
+                        {% if version.version_metadata %}
+
+                        <details class="mt-3">
+
+                            <summary>
+                                Version metadata
+                            </summary>
+
+                            <pre class="metadata-json mt-2">{{ version.version_metadata | json_pretty }}</pre>
+
+                        </details>
+
+                        {% endif %}
+
+                    </div>
+
+                </details>
+
+                {% endfor %}
+
+            </div>
+
+
+            {% else %}
+
+            <div class="card-body text-secondary">
+                This document has not changed since its
+                first ingestion.
+            </div>
+
+            {% endif %}
+
+        </div>
+
+
+    </div>
+
+
+    <div class="col-lg-4">
+
+
+        <div class="card mb-3">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Document Metadata
+                </h3>
+
+            </div>
+
+            <div class="card-body">
+
+                <dl>
+
+                    <dt>
+                        Source
+                    </dt>
+
+                    <dd>
+                        <a href="{{ url_for(
+            'web_source_detail',
+            source_id=detail.source.id
+        ) }}">
+                            {{ detail.source.name }}
+                        </a>
+                    </dd>
+
+
+                    <dt>
+                        Author
+                    </dt>
+
+                    <dd>
+                        {{ detail.document.author or "—" }}
+                    </dd>
+
+
+                    <dt>
+                        Published
+                    </dt>
+
+                    <dd>
+                        {{
+                        detail.document.published_at
+                        | datetime_utc
+                        }}
+                    </dd>
+
+
+                    <dt>
+                        Source Updated
+                    </dt>
+
+                    <dd>
+                        {{
+                        detail.document.source_updated_at
+                        | datetime_utc
+                        }}
+                    </dd>
+
+
+                    <dt>
+                        Retrieved
+                    </dt>
+
+                    <dd>
+                        {{
+                        detail.document.retrieved_at
+                        | datetime_utc
+                        }}
+                    </dd>
+
+
+                    <dt>
+                        External ID
+                    </dt>
+
+                    <dd class="text-break">
+                        {{
+                        detail.document.external_id
+                        or "—"
+                        }}
+                    </dd>
+
+
+                    <dt>
+                        Content Hash
+                    </dt>
+
+                    <dd class="font-monospace text-break">
+                        {{ detail.document.content_hash }}
+                    </dd>
+
+
+                    <dt>
+                        Source Type
+                    </dt>
+
+                    <dd>
+                        {{ detail.document.source_type }}
+                    </dd>
+
+                </dl>
+
+            </div>
+
+        </div>
+
+
+        <div class="card mb-3">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Ingestion Endpoint
+                </h3>
+
+            </div>
+
+            <div class="card-body">
+
+                {% if detail.endpoint %}
+
+                <dl>
+
+                    <dt>
+                        Endpoint
+                    </dt>
+
+                    <dd>
+                        {{ detail.endpoint.name }}
+                    </dd>
+
+
+                    <dt>
+                        URL
+                    </dt>
+
+                    <dd class="text-break">
+                        {{ detail.endpoint.url }}
+                    </dd>
+
+
+                    <dt>
+                        Status
+                    </dt>
+
+                    <dd>
+                        {{ badge(detail.endpoint.status) }}
+                    </dd>
+
+
+                    <dt>
+                        Last HTTP Status
+                    </dt>
+
+                    <dd>
+                        {{
+                        detail.endpoint.last_http_status
+                        or "—"
+                        }}
+                    </dd>
+
+
+                    <dt>
+                        Last Success
+                    </dt>
+
+                    <dd>
+                        {{
+                        detail.endpoint.last_success_at
+                        | datetime_utc
+                        }}
+                    </dd>
+
+                </dl>
+
+                {% else %}
+
+                <div class="text-secondary">
+                    This document is not associated with a
+                    source endpoint.
+                </div>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <div class="card mb-3">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Latest Endpoint Run
+                </h3>
+
+            </div>
+
+            <div class="card-body">
+
+                {% if detail.latest_endpoint_run %}
+
+                {% set run = detail.latest_endpoint_run %}
+
+                <div class="mb-3">
+                    {{ badge(run.status) }}
+                </div>
+
+                <dl>
+
+                    <dt>
+                        Run ID
+                    </dt>
+
+                    <dd>
+                        {{ run.id }}
+                    </dd>
+
+
+                    <dt>
+                        Trigger
+                    </dt>
+
+                    <dd>
+                        {{ run.trigger_type }}
+                    </dd>
+
+
+                    <dt>
+                        HTTP Status
+                    </dt>
+
+                    <dd>
+                        {{ run.http_status or "—" }}
+                    </dd>
+
+
+                    <dt>
+                        Finished
+                    </dt>
+
+                    <dd>
+                        {{ run.finished_at | datetime_utc }}
+                    </dd>
+
+
+                    <dt>
+                        Items Seen
+                    </dt>
+
+                    <dd>
+                        {{ run.items_seen }}
+                    </dd>
+
+
+                    <dt>
+                        Created
+                    </dt>
+
+                    <dd>
+                        {{ run.items_created }}
+                    </dd>
+
+
+                    <dt>
+                        Updated
+                    </dt>
+
+                    <dd>
+                        {{ run.items_updated }}
+                    </dd>
+
+
+                    <dt>
+                        Unchanged
+                    </dt>
+
+                    <dd>
+                        {{ run.items_unchanged }}
+                    </dd>
+
+
+                    <dt>
+                        Failed
+                    </dt>
+
+                    <dd>
+                        {{ run.items_failed }}
+                    </dd>
+
+                </dl>
+
+
+                <div class="alert alert-info small">
+                    This is the latest run for the endpoint,
+                    not necessarily the exact run that originally
+                    created this document.
+                </div>
+
+
+                {% else %}
+
+                <div class="text-secondary">
+                    No ingestion run is available.
+                </div>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="card-header">
+
+                <h3 class="card-title">
+                    Stored Metadata
+                </h3>
+
+            </div>
+
+            <div class="card-body">
+
+                <pre class="metadata-json">{{ detail.document.document_metadata | json_pretty }}</pre>
+
+            </div>
+
+        </div>
+
+
+    </div>
+
+</div>
+
+{% endblock %}

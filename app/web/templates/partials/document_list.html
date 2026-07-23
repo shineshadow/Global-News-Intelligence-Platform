@@ -1,0 +1,205 @@
+<div class="card">
+
+    <div class="card-header">
+
+        <h3 class="card-title">
+            {{ result.total | number }}
+            Documents
+        </h3>
+
+        <div class="card-actions text-secondary">
+            Page
+            {{ result.page | number }}
+            of
+            {{ result.page_count | number }}
+        </div>
+
+    </div>
+
+
+    {% if result.items %}
+
+    <div class="list-group list-group-flush">
+
+        {% for item in result.items %}
+
+        <div class="list-group-item">
+
+            <div class="row">
+
+                <div class="col">
+
+                    <div class="mb-1">
+
+                        <a class="fw-bold document-title" href="{{ url_for(
+                'web_document_detail',
+                document_id=item.id
+            ) }}">
+                            {{ item.title }}
+                        </a>
+
+                    </div>
+
+
+                    <div class="mb-2">
+
+                        <span class="badge bg-blue-lt">
+                            {{ item.source_name }}
+                        </span>
+
+                        {% if item.country %}
+                        <span class="badge bg-secondary-lt">
+                            {{ item.country }}
+                        </span>
+                        {% endif %}
+
+                        {% if item.language %}
+                        <span class="badge bg-secondary-lt">
+                            {{ item.language }}
+                        </span>
+                        {% endif %}
+
+                    </div>
+
+
+                    {% if item.summary %}
+
+                    <div class="text-secondary document-summary">
+                        {{ item.summary }}
+                    </div>
+
+                    {% endif %}
+
+
+                    <div class="small text-secondary mt-2">
+
+                        {% if item.author %}
+                        {{ item.author }}
+                        ·
+                        {% endif %}
+
+                        {% if item.published_at %}
+                        Published
+                        {{
+                        item.published_at
+                        | datetime_utc
+                        }}
+                        {% else %}
+                        Retrieved
+                        {{
+                        item.retrieved_at
+                        | datetime_utc
+                        }}
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+
+                <div class="col-auto">
+
+                    <a class="btn btn-sm" href="{{ url_for(
+            'web_document_detail',
+            document_id=item.id
+        ) }}">
+                        View
+                    </a>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+
+    <div class="card-footer">
+
+        <div class="d-flex justify-content-between">
+
+            <div>
+
+                {% if previous_url %}
+
+                <a class="btn" href="{{ previous_url }}" hx-get="{{ previous_url }}" hx-target="#document-results"
+                    hx-swap="innerHTML" hx-push-url="true">
+                    ← Previous
+                </a>
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="text-secondary align-self-center">
+
+                Showing
+
+                {{
+                (
+                (result.page - 1)
+                * result.page_size
+                + 1
+                )
+                | number
+                }}
+
+                –
+
+                {{
+                [
+                result.page
+                * result.page_size,
+                result.total
+                ]
+                | min
+                | number
+                }}
+
+                of
+
+                {{ result.total | number }}
+
+            </div>
+
+
+            <div>
+
+                {% if next_url %}
+
+                <a class="btn" href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#document-results"
+                    hx-swap="innerHTML" hx-push-url="true">
+                    Next →
+                </a>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    {% else %}
+
+    <div class="card-body py-5 text-center">
+
+        <h3>
+            No documents found
+        </h3>
+
+        <div class="text-secondary">
+            Try widening the time range or clearing
+            one of the filters.
+        </div>
+
+    </div>
+
+    {% endif %}
+
+</div>

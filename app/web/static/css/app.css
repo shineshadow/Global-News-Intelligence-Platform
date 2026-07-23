@@ -16,3 +16,76 @@
 table td {
     vertical-align: middle;
 }
+
+.document-title {
+    font-size: 1rem;
+}
+
+.document-summary {
+    max-width: 70rem;
+    line-height: 1.5;
+}
+
+.document-original {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+}
+
+.document-original-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+
+    max-height: 60rem;
+
+    padding: 1rem;
+
+    border: 1px solid
+        var(--tblr-border-color);
+
+    border-radius:
+        var(--tblr-border-radius);
+
+    background:
+        var(--tblr-bg-surface-secondary);
+
+    color: 
+        var(--tblr-body-color);
+
+    font-family:
+        var(--tblr-font-sans-serif);
+
+    font-size: 0.875rem;
+
+    line-height: 1.6;
+}
+
+.metadata-json {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+
+    max-height: 30rem;
+
+    overflow-y: auto;
+
+    border: 1px solid
+        var(--tblr-border-color);
+
+    border-radius:
+        var(--tblr-border-radius);
+
+    background:
+        var(--tblr-bg-surface-secondary);    
+
+    color: 
+        var(--tblr-body-color);    
+
+    font-size: 0.75rem;
+}
+
+.document-version {
+    border-bottom: 1px solid
+        var(--tblr-border-color);
+
+    padding-bottom: 1rem;
+}
