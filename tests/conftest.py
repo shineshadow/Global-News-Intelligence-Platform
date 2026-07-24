@@ -117,6 +117,8 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            entity_aliases,
+            entities,
             document_versions,
             documents,
             ingestion_runs,
