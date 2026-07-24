@@ -151,3 +151,4 @@ def test_parse_rejects_non_feed_content() -> None:
             base_url="https://example.com/feed.xml",
             content_type="text/html",
         )
+

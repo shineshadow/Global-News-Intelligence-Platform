@@ -11,6 +11,7 @@ from app.services.exceptions import (
     ResourceConflictError,
     ResourceNotFoundError,
     ServiceError,
+    ServiceUnavailableError,
 )
 
 
@@ -89,6 +90,23 @@ async def request_validation_handler(
     )
 
 
+##@app.exception_handler(ServiceUnavailableError)
+async def service_unavailable_handler(
+    _request: Request,
+    exception: ServiceUnavailableError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": "service_unavailable",
+                "message": str(exception),
+                "details": None,
+            }
+        },
+    )
+
+
 async def unhandled_service_error_handler(
     _request: Request,
     exception: ServiceError,
@@ -134,3 +152,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         ServiceError,
         unhandled_service_error_handler,
     )
+
+    app.add_exception_handler(
+        ServiceUnavailableError,
+        service_unavailable_handler,
+    )    

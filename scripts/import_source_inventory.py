@@ -10,12 +10,12 @@ from app.services.source_inventory_service import (
 
 DEFAULT_SOURCES = Path(
     "data/source-inventory/"
-    "phase1_native_rss_sources_v0_1.csv"
+    "phase1_native_rss_sources_v0_2_batch_b.csv"
 )
 
 DEFAULT_ENDPOINTS = Path(
     "data/source-inventory/"
-    "phase1_native_rss_endpoints_v0_1.csv"
+    "phase1_native_rss_endpoints_v0_2_batch_b.csv"
 )
 
 

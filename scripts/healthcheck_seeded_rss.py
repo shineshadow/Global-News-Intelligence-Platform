@@ -16,7 +16,7 @@ from app.services.rss_health_service import (
 from ingestion.rss.fetcher import DEFAULT_TIMEOUT
 
 
-DEFAULT_BATCH = "phase1-native-rss-v0.1"
+DEFAULT_BATCH = "phase1-native-rss-v0.2-batch-b"
 
 
 def build_parser() -> argparse.ArgumentParser:

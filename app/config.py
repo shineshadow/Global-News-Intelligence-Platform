@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     redis_url: str
     test_database_url: str | None = None
 
-    celery_broker_url: str = "redis://localhost:6379/1"
-    celery_lock_url: str = "redis://localhost:6379/2"
+    celery_broker_url: str
+    celery_lock_url: str
 
     celery_endpoint_claim_ttl_seconds: int = 3600
     celery_dispatch_interval_seconds: int = 30

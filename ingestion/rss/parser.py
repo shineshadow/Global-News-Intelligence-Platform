@@ -296,9 +296,6 @@ def _parse_item(
 
     content = _entry_content(entry)
 
-    if content is None:
-        content = summary
-
     author = _limited_string(
         entry.get("author"),
         max_length=512,

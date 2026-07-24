@@ -12,3 +12,7 @@ class ResourceConflictError(ServiceError):
 
 class InvalidUpdateError(ServiceError):
     """Raised when an update violates a business rule."""
+
+
+class ServiceUnavailableError(ServiceError):
+    """Required infrastructure is temporarily unavailable."""
