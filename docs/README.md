@@ -6,6 +6,7 @@ Generated files:
 - `API_SPECIFICATION.md`
 - `ARCHITECTURE.md`
 - `BENCHMARK_PROCEDURES.md`
+- `CANONICAL_TOPIC_TAXONOMY.md` — authoritative frozen 23-root topic taxonomy and versioning policy
 - `DATABASE_SCHEMA_SPECIFICATION.md`
 - `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`
 - `IMPLEMENTATION.md`

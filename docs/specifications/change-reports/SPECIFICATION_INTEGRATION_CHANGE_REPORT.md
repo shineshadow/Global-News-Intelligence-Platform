@@ -68,3 +68,22 @@ MIGRATION_PLAN.md
 BENCHMARK_PROCEDURES.md
 UI_IMPLEMENTATION_NOTES.md
 ```
+
+
+---
+
+## Taxonomy v1.0 Freeze — Package v0.4
+
+The canonical topic root layer was formally frozen at taxonomy version `1.0`.
+
+Changes:
+
+- Added `CANONICAL_TOPIC_TAXONOMY.md` as the authoritative topic-vocabulary reference.
+- Established 23 frozen canonical roots.
+- Added stable machine slugs and root sort order.
+- Defined root semantics and multi-label behavior.
+- Defined versioning policy: additive descendant changes may use minor versions; root-level/material semantic changes require a major taxonomy version.
+- Updated `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md` to reference the authoritative taxonomy rather than treating roots as examples.
+- Updated `MASTER_TECHNICAL_SPECIFICATION.md` with the frozen v1.0 root contract.
+- Updated Intelligence Calendar topic-filter examples and removed the obsolete `Disasters` root name.
+- The living database schema documentation is updated separately because the taxonomy is approved design intent but the Phase 2 `topics` table is not yet implemented.

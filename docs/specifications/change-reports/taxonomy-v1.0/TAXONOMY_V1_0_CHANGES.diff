@@ -1,0 +1,192 @@
+--- a/DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md
++++ b/DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md
+@@ -248,7 +248,9 @@
+ 
+ The topic system is a canonical, hierarchical taxonomy.
+ 
+-Initial top-level examples include:
++The authoritative root layer is **Canonical Topic Taxonomy v1.0** and is frozen at 23 roots. The canonical vocabulary and taxonomy-version policy are maintained in `CANONICAL_TOPIC_TAXONOMY.md`.
++
++Canonical roots:
+ 
+ ```text
+ Politics
+@@ -268,9 +270,15 @@
+ Media
+ Education
+ Religion
+-Culture
+-Disasters
+-```
++Arts, Culture & Entertainment
++Disasters & Emergencies
++Labor & Employment
++Sports
++Weather
++Lifestyle & Human Interest
++```
++
++The root layer must not be expanded, removed, merged, split, or semantically repurposed without an explicit major taxonomy-version change and migration/reclassification review. Child and descendant topics remain intentionally extensible.
+ 
+ More specialized branches may include:
+ 
+@@ -313,7 +321,9 @@
+     └── Nuclear
+ ```
+ 
+-The taxonomy should remain extensible without database migrations for every new category.
++The taxonomy should remain extensible without database migrations for every new child or descendant category.
++
++Taxonomy version `1.0` freezes only the canonical root layer. Backward-compatible child-topic additions and refinements may advance minor taxonomy versions; root-layer or materially breaking semantic changes require a major taxonomy version.
+ 
+ ---
+ 
+--- a/MASTER_TECHNICAL_SPECIFICATION.md
++++ b/MASTER_TECHNICAL_SPECIFICATION.md
+@@ -1155,10 +1155,11 @@
+ 
+ ## 12. Topic Classification System
+ 
+-The system will implement a hierarchical topic taxonomy.
+-
+-Example top-level taxonomy:
+-```
++The system will implement a canonical hierarchical topic taxonomy.
++
++The authoritative root layer is **Canonical Topic Taxonomy v1.0**, frozen at 23 roots and maintained in `CANONICAL_TOPIC_TAXONOMY.md`:
++
++```text
+ Politics
+ Law & Judiciary
+ War & Security
+@@ -1176,9 +1177,16 @@
+ Media
+ Education
+ Religion
+-Culture
+-Disasters
+-```
++Arts, Culture & Entertainment
++Disasters & Emergencies
++Labor & Employment
++Sports
++Weather
++Lifestyle & Human Interest
++```
++
++The root layer is stable. New subject coverage should normally be added as child or descendant topics. Any root addition, removal, merge, split, or material semantic change requires an explicit major taxonomy-version migration and reclassification impact review.
++
+ Example hierarchy:
+ ```
+ Politics
+@@ -1246,6 +1254,7 @@
+ - Source type, endpoint type, and document type are separate concepts.
+ - Automated classifications should retain confidence and provenance.
+ - Classifier versions and taxonomy versions must be retained so historical documents can be reprocessed safely.
++- Canonical Topic Taxonomy v1.0 freezes the 23-root topic layer; child/descendant taxonomy may expand under versioned governance without redefining the roots.
+ - Manual corrections must preserve prior automated classifications rather than silently destroying history.
+ - Documents, Stories, observed Events, Intelligence Calendar Events, Monitors, Search, Alerts, and Research should reuse the same canonical topics, entities, geographies, and document types.
+ - Deterministic metadata, source defaults, endpoint defaults, rules, and alias matching should be used before expensive AI where practical.
+--- a/INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md
++++ b/INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md
+@@ -2479,7 +2479,9 @@
+ 
+ ## 39. Topic Filters
+ 
+-Calendar topic filtering must use the canonical hierarchical taxonomy defined by the Unified Document Classification System. Parent-topic filters should optionally include descendant topics.
++Calendar topic filtering must use the canonical hierarchical taxonomy defined by the Unified Document Classification System and `CANONICAL_TOPIC_TAXONOMY.md`. Parent-topic filters should optionally include descendant topics.
++
++The following are example filters and intentionally mix canonical roots with high-value descendant topics; they are not a competing root taxonomy:
+ 
+ ```text
+ Politics
+@@ -2494,7 +2496,7 @@
+ Cybersecurity
+ Energy
+ Society
+-Disasters
++Disasters & Emergencies
+ ```
+ 
+ ---
+--- a/README.md
++++ b/README.md
+@@ -6,6 +6,7 @@
+ - `API_SPECIFICATION.md`
+ - `ARCHITECTURE.md`
+ - `BENCHMARK_PROCEDURES.md`
++- `CANONICAL_TOPIC_TAXONOMY.md` — authoritative frozen 23-root topic taxonomy and versioning policy
+ - `DATABASE_SCHEMA_SPECIFICATION.md`
+ - `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`
+ - `IMPLEMENTATION.md`
+--- a/SPECIFICATION_INTEGRATION_CHANGE_REPORT.md
++++ b/SPECIFICATION_INTEGRATION_CHANGE_REPORT.md
+@@ -68,3 +68,22 @@
+ BENCHMARK_PROCEDURES.md
+ UI_IMPLEMENTATION_NOTES.md
+ ```
++
++
++---
++
++## Taxonomy v1.0 Freeze — Package v0.4
++
++The canonical topic root layer was formally frozen at taxonomy version `1.0`.
++
++Changes:
++
++- Added `CANONICAL_TOPIC_TAXONOMY.md` as the authoritative topic-vocabulary reference.
++- Established 23 frozen canonical roots.
++- Added stable machine slugs and root sort order.
++- Defined root semantics and multi-label behavior.
++- Defined versioning policy: additive descendant changes may use minor versions; root-level/material semantic changes require a major taxonomy version.
++- Updated `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md` to reference the authoritative taxonomy rather than treating roots as examples.
++- Updated `MASTER_TECHNICAL_SPECIFICATION.md` with the frozen v1.0 root contract.
++- Updated Intelligence Calendar topic-filter examples and removed the obsolete `Disasters` root name.
++- The living database schema documentation is updated separately because the taxonomy is approved design intent but the Phase 2 `topics` table is not yet implemented.
+--- a/docs/database/DATABASE_SCHEMA.md
++++ b/docs/database/DATABASE_SCHEMA.md
+@@ -664,7 +664,7 @@
+ 
+ The next major schema expansion is expected to introduce the Unified Document Classification foundation.
+ 
+-Planned canonical roots include:
++The planned Phase 2 topic seed must use **Canonical Topic Taxonomy v1.0**, whose frozen 23-root layer is:
+ 
+ ```text
+ Politics
+@@ -684,9 +684,15 @@
+ Media
+ Education
+ Religion
+-Culture
+-Disasters
+-```
++Arts, Culture & Entertainment
++Disasters & Emergencies
++Labor & Employment
++Sports
++Weather
++Lifestyle & Human Interest
++```
++
++`CANONICAL_TOPIC_TAXONOMY.md` is authoritative for topic vocabulary and taxonomy-version governance. This root taxonomy is approved design intent only at the Phase 1 database snapshot; the `topics` table has not yet been implemented.
+ 
+ Expected Phase 2 schema concepts include:
+ 
+--- a/docs/database/SCHEMA_CHANGELOG.md
++++ b/docs/database/SCHEMA_CHANGELOG.md
+@@ -87,6 +87,13 @@
+ 
+ The exact migration must be reviewed against `DATABASE_SCHEMA.md` and the Unified Document Classification technical specification before being applied.
+ 
++### Approved taxonomy baseline for the next migration
++
++The Phase 2 topic model will seed **Canonical Topic Taxonomy v1.0** with a frozen 23-root layer. Root vocabulary is maintained in `CANONICAL_TOPIC_TAXONOMY.md`. Root identity will use stable slugs; generated database IDs are not canonical identifiers.
++
++Changes to the root layer require an explicit major taxonomy-version migration and reclassification impact review. Child and descendant taxonomy may expand under versioned governance.
++
++
+ After the migration is complete:
+ 
+ 1. update this changelog;

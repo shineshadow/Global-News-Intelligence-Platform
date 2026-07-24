@@ -248,7 +248,9 @@ Geographies provide normalized spatial filtering and jurisdictional context. Loc
 
 The topic system is a canonical, hierarchical taxonomy.
 
-Initial top-level examples include:
+The authoritative root layer is **Canonical Topic Taxonomy v1.0** and is frozen at 23 roots. The canonical vocabulary and taxonomy-version policy are maintained in `CANONICAL_TOPIC_TAXONOMY.md`.
+
+Canonical roots:
 
 ```text
 Politics
@@ -268,9 +270,15 @@ Immigration
 Media
 Education
 Religion
-Culture
-Disasters
+Arts, Culture & Entertainment
+Disasters & Emergencies
+Labor & Employment
+Sports
+Weather
+Lifestyle & Human Interest
 ```
+
+The root layer must not be expanded, removed, merged, split, or semantically repurposed without an explicit major taxonomy-version change and migration/reclassification review. Child and descendant topics remain intentionally extensible.
 
 More specialized branches may include:
 
@@ -313,7 +321,9 @@ War & Security
     └── Nuclear
 ```
 
-The taxonomy should remain extensible without database migrations for every new category.
+The taxonomy should remain extensible without database migrations for every new child or descendant category.
+
+Taxonomy version `1.0` freezes only the canonical root layer. Backward-compatible child-topic additions and refinements may advance minor taxonomy versions; root-layer or materially breaking semantic changes require a major taxonomy version.
 
 ---
 

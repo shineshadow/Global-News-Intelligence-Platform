@@ -2479,7 +2479,9 @@ Indo-Pacific
 
 ## 39. Topic Filters
 
-Calendar topic filtering must use the canonical hierarchical taxonomy defined by the Unified Document Classification System. Parent-topic filters should optionally include descendant topics.
+Calendar topic filtering must use the canonical hierarchical taxonomy defined by the Unified Document Classification System and `CANONICAL_TOPIC_TAXONOMY.md`. Parent-topic filters should optionally include descendant topics.
+
+The following are example filters and intentionally mix canonical roots with high-value descendant topics; they are not a competing root taxonomy:
 
 ```text
 Politics
@@ -2494,7 +2496,7 @@ Technology
 Cybersecurity
 Energy
 Society
-Disasters
+Disasters & Emergencies
 ```
 
 ---

@@ -1155,10 +1155,11 @@ Embeddings may also support:
 
 ## 12. Topic Classification System
 
-The system will implement a hierarchical topic taxonomy.
+The system will implement a canonical hierarchical topic taxonomy.
 
-Example top-level taxonomy:
-```
+The authoritative root layer is **Canonical Topic Taxonomy v1.0**, frozen at 23 roots and maintained in `CANONICAL_TOPIC_TAXONOMY.md`:
+
+```text
 Politics
 Law & Judiciary
 War & Security
@@ -1176,9 +1177,16 @@ Immigration
 Media
 Education
 Religion
-Culture
-Disasters
+Arts, Culture & Entertainment
+Disasters & Emergencies
+Labor & Employment
+Sports
+Weather
+Lifestyle & Human Interest
 ```
+
+The root layer is stable. New subject coverage should normally be added as child or descendant topics. Any root addition, removal, merge, split, or material semantic change requires an explicit major taxonomy-version migration and reclassification impact review.
+
 Example hierarchy:
 ```
 Politics
@@ -1246,6 +1254,7 @@ Architectural invariants:
 - Source type, endpoint type, and document type are separate concepts.
 - Automated classifications should retain confidence and provenance.
 - Classifier versions and taxonomy versions must be retained so historical documents can be reprocessed safely.
+- Canonical Topic Taxonomy v1.0 freezes the 23-root topic layer; child/descendant taxonomy may expand under versioned governance without redefining the roots.
 - Manual corrections must preserve prior automated classifications rather than silently destroying history.
 - Documents, Stories, observed Events, Intelligence Calendar Events, Monitors, Search, Alerts, and Research should reuse the same canonical topics, entities, geographies, and document types.
 - Deterministic metadata, source defaults, endpoint defaults, rules, and alias matching should be used before expensive AI where practical.
