@@ -80,8 +80,8 @@ The platform must be capable of:
 11. Locally transcribing videos without usable captions.
 12. Performing keyword and phrase monitoring.
 13. Supporting Boolean and regular-expression rules.
-14. Automatically classifying content by topic and subtopic.
-15. Identifying people, organizations, locations, countries, and other entities.
+14. Automatically classifying content through a unified multi-dimensional system covering geography, hierarchical topics, entities, and document type.
+15. Identifying and resolving people, organizations, locations, countries, agencies, companies, military units, political parties, and other entities across languages and aliases.
 16. Translating foreign-language content.
 17. Summarizing content.
 18. Generating multilingual embeddings.
@@ -303,6 +303,10 @@ TEMPORARY MONITORS   POLLING ESCALATION
                 RULE ENGINE
                         │
                         ▼
+          UNIFIED DOCUMENT CLASSIFICATION
+       Geography / Topics / Entities / Type
+                        │
+                        ▼
                 FUTURE EVENT DETECTION
                         │
               ┌─────────┴─────────┐
@@ -465,7 +469,11 @@ Initial responsibilities:
 - article storage
 - source configuration
 - story clusters
-- topic classifications
+- canonical topic classifications
+- document geography classifications
+- entity relationships and aliases
+- document-type classifications
+- classification confidence, provenance, and run history
 - JSON metadata
 - full-text search
 - embedding storage
@@ -1206,15 +1214,68 @@ Example:
 ```
 Politics
 Elections
+Election Administration
 Law & Judiciary
-South Korea
 ```
----
 
+Geography is a separate classification dimension and must not be represented as a topic merely for filtering convenience. For example, `South Korea` belongs in document geography relationships rather than the topic taxonomy.
 
-Calendar Events use the same topic taxonomy as documents and stories.
+Calendar Events use the same canonical topic taxonomy as documents, stories, and observed Events.
 
 This allows an expected event to provide prior topic context before related documents arrive and allows temporary monitors to be generated from the event's assigned topics.
+
+Detailed classification architecture, hierarchy, confidence, provenance, taxonomy versioning, geography semantics, entity relationships, document types, reclassification, and filtering behavior are defined in `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`.
+
+### 12.1 Unified Document Classification Architecture
+
+Every normalized document may be classified independently across the following canonical dimensions:
+
+```text
+Geographies
+Hierarchical Topics
+Entities
+Document Type
+```
+
+Architectural invariants:
+
+- `Source.country` identifies publisher or organizational jurisdiction and is not a substitute for document geography.
+- A document may have multiple geographies.
+- A document may have multiple topics at arbitrary hierarchy depth.
+- Topics and geographies are separate dimensions.
+- Source type, endpoint type, and document type are separate concepts.
+- Automated classifications should retain confidence and provenance.
+- Classifier versions and taxonomy versions must be retained so historical documents can be reprocessed safely.
+- Manual corrections must preserve prior automated classifications rather than silently destroying history.
+- Documents, Stories, observed Events, Intelligence Calendar Events, Monitors, Search, Alerts, and Research should reuse the same canonical topics, entities, geographies, and document types.
+- Deterministic metadata, source defaults, endpoint defaults, rules, and alias matching should be used before expensive AI where practical.
+- Classification failure must not prevent durable ingestion of the original document.
+
+Recommended conceptual flow:
+
+```text
+NORMALIZED DOCUMENT
+        │
+        ▼
+DETERMINISTIC ENRICHMENT
+        │
+        ▼
+UNIFIED DOCUMENT CLASSIFICATION
+        │
+        ├── Geography
+        ├── Hierarchical Topics
+        ├── Entities
+        └── Document Type
+        │
+        ▼
+CONFIDENCE + PROVENANCE
+        │
+        ▼
+MONITORING / SEARCH / FILTERING
+        │
+        ▼
+EMBEDDINGS + STORY CLUSTERING
+```
 
 ## 13. Monitoring Rule System
 
@@ -1230,8 +1291,12 @@ Supported rule types:
 - subtopic
 - semantic concept
 - entity
+- geography
+- geography role
 - country
 - region
+- document type
+- classification confidence
 - language
 - source
 - source type
@@ -1349,6 +1414,10 @@ An event may link to people, organizations, governments, agencies, military unit
 
 Entity aliases improve both future-event extraction and event-aware monitoring across languages.
 
+Named location entities and canonical geographies are related but distinct. Geography records represent normalized spatial jurisdictions/regions used for classification and filtering; location entities represent named places, venues, facilities, bases, buildings, or other entity-like locations and may themselves reference a canonical geography.
+
+Document-to-entity relationships should additionally retain relationship roles, confidence, classification method, classifier version, and manual-override state where applicable. Entity resolution should distinguish the canonical entity from the raw mention text found in the document. Detailed entity relationship fields are defined in `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`.
+
 ## 15. Unified Document Model
 
 All content becomes a normalized document.
@@ -1365,7 +1434,7 @@ title_translated
 content_original
 content_translated
 language
-country
+publisher_country_snapshot (optional convenience/audit field)
 published_at
 retrieved_at
 author
@@ -1373,6 +1442,11 @@ metadata
 content_hash
 embedding
 ```
+
+Substantive document geography must be represented through normalized `document_geographies` relationships. A single `country` field must not be treated as the authoritative representation of all countries or regions discussed by a document.
+
+Document semantic type must be classified independently through the canonical document-type system. Examples include `news_report`, `press_release`, `court_decision`, `legislation`, `regulation`, `research_paper`, `transcript`, and `procurement_notice`.
+
 Source types:
 ```
 rss
@@ -1425,9 +1499,17 @@ document_versions
 topics
 document_topics
 
+geographies
+document_geographies
+
 entities
 entity_aliases
 document_entities
+
+document_types
+document_type_assignments
+
+classification_runs
 
 keywords
 
@@ -1457,6 +1539,7 @@ transcripts
 transcript_segments
 
 intelligence_calendar_events
+intelligence_calendar_event_geographies
 intelligence_calendar_event_topics
 intelligence_calendar_event_entities
 intelligence_calendar_event_sources
@@ -1476,6 +1559,8 @@ The `intelligence_calendar_events` table represents known, scheduled, recurring,
 A Calendar Event may later link to an observed real-world Event, allowing the system to distinguish what was expected from what actually occurred.
 
 Detailed Calendar field definitions and relational-table schemas are maintained in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
+
+Detailed classification schemas, relationship metadata, provenance fields, taxonomy versioning, confidence semantics, and backfill behavior are maintained in `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`.
 
 ## 17. Document Processing Workflow
 
@@ -1498,10 +1583,21 @@ Language detection
 Keyword / Regex matching
       │
       ▼
-Topic classification
+DETERMINISTIC ENRICHMENT
       │
       ▼
-Entity extraction
+UNIFIED DOCUMENT CLASSIFICATION
+      │
+      ├── Geography classification
+      ├── Hierarchical topic classification
+      ├── Entity extraction + resolution
+      └── Document-type classification
+      │
+      ▼
+Persist confidence + provenance
+      │
+      ▼
+Classification-aware monitor evaluation
       │
       ▼
 FUTURE EVENT DETECTION
@@ -1606,6 +1702,8 @@ Stories may also maintain relationships to:
 related_calendar_events
 related_observed_events
 ```
+
+Stories should reuse canonical classification records through relationships such as `story_topics`, `story_entities`, and `story_geographies`. Document classifications may be used as weighted priors to narrow plausible story candidates before embedding comparison, but classification overlap must not force story membership when semantic evidence disagrees.
 
 Calendar Events provide prior intelligence signals that may improve story assignment when the system already knows the expected date, country, entities, topics, and sources associated with an upcoming event.
 
@@ -2070,6 +2168,9 @@ The following screens and workflows are unique to the platform and must be built
 - source-health workflow
 - Intelligence Calendar validation and scheduling workflow
 - monitor builder
+- classification-aware document browser with combinable geography/topic/entity/document-type filters
+- classification review and manual-correction workflow
+- taxonomy and entity-maintenance workflow
 - event-to-document and event-to-story views
 - cross-language reporting comparison
 - YouTube transcript intelligence view
@@ -2106,10 +2207,29 @@ Traditional text retrieval.
 
 Filtered Search
 
-Example:
+Document filters must be combinable and should support at minimum:
+
+```text
+Geography
+Topic / taxonomy branch
+Entity
+Entity role
+Document type
+Source
+Source type
+Language
+Publication / retrieval time
+Classification confidence
 ```
-Country = South Korea
+
+Example:
+```text
+Geography = South Korea
 Topic = Elections
+Subtopic = Election Administration
+Entity = National Election Commission
+Document Type = News Report
+Language = Korean + English
 Date = Last 30 days
 ```
 Semantic Search
@@ -2391,7 +2511,7 @@ Success criterion:
 
 ---
 
-### Phase 2 — Monitoring
+### Phase 2 — Monitoring and Classification Foundation
 
 Add:
 
@@ -2399,12 +2519,21 @@ Add:
 - phrases
 - regex
 - Boolean rules
-- topic taxonomy
+- canonical hierarchical topic taxonomy
+- canonical geography model
+- document geography relationships
+- entity relationship metadata and aliases
+- canonical document types
+- classification confidence and provenance fields
+- deterministic/source-default classification
+- classification-aware document filters and monitor rules
 - ntfy alerts
+
+Detailed design is defined in `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`.
 
 Success criterion:
 
-Reliable real-time monitoring without AI dependency.
+Reliable real-time monitoring and high-value classification/filtering without requiring AI dependency for baseline operation.
 
 ---
 
@@ -2466,11 +2595,14 @@ Add:
 
 Tasks:
 
-- topic classification
+- multilingual topic classification
+- document geography classification
+- document-type classification
+- entity extraction and resolution
 - translation
 - summarization
-- entities
 - relevance scoring
+- confidence calibration and selective reclassification
 
 ---
 
@@ -2684,7 +2816,22 @@ The following are considered current architectural decisions:
 - Multilingual embeddings
 - Story-based architecture
 - Topic classification
+- Unified multi-dimensional document classification
+- Source geography is distinct from document geography
+- Geography is distinct from topic taxonomy
+- Source type is distinct from document type
+- Multi-label topic, geography, and entity relationships
+- Classification confidence and provenance retention
+- Taxonomy and classifier versioning
+- Reprocessable historical classifications
 - YouTube as a first-class source
+
+### Companion Specification Decisions
+
+- `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md` is authoritative for detailed classification behavior, canonical taxonomy/geography/document-type schemas, confidence/provenance, and classification reprocessing.
+- `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md` is authoritative for detailed Intelligence Calendar behavior.
+- Future subsystem specifications may include `STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md`, `SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md`, and `AI_ROUTING_TECHNICAL_SPECIFICATION.md`.
+- Companion subsystem specifications must reuse Master architectural contracts and must not create competing authoritative data models.
 
 ### Web UI Decisions
 
@@ -2799,8 +2946,14 @@ Tests should measure:
 - ASR accuracy
 - timestamp accuracy
 - cross-language clustering
+- hierarchical topic classification accuracy
+- multi-geography classification precision and recall
+- entity resolution and alias accuracy
+- document-type classification accuracy
+- classification confidence calibration
+- cross-language classification consistency
 
-The benchmark should be rerun whenever models are upgraded.
+The benchmark should be rerun whenever models, taxonomy versions, classifier rules, or confidence policies are materially upgraded.
 
 ---
 
@@ -2977,7 +3130,11 @@ RSS / Web / Government / YouTube / Social
         INGESTION ENGINE
                 │
                 ▼
-      NORMALIZED DOCUMENTS
+        NORMALIZED DOCUMENTS
+                │
+                ▼
+   UNIFIED DOCUMENT CLASSIFICATION
+ Geography / Topics / Entities / Type
                 │
                 ▼
      FUTURE EVENT DETECTION
@@ -3025,3 +3182,33 @@ The intended result is a modern global news-intelligence platform that combines 
 
 The Master Technical Specification defines how the Intelligence Calendar fits into the platform as a whole. Detailed subsystem behavior, database schemas, validation states, scheduler logic, APIs, monitoring templates, and UI behavior are defined in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
 
+
+
+---
+
+## 35. Companion Technical Specifications
+
+Detailed subsystem specifications complement this Master without replacing its authority:
+
+```text
+DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md
+INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md
+STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md
+SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md
+AI_ROUTING_TECHNICAL_SPECIFICATION.md
+```
+
+Implementation-oriented documents should remain subordinate to the Master and companion specifications:
+
+```text
+ARCHITECTURE.md
+IMPLEMENTATION.md
+DATABASE_SCHEMA_SPECIFICATION.md
+API_SPECIFICATION.md
+WORKER_DESIGN_SPECIFICATION.md
+MIGRATION_PLAN.md
+BENCHMARK_PROCEDURES.md
+UI_IMPLEMENTATION_NOTES.md
+```
+
+When documents conflict, architectural decisions in the Master take precedence unless the Master explicitly delegates authority to a companion specification for the disputed detail.

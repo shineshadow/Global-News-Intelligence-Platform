@@ -1,125 +1,398 @@
-I should **not build the Web UI completely from scratch**, and I should **not use Drupal as the primary UI/application layer**.
+# Web UI Implementation Strategy
 
-I think the best approach for this platform is the same philosophy we chose for the Intelligence Calendar:
+**Project:** Global News Intelligence Platform  
+**Document:** `docs/architecture/WEB_UI_IMPLEMENTATION_STRATEGY.md`  
+**Version:** 0.2  
+**Date:** July 24, 2026  
+**Status:** Architecture Strategy / Rationale  
 
-> **Build the intelligence application itself, but assemble the UI from mature open-source components.**
+---
 
-Your current Master already points in the right direction with **FastAPI + Jinja + HTMX + optional Alpine.js**.  I should refine that into a formal UI architecture.
+## 1. Purpose
 
-# My recommendation
+This document defines the architectural strategy and rationale for the Global News Intelligence Platform Web UI.
+
+It explains **why** the platform uses a server-rendered, progressively enhanced Intelligence Operations Console built on FastAPI, Jinja2, HTMX, Alpine.js, Tabler, Tabulator, FullCalendar, Apache ECharts, and SQLAdmin.
+
+It does **not** replace domain specifications or implementation notes.
+
+The intended documentation hierarchy is:
 
 ```text
-                 GLOBAL NEWS INTELLIGENCE PLATFORM
+MASTER_TECHNICAL_SPECIFICATION.md
+        │
+        │ platform-wide architectural contract
+        ▼
+WEB_UI_IMPLEMENTATION_STRATEGY.md
+        │
+        │ Web UI architectural rationale and boundaries
+        ▼
+UI_IMPLEMENTATION_NOTES.md
+        │
+        │ screen-level and interaction-level implementation guidance
+        ▼
+app/web/
+```
+
+The governing principle is:
+
+> **Build the intelligence application itself, but assemble the user interface from mature open-source components.**
+
+The platform should not hand-build ordinary UI primitives that mature libraries already provide. It should spend custom-development effort on the intelligence workflows that make the system unique.
+
+---
+
+## 2. Relationship to Other Specifications
+
+The Web UI consumes authoritative domain models defined elsewhere. It must not redefine them.
+
+Primary companion specifications include:
+
+```text
+MASTER_TECHNICAL_SPECIFICATION.md
+DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md
+STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md
+INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md
+SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md
+AI_ROUTING_TECHNICAL_SPECIFICATION.md
+PUBLISHER_WORKSPACE_TECHNICAL_SPECIFICATION.md
+```
+
+Implementation-facing documents include:
+
+```text
+ARCHITECTURE.md
+IMPLEMENTATION.md
+DATABASE_SCHEMA_SPECIFICATION.md
+API_SPECIFICATION.md
+WORKER_DESIGN_SPECIFICATION.md
+MIGRATION_PLAN.md
+BENCHMARK_PROCEDURES.md
+UI_IMPLEMENTATION_NOTES.md
+```
+
+The Web UI strategy must remain consistent with those documents.
+
+---
+
+## 3. Core Architectural Decision
+
+The application UI will be a custom:
+
+```text
+Intelligence Operations Console
+```
+
+It is primarily designed for:
+
+```text
+monitoring
+filtering
+searching
+investigating
+correlating
+reviewing
+validating
+approving
+configuring
+analyzing
+researching
+assembling evidence
+preparing publication research packages
+```
+
+It is **not** primarily a conventional CMS for page creation, menu management, and public website publishing.
+
+The primary Web UI architecture is:
+
+```text
+                         WEB BROWSER
                               │
                               ▼
-                         FASTAPI
-                  Application + REST APIs
+                           FASTAPI
+                 Application + governed routes
                               │
                               ▼
-                         JINJA2
+                           JINJA2
                     Server-rendered HTML
                               │
                               ▼
-                           HTMX
-                 Dynamic partial-page updates
+                            HTMX
+                 Dynamic server interactions
                               │
                               ▼
                          ALPINE.JS
-              Small client-side interactions/state
+              Lightweight browser-only behavior
                               │
                               ▼
-                          TABLER
-              Overall UI shell/design system
+                           TABLER
+                 Application shell / design system
                               │
           ┌───────────────────┼───────────────────┐
           ▼                   ▼                   ▼
       TABULATOR          FULLCALENDAR          ECHARTS
-     Data Tables      Intelligence Calendar    Analytics
+     Data tables        Calendar display      Analytics
+                              │
+                              ▼
+                         POSTGRESQL
+                   Authoritative durable state
 ```
 
-This gives you a polished application without us having to hand-design:
-
-* navigation
-* sidebars
-* cards
-* forms
-* modals
-* dropdowns
-* tabs
-* responsive layouts
-* dark mode
-* tables
-* calendars
-* charts
-* badges
-* status indicators
-
-But the **actual screens, workflows, and intelligence logic are ours**.
+SQLAdmin provides a separate low-level administrative interface and does not replace the operator console.
 
 ---
 
-# 1. I should use Tabler as the UI foundation
+## 4. Authoritative-State Rule
 
-My strongest recommendation for the main interface is **Tabler**.
+The browser must never become the authoritative owner of application business state.
 
-Tabler is a Bootstrap 5-based open-source admin/dashboard UI kit, and its core project is MIT-licensed. It already provides responsive layouts, dashboards, forms, cards, navigation, modals, dark mode, and more than 100 UI components. Its own plugin ecosystem/examples include FullCalendar and data-table functionality. ([Tabler][1])
-
-So instead of building this:
+The authoritative path is:
 
 ```text
-Sidebar
-Top navigation
-Responsive mobile navigation
-Dashboard cards
-Tabs
-Buttons
-Forms
-Modal windows
-Badges
-Dropdowns
-Pagination
-Dark mode
-Status widgets
+PostgreSQL
+    ↓
+Repositories / Services
+    ↓
+FastAPI
+    ↓
+Jinja / HTMX / browser components
 ```
 
-from scratch, we start with Tabler.
+The following are presentation or interaction tools only:
 
-Your application could look something like:
+```text
+Jinja2
+HTMX
+Alpine.js
+Tabler
+Tabulator
+FullCalendar
+Apache ECharts
+```
+
+They must not create a competing application data model.
+
+Examples:
+
+```text
+Classification taxonomy
+    → owned by PostgreSQL + classification services
+
+Story membership
+    → owned by Story Intelligence services
+
+Calendar recurrence
+    → owned by Intelligence Calendar services
+
+Research clip provenance
+    → owned by Publisher Workspace services
+
+Source endpoint lifecycle
+    → owned by source-management services
+```
+
+Client-side state may be used for temporary presentation behavior such as open panels, selected rows, unsaved form state, or keyboard navigation, but durable changes must flow through governed application routes and services.
+
+---
+
+## 5. Canonical Domain Vocabulary in the UI
+
+The UI must use the canonical vocabulary established by the technical specifications.
+
+### 5.1 Geography
+
+Use:
+
+```text
+Geography
+Geographies
+```
+
+for the countries, regions, jurisdictions, and spatial areas a document, story, or event concerns.
+
+Do not use publisher country as a substitute for document geography.
+
+Example:
+
+```text
+Publisher:
+The Washington Post
+
+Publisher jurisdiction:
+United States
+
+Document geographies:
+Japan
+Philippines
+China
+```
+
+Navigation and filters should therefore generally use **Geographies**, not a generic `Countries` concept tied to source ownership.
+
+### 5.2 Topics
+
+Topics come from the canonical hierarchical topic taxonomy.
+
+The UI must not invent browser-only topic labels.
+
+Example:
+
+```text
+War & Security
+└── Military
+    └── Naval Activity
+        └── Naval Procurement
+```
+
+### 5.3 Entities
+
+Entities and aliases come from the canonical Entity System.
+
+Examples:
+
+```text
+National Election Commission of South Korea
+NEC
+중앙선거관리위원회
+선관위
+```
+
+all resolve to one canonical entity.
+
+### 5.4 Document Type
+
+`document_type` is distinct from source type and endpoint type.
+
+Examples:
+
+```text
+news_report
+press_release
+court_decision
+speech
+legislation
+regulation
+research_paper
+transcript
+public_notice
+```
+
+### 5.5 Story, Calendar Event, and Observed Event
+
+The UI must preserve these distinctions:
+
+```text
+Story
+    collection of documents describing an evolving development
+
+Intelligence Calendar Event
+    known, scheduled, recurring, or AI-discovered expected occurrence
+
+Observed Event
+    real-world occurrence inferred or confirmed from reporting
+```
+
+The UI should make relationships among them visible without collapsing them into one object type.
+
+---
+
+## 6. Primary UI Technology Stack
+
+| Function | Technology | Architectural Role |
+| --- | --- | --- |
+| Application backend | FastAPI | Authoritative application routes and services |
+| HTML rendering | Jinja2 | Server-rendered pages and fragments |
+| Dynamic server interaction | HTMX 2.x | Partial requests and fragment replacement |
+| Lightweight browser behavior | Alpine.js | Small local interaction/state |
+| Application shell/design system | Tabler | Layout and reusable visual primitives |
+| Data-heavy tables | Tabulator | Interactive result-window rendering |
+| Calendar visualization | FullCalendar Standard | Intelligence Calendar presentation |
+| Analytics/charts | Apache ECharts | Interactive visualization |
+| Internal CRUD/admin | SQLAdmin | Permission-restricted low-level maintenance |
+
+The stack is intentionally modular. Any individual component may later be replaced if a demonstrated need justifies it without changing the authoritative application model.
+
+---
+
+## 7. Tabler as the Application Shell
+
+Tabler should provide the overall visual shell and general-purpose interface primitives.
+
+Use Tabler for:
+
+```text
+navigation
+sidebars
+top navigation
+cards
+forms
+buttons
+badges
+tabs
+modals
+dropdowns
+pagination
+responsive layouts
+status indicators
+light/dark modes
+```
+
+Custom development should focus on domain-specific screens rather than recreating those primitives.
+
+A conceptual application shell is:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ GLOBAL NEWS INTELLIGENCE                         🔔  👤  ⚙️ │
+│ GLOBAL NEWS INTELLIGENCE                         Alerts User │
 ├────────────────┬─────────────────────────────────────────────┤
 │ Dashboard      │                                             │
-│ Breaking       │         MAIN APPLICATION AREA               │
-│ Intelligence   │                                             │
-│ Calendar       │                                             │
+│ Breaking       │                                             │
+│ Calendar       │         MAIN APPLICATION AREA               │
 │ Stories        │                                             │
 │ Documents      │                                             │
 │ Alerts         │                                             │
 │ Sources        │                                             │
-│ Countries      │                                             │
+│ Geographies    │                                             │
 │ Topics         │                                             │
 │ YouTube        │                                             │
 │ Monitors       │                                             │
 │ Entities       │                                             │
-│ Research       │                                             │
+│ Publisher      │                                             │
+│ Workspace      │                                             │
 │ AI Analysis    │                                             │
 │ System         │                                             │
 └────────────────┴─────────────────────────────────────────────┘
 ```
 
-Tabler gives us the shell.
-
-We build what goes inside it.
+The exact navigation may evolve, but terminology must remain aligned with canonical subsystem names.
 
 ---
 
-# 2. FastAPI remains the application backend
+## 8. FastAPI Remains the Application Backend
 
-I should **not put Drupal between the UI and the intelligence system**.
+FastAPI remains authoritative for:
 
-The architecture should remain:
+```text
+application services
+authentication
+authorization
+source administration
+search
+classification operations
+story operations
+calendar operations
+monitor operations
+Publisher Workspace operations
+AI routing requests
+alert administration
+Web UI routes
+HTML partial routes
+REST APIs
+```
+
+The UI must not place Drupal, a frontend framework, or another application server between FastAPI and the authoritative domain model.
+
+The intended path is:
 
 ```text
 Browser
@@ -127,157 +400,115 @@ Browser
    ▼
 FastAPI
    │
-   ├── Application logic
-   ├── Authentication
-   ├── Permissions
-   ├── Search
-   ├── Stories
-   ├── Documents
-   ├── Sources
-   ├── Monitors
-   ├── Intelligence Calendar
-   ├── AI Analysis
-   └── REST APIs
-           │
-           ▼
-       PostgreSQL
-```
-
-FastAPI officially supports Jinja template rendering through its Starlette integration, so this remains a natural fit with the architecture you've already selected. ([FastAPI][2])
-
-The important advantage is:
-
-```text
-ONE APPLICATION DATA MODEL
-
+   ▼
+Application services
+   │
+   ▼
 PostgreSQL
-    │
-    ├── sources
-    ├── documents
-    ├── stories
-    ├── events
-    ├── intelligence_calendar_events
-    ├── entities
-    ├── monitors
-    ├── alerts
-    └── AI results
 ```
-
-Everything operates on the same authoritative data.
 
 ---
 
-# 3. HTMX gives us the dynamic UI without building a React application
+## 9. Jinja2 as the Server-Rendering Layer
 
-HTMX is an excellent fit here.
-
-It lets HTML elements make requests and update sections of the page without reloading the entire application. The current stable HTMX 2.x line is dependency-free and can be used without a JavaScript build system. HTMX 4 is currently in beta, so I should use the stable 2.x release initially. ([GitHub][3])
-
-For example, on the Sources screen:
+Jinja2 should render:
 
 ```text
-Country: [South Korea ▼]
-Status:  [Active ▼]
-Type:    [Government ▼]
-
-[Apply]
+full pages
+layouts
+navigation
+page-specific templates
+reusable partials
+reusable components
+error pages
+HTMX fragments
 ```
 
-HTMX can request:
+Recommended conceptual structure:
 
 ```text
-/sources/filter?country=south-korea&type=government
+app/web/templates/
+├── layouts/
+├── pages/
+├── partials/
+├── components/
+└── errors/
 ```
 
-and replace only:
-
-```text
-<div id="source-results">
-```
-
-No React.
-
-No full-page refresh.
-
-No complex frontend state management.
-
-Another example:
-
-```text
-STORY
-
-Chinese Military Activity Near Taiwan
-
-[27 Sources]
-[5 Languages]
-
-[Show Documents]
-```
-
-Clicking `Show Documents` could dynamically load the related documents directly underneath the story without leaving the page.
-
-That is exactly the sort of interface this platform needs.
+Server-rendering remains the default so that core workflows do not require a large JavaScript runtime or a second frontend application state model.
 
 ---
 
-# 4. Alpine.js handles the small interactive pieces
+## 10. HTMX for Server-Driven Interaction
 
-Alpine.js is MIT-licensed and designed specifically for adding relatively lightweight JavaScript behavior directly to markup. ([GitHub][4])
+HTMX should provide dynamic interactions where the server remains responsible for business state.
 
-I should use it for things like:
-
-```text
-Open/close panels
-Dropdown states
-Modal behavior
-Expandable story sections
-Client-side toggles
-Tabs
-Keyboard shortcuts
-Temporary selections
-```
-
-The relationship becomes:
+Typical uses:
 
 ```text
-FastAPI
-    ↓
-Jinja
-    ↓
-HTML
-
-HTMX
-    ↓
-Server interactions
-
-Alpine
-    ↓
-Small browser interactions
+filter result sets
+sort result sets
+paginate
+refresh dashboard cards
+expand related documents
+load classification details
+change story status
+validate Calendar candidates
+activate or disable monitors
+verify source endpoints
+load source-health details
+add documents to Publisher Workspace projects
+load research clips
+refresh worker/AI status panels
 ```
 
-This is substantially lighter than:
+Example:
 
 ```text
-FastAPI API
-     +
-React
-     +
-Redux
-     +
-Next.js
-     +
-Node build chain
+Document filters
+        ↓
+HTMX request
+        ↓
+FastAPI route
+        ↓
+Application service / database query
+        ↓
+Jinja partial
+        ↓
+Replace result region
 ```
 
-We can always move individual complex parts to a richer JavaScript component later.
+The browser should not reproduce server-side filtering or authorization rules.
 
 ---
 
-# 5. Use Tabulator for the heavy data-management screens
+## 11. Alpine.js for Lightweight Browser Behavior
 
-This platform will have **a lot of tables**.
+Alpine.js should be limited to small browser-local interactions.
 
-For example:
+Appropriate uses include:
+
+```text
+open/close panels
+dropdown state
+modal state
+local tabs
+keyboard shortcuts
+client-side toggles
+temporary selections
+responsive menu state
+small drag/drop affordances where appropriate
+```
+
+Alpine state should generally be disposable. Reloading a page must not destroy authoritative persisted state.
+
+Avoid moving complex domain workflows into Alpine components.
+
+---
+
+## 12. Tabulator for Data-Heavy Result Windows
+
+Tabulator should be used for large interactive operator tables such as:
 
 ```text
 Sources
@@ -288,178 +519,183 @@ Calendar Candidates
 AI Jobs
 Alerts
 Monitor Matches
-Failed Workers
+Worker Failures
 YouTube Channels
 Source Health
+Research Project Documents
+Media Assets
 ```
 
-Some might eventually contain thousands or millions of records.
-
-I should strongly consider **Tabulator** for these screens.
-
-Tabulator is MIT-licensed and actively maintained; stewardship moved to Beekeeper Studio in May 2026. ([Tabulator][5])
-
-For example:
-
-```text
-SOURCES
-
-┌───────┬───────────────┬──────────────┬────────┬──────────┐
-│ ID    │ Source        │ Country      │ Type   │ Status   │
-├───────┼───────────────┼──────────────┼────────┼──────────┤
-│ 104   │ Yonhap        │ South Korea  │ News   │ ● Active │
-│ 105   │ NEC           │ South Korea  │ Gov    │ ● Active │
-│ 106   │ YTN           │ South Korea  │ News   │ ● Active │
-└───────┴───────────────┴──────────────┴────────┴──────────┘
-```
-
-with:
+Supported operator capabilities may include:
 
 ```text
 sorting
 filtering
-column selection
-pagination
-inline editing
+column visibility
 row selection
+pagination
 virtualized rendering
+safe inline editing
+saved views
 CSV export
 ```
 
-We do not need to build those mechanics ourselves.
+### 12.1 Server-Side Scale Rule
+
+Tabulator must **not** be treated as the place where millions of database rows are loaded and filtered in the browser.
+
+The scalable pattern is:
+
+```text
+5,000,000 rows in PostgreSQL
+        ↓
+FastAPI applies governed query/filter/order rules
+        ↓
+237 matching rows
+        ↓
+server-side page/window
+        ↓
+50 rows
+        ↓
+Tabulator renders the current result window
+```
+
+PostgreSQL and application services own:
+
+```text
+filtering
+sorting constraints
+pagination
+permissions
+large-data aggregation
+query limits
+```
+
+Tabulator owns presentation and interaction for the returned result window.
 
 ---
 
-# 6. FullCalendar handles the Intelligence Calendar display
+## 13. FullCalendar for Intelligence Calendar Visualization
 
-As we already discussed, I should use **FullCalendar Standard** for the Intelligence Calendar visual interface.
+FullCalendar Standard provides calendar visualization primitives only.
 
-Its Standard components are MIT-licensed. ([FullCalendar][6])
-
-So:
+Use it for:
 
 ```text
-Intelligence Calendar
-        │
-        ▼
-Custom FastAPI API
-        │
-        ▼
-FullCalendar UI
+month view
+week view
+day view
+date navigation
+event positioning
+event rendering
+selectable date ranges
+basic interaction with displayed events
 ```
 
-We build:
+It must **not** become the scheduling authority.
+
+The Intelligence Calendar subsystem remains responsible for:
 
 ```text
-Event intelligence
-Validation
-Confidence
-Priority
-Pre-event monitoring
-Temporary monitors
-Story correlation
+recurrence
+validation
+confidence
+Calendar priority
+expected news importance
+event history
+pre-event monitoring
+temporary monitors
+polling escalation
+YouTube escalation
+scheduled-versus-observed outcomes
 ```
 
-FullCalendar builds:
+Architecture:
 
 ```text
-Month view
-Week view
-Day view
-Event positioning
-Navigation
-Date ranges
-Event rendering
+PostgreSQL Calendar state
+        ↓
+Intelligence Calendar services
+        ↓
+FastAPI
+        ↓
+FullCalendar display
 ```
+
+Changes made through the calendar UI must be validated and persisted by the Calendar service layer.
 
 ---
 
-# 7. Use Apache ECharts for intelligence dashboards
+## 14. Apache ECharts for Analytics Visualization
 
-You will eventually want dashboards showing things like:
+Apache ECharts should render interactive analytical visualizations.
 
-```text
-Documents per hour
-Stories by country
-Breaking stories
-Source activity
-Languages
-Topic volume
-China/Taiwan coverage trends
-Alert volume
-AI costs
-Worker performance
-Source failures
-Calendar event activity
-```
-
-I should use **Apache ECharts**.
-
-It is Apache-2.0 licensed and built specifically for rich interactive browser visualization. The current project remains actively developed. ([GitHub][7])
-
-For example:
+Examples:
 
 ```text
-STORY VOLUME — LAST 24 HOURS
-
-Politics       █████████████  418
-Military       ██████████     327
-Foreign Affairs████████       264
-Elections      ██████         193
-Technology     █████          156
+documents per hour
+story volume by topic
+story volume by geography
+source activity
+language distribution
+alert volume
+AI cost
+worker performance
+source failures
+Calendar activity
+cross-language coverage
+narrative/topic change over time
+classification confidence distribution
 ```
 
-or:
+### 14.1 Governed Analytics Rule
+
+Charts must consume governed aggregates from application services.
+
+Preferred path:
 
 ```text
-SOURCE ACTIVITY BY COUNTRY
-
-South Korea     31%
-United States   22%
-Japan           16%
-China           14%
-Taiwan          9%
-Philippines     5%
-Other           3%
+PostgreSQL
+    ↓
+query / aggregation service
+    ↓
+FastAPI
+    ↓
+ECharts
 ```
 
-Again, we don't build chart rendering ourselves.
+Avoid downloading very large raw datasets to the browser merely to compute analytics client-side.
+
+The browser visualization must not become an independent analytics data layer.
 
 ---
 
-# 8. SQLAdmin could give us the Drupal-like CRUD advantage
+## 15. SQLAdmin as a Separate Administrative Interface
 
-This is the part where your point about Drupal's **Content Types + Fields** is very relevant.
-
-Drupal is excellent at letting an administrator create and edit structured content.
-
-But we can get much of that development convenience without running Drupal.
-
-There is a project called **SQLAdmin** specifically for FastAPI and Starlette. It can generate an administrative interface from SQLAlchemy database models. Its current release history shows active development into May 2026, and it uses a BSD-3-Clause license. ([GitHub][8])
-
-So internally we could have:
+SQLAdmin may provide a permission-restricted administrative interface, for example:
 
 ```text
 /admin
 ```
 
-with quick CRUD management for:
+Possible low-level CRUD targets include:
 
 ```text
 Sources
 Source Endpoints
 Topics
+Geographies
 Entities
+Document Types
 Monitor Rules
-Calendar Events
+Intelligence Calendar Events
 Calendar Templates
 Users
 AI Provider Settings
+Taxonomy Records
 ```
 
-This is **not necessarily the operator-facing UI**.
-
-Think of it as:
+The architectural distinction is:
 
 ```text
                     PLATFORM
@@ -468,282 +704,1056 @@ Think of it as:
           ▼                         ▼
    OPERATOR INTERFACE          ADMIN INTERFACE
 
-Tabler + HTMX               SQLAdmin
-Beautiful workflow UI       Raw system administration
+Tabler + Jinja + HTMX          SQLAdmin
+Custom workflows               Low-level maintenance
 ```
 
-This gives you something very similar to one of Drupal's biggest advantages:
+SQLAdmin must not become the primary operator-facing product interface.
 
-> Define structured objects and get editable administrative forms.
-
-But without turning the entire system into a Drupal application.
+Custom intelligence workflows belong in the Intelligence Operations Console.
 
 ---
 
-# Why I should not use Drupal
+## 16. Operator Interface Versus Administrative Interface
 
-You're correct that Drupal is extremely powerful.
+The operator interface is optimized for intelligence work.
 
-Its content types and field system allow structured models with customizable fields. ([Drupal.org][9])
-
-You could theoretically create:
+It should support:
 
 ```text
-Content Type: Story
+investigation
+monitoring
+research
+correlation
+validation
+triage
+source review
+story review
+calendar review
+Publisher Workspace evidence assembly
+```
 
-Fields:
-Title
-Summary
-Country
-Entities
+The administrative interface is optimized for maintenance.
+
+It may expose lower-level models and configuration that ordinary operators should not manipulate directly.
+
+These concerns must remain separate even if both interfaces use the same PostgreSQL models.
+
+---
+
+## 17. Classification-Aware UI Requirements
+
+The Web UI must directly consume the Unified Document Classification System.
+
+The Documents interface should eventually support combinable filters for:
+
+```text
+Geography
+Topic hierarchy
+Entity
+Entity role
+Document type
+Source
+Source type
+Language
+Time
+Keyword/text search
+Semantic search
+Classification confidence
+```
+
+Example:
+
+```text
+Geography:
+South Korea
+
+Topic:
+Politics → Elections → Election Administration
+
+Entity:
+National Election Commission of South Korea
+
+Document Type:
+News Report
+
+Language:
+Korean + English
+
+Time:
+Last 30 Days
+```
+
+The UI must not create its own incompatible taxonomy or geography labels.
+
+### 17.1 Classification Detail
+
+Document details may expose:
+
+```text
+Geographies
 Topics
-Importance
-```
-
-and:
-
-```text
-Content Type: Source
-
-Fields:
-Name
-URL
-Country
-Type
-RSS URL
-Priority
-```
-
-and:
-
-```text
-Content Type: Calendar Event
-
-Fields:
-Date
-Priority
+Entities
+Entity roles
+Document type
 Confidence
-Status
+Classification method
+Classifier/model version
+Taxonomy version
+Classification history
+Manual overrides
 ```
 
-But I think we'd quickly hit an architectural problem.
+Original content must remain visually distinguishable from AI-derived classifications.
 
-Our actual data model is considerably more complex:
+---
+
+## 18. Story Intelligence UI Boundary
+
+Story Intelligence owns machine-derived story state.
+
+The UI consumes and presents:
+
+```text
+canonical story title/summary
+story timeline
+related documents
+new developments
+claims
+contradictions
+source diversity
+language distribution
+geographies
+topics
+entities
+Calendar relationships
+Observed Event relationships
+merge/split history
+```
+
+The Story interface may provide operator actions such as:
+
+```text
+review membership
+approve merge/split
+open evidence
+filter documents
+open Publisher Workspace
+inspect new developments
+compare sources
+```
+
+But durable story membership and story intelligence remain owned by Story Intelligence services.
+
+---
+
+## 19. Intelligence Calendar UI Boundary
+
+The Calendar UI should expose:
+
+```text
+Today
+Tomorrow
+This Week
+Next 30 Days
+Critical
+Recurring
+One-Time
+AI-Discovered
+Manual
+Official Calendar
+Candidates
+Verified
+Confirmed
+In Progress
+Completed
+Postponed
+Cancelled
+```
+
+Calendar Event detail should expose:
+
+```text
+description
+schedule/timezone
+validation evidence
+supporting and contradicting sources
+geographies
+topics
+entities
+related documents
+related stories
+temporary monitors
+polling escalation
+YouTube monitoring
+event history
+observed outcome
+```
+
+FullCalendar renders calendar primitives; FastAPI/PostgreSQL own the intelligence state.
+
+---
+
+## 20. Publisher Workspace UI
+
+The Publisher Workspace is a first-class custom product area.
+
+It consumes:
+
+```text
+Documents
+Document Versions
+Stories
+Intelligence Calendar Events
+Observed Events
+Unified Classifications
+Transcripts
+Media Assets
+AI Analysis
+```
+
+Primary workflows include:
+
+```text
+Research Projects
+Research Queue
+Saved Documents
+Evidence Clips
+Quotes
+Facts
+Timeline Items
+Notes
+Media Tray
+Source Comparisons
+Citations
+Exports
+Published Output links
+```
+
+A conceptual workflow is:
+
+```text
+Breaking / Search / Calendar / Stories
+                  │
+                  ▼
+             Open Story
+                  │
+                  ▼
+          Review Evidence
+                  │
+                  ▼
+      Add to Research Project
+                  │
+                  ▼
+ Clips / Quotes / Facts / Media / Notes
+                  │
+                  ▼
+      Compare / Verify / Translate
+                  │
+                  ▼
+          Research Package
+                  │
+                  ▼
+            External Editor
+```
+
+The Publisher Workspace must preserve exact evidence provenance, including `document_version_id` where applicable.
+
+The Web UI must visibly distinguish:
+
+```text
+original source evidence
+operator-authored notes
+AI-generated research output
+translated material
+```
+
+The detailed model is defined by `PUBLISHER_WORKSPACE_TECHNICAL_SPECIFICATION.md`.
+
+---
+
+## 21. Source Acquisition and Health UI
+
+Source and endpoint screens should expose operational state without duplicating source-management logic.
+
+Potential fields and controls include:
+
+```text
+source identity
+source jurisdiction
+endpoint type
+endpoint URL
+status
+health class
+verification status
+last successful fetch
+last failure
+failure reason
+poll interval
+consecutive failures
+ETag / Last-Modified status
+acquisition fallback
+selector configuration
+preview extracted items
+rate-limit notes
+```
+
+Future non-RSS endpoint configuration may require specialized forms for:
+
+```text
+listing-page selectors
+article-link selectors
+article-body extraction
+change detection
+RSSHub route parameters
+RSS-Bridge configuration
+Playwright fallback
+```
+
+These are operator workflows and should not be relegated solely to raw SQLAdmin CRUD.
+
+---
+
+## 22. AI Operations UI
+
+The UI may provide an AI Operations area consuming the AI Routing subsystem.
+
+Potential views include:
+
+```text
+AI job queue
+provider health
+model health
+local versus OpenAI routing
+escalation rate
+cost/budget utilization
+failed structured outputs
+retry state
+classification model versions
+benchmark results
+```
+
+AI operations screens must not bypass the AI Router by calling providers directly from the browser.
+
+Architecture:
+
+```text
+Browser
+    ↓
+FastAPI
+    ↓
+AI Router
+    ↓
+Local / OpenAI / future providers
+```
+
+---
+
+## 23. Custom Product Screens
+
+The platform should reuse generic visual components while building custom intelligence workflows.
+
+Custom screens include at minimum:
+
+```text
+Breaking Intelligence
+Document Browser
+Document Detail
+Story Intelligence
+New-Development Comparison
+Source Management
+Source Health
+Intelligence Calendar
+Calendar Validation
+Monitor Builder
+Cross-Language Comparison
+YouTube Transcript Intelligence
+AI Analysis
+Publisher Workspace
+Research Project Detail
+Media Tray
+Citation/Export Workflow
+Operations / Worker Health
+```
+
+Those screens are where the product's unique value resides.
+
+---
+
+## 24. Progressive Enhancement
+
+Core workflows should remain usable with server-rendered HTML wherever practical.
+
+HTMX and Alpine.js should enhance usability rather than create a hard dependency on a full client-side application.
+
+Benefits include:
+
+```text
+simpler deployment
+fewer independent application states
+lower frontend complexity
+better debuggability
+reduced build tooling
+cleaner authorization boundaries
+```
+
+This does not prohibit JavaScript-rich components where they provide clear value.
+
+---
+
+## 25. URL and Navigation State
+
+Important filtered views should be representable in URLs where practical.
+
+Example:
+
+```text
+/web/documents?geography=south-korea&topic=elections&entity=nec&time=30d
+```
+
+Benefits:
+
+```text
+shareable investigation views
+browser back/forward support
+bookmarking
+saved views
+reproducible operator workflows
+```
+
+Temporary browser-only state need not be encoded in the URL, but investigation filters generally should be.
+
+---
+
+## 26. Accessibility and Responsive Operation
+
+The Intelligence Operations Console is desktop-first but should remain usable on tablets and mobile devices for important review and response workflows.
+
+Requirements include:
+
+```text
+semantic HTML
+accessible labels
+visible focus states
+keyboard navigation where practical
+responsive layouts
+high-density desktop modes
+dark mode
+mobile alert review
+mobile Calendar review
+mobile Story review
+basic mobile administration
+```
+
+Third-party components must be integrated in ways that preserve accessible surrounding markup and operator workflows.
+
+---
+
+## 27. Performance and Large-Data Strategy
+
+The UI must assume that the platform may eventually contain:
+
+```text
+millions of documents
+large classification tables
+large story histories
+large event histories
+large ingestion-run histories
+large AI job histories
+```
+
+The browser should receive only the data needed for the current view.
+
+Recommended rules:
+
+```text
+server-side pagination by default
+server-side filtering by default
+server-side ordering for large result sets
+bounded page sizes
+query timeouts/limits where appropriate
+cached aggregates for expensive dashboards when justified
+HTMX partial updates rather than full-page refreshes where useful
+```
+
+Virtualized browser rendering does not replace server-side query discipline.
+
+---
+
+## 28. Security and Authorization Boundary
+
+Authorization must be enforced server-side.
+
+The UI may hide unavailable actions for usability, but hidden controls are not a security boundary.
+
+Examples:
+
+```text
+source lifecycle changes
+manual classification override
+story merge/split
+Calendar confirmation/cancellation
+monitor activation
+Publisher Workspace export
+AI provider configuration
+SQLAdmin access
+```
+
+must be authorized by application services/routes.
+
+Future multi-user deployments should support role-based permissions without requiring a frontend architecture rewrite.
+
+---
+
+## 29. Asset Strategy and Build Tooling
+
+The initial Web UI should not require a mandatory Node.js build pipeline merely to operate.
+
+Third-party browser assets may initially be:
+
+```text
+vendored under app/web/static/vendor/
+```
+
+or served through another controlled and reproducible asset approach.
+
+A build pipeline may later be introduced for:
+
+```text
+asset minification
+bundling
+cache-busting
+source maps
+frontend testing
+```
+
+if it provides demonstrated operational value.
+
+Introducing such a pipeline must remain an implementation detail and must not move domain/business logic into a competing frontend model.
+
+---
+
+## 30. Why Drupal Is Not the Primary Application Layer
+
+Drupal remains a capable CMS with strong structured-content administration, but it does not fit as the authoritative application layer for this platform.
+
+The Global News Intelligence Platform already has a complex domain model centered on:
 
 ```text
 PostgreSQL
-    │
-    ├── Sources
-    │     └── Source Endpoints
-    │
-    ├── Documents
-    │     ├── Versions
-    │     ├── Topics
-    │     └── Entities
-    │
-    ├── Stories
-    │     └── Documents
-    │
-    ├── Calendar Events
-    │     ├── Entities
-    │     ├── Sources
-    │     ├── Documents
-    │     ├── Stories
-    │     ├── Monitors
-    │     └── History
-    │
-    └── AI Jobs
+FastAPI
+SQLAlchemy
+Celery
+classification services
+story intelligence
+Calendar intelligence
+Publisher Workspace
+AI routing
 ```
 
-Then we'd introduce:
+Adding Drupal as an authoritative layer would introduce a second application/entity model.
+
+The conflict would become:
 
 ```text
-Drupal
-    │
-    └── Drupal Entity/Node System
-```
-
-Now we have two competing models.
-
-We should have to decide:
-
-```text
-Is PostgreSQL/FastAPI authoritative?
+FastAPI / PostgreSQL authoritative?
 
 or
 
-Is Drupal authoritative?
+Drupal entity model authoritative?
 ```
 
-If FastAPI is authoritative, Drupal becomes an elaborate frontend API client.
+Either choice creates unnecessary duplication.
 
-If Drupal is authoritative, our Python intelligence workers have to integrate deeply with Drupal's content/entity architecture.
+Potential duplicated concerns include:
 
-Neither is attractive.
+```text
+application framework
+data/entity model
+permissions
+caching
+configuration
+migrations
+deployment lifecycle
+administrative interfaces
+```
+
+The platform instead obtains Drupal-like structured administration through:
+
+```text
+PostgreSQL models
+SQLAlchemy
+custom FastAPI workflows
+SQLAdmin
+```
+
+without making a CMS the authoritative domain layer.
 
 ---
 
-# Drupal also creates unnecessary stack duplication
+## 31. Why the Platform Is Not Primarily a CMS
 
-Your current system:
-
-```text
-Python
-FastAPI
-PostgreSQL
-Redis
-Celery
-Jinja
-HTMX
-```
-
-Adding Drupal means:
+A conventional CMS primarily optimizes for:
 
 ```text
-PHP
-Composer
-Drupal
-Drupal modules
-Drupal configuration
-Drupal caching
-Drupal permissions
-Drupal entities
-Drupal migrations
+creating pages
+editing public content
+managing navigation
+publishing website articles
+managing themes/layouts
 ```
 
-Potentially:
+This platform primarily optimizes for:
 
 ```text
-Two application frameworks
-Two ORM/data models
-Two permission systems
-Two caching systems
-Two deployment lifecycles
+collecting intelligence
+classifying documents
+monitoring changes
+searching evidence
+correlating stories
+tracking future events
+validating sources
+comparing reporting
+building research packages
+operational system monitoring
 ```
 
-For a normal content website, Drupal might make perfect sense.
+The Publisher Workspace supports publication preparation, but that does not turn the entire platform into a CMS.
 
-For a highly specialized intelligence application, I think it becomes an unnecessary middle layer.
+An external editor or downstream publishing system may continue to handle final prose production and public publication.
 
 ---
 
-# The key difference
+## 32. Why React or Next.js Is Not Introduced Initially
 
-This isn't really a traditional CMS.
+A React or Next.js frontend should not be introduced merely because the application is complex.
 
-It's more like:
+The server-rendered stack should remain the default while it cleanly supports the required workflows.
 
-```text
-Intelligence Operations Console
-```
-
-The UI is primarily for:
+The initial architecture avoids unnecessary duplication such as:
 
 ```text
-monitoring
-filtering
-searching
-investigating
-correlating
-reviewing
-approving
-configuring
-analyzing
+FastAPI REST API
+        +
+large SPA
+        +
+separate client state model
+        +
+additional frontend routing
+        +
+mandatory Node build/deployment lifecycle
 ```
 
-not primarily:
+A richer client-side component may be introduced later for a specific screen when measured complexity demonstrates that Jinja + HTMX + Alpine cannot handle the requirement cleanly.
 
-```text
-creating webpages
-publishing articles
-managing menus
-editing website content
-```
-
-That's why an admin/dashboard application architecture fits much better than a CMS.
+That should be a local decision, not a platform-wide frontend rewrite by default.
 
 ---
 
-# My recommended Web UI stack
+## 33. Future Rich-Client Escape Hatch
 
-I should formally specify:
+The architecture intentionally leaves room for specialized client-side components.
 
-| Function                     | Technology                |
-| ---------------------------- | ------------------------- |
-| Application backend          | **FastAPI**               |
-| HTML templating              | **Jinja2**                |
-| Dynamic server interaction   | **HTMX 2.x**              |
-| Lightweight browser behavior | **Alpine.js**             |
-| Main visual UI/design system | **Tabler**                |
-| Large interactive tables     | **Tabulator**             |
-| Intelligence Calendar        | **FullCalendar Standard** |
-| Analytics/charts             | **Apache ECharts**        |
-| Internal CRUD/admin          | **SQLAdmin**              |
-| Backend APIs                 | **FastAPI REST**          |
-
-Which produces:
+Examples that might eventually justify richer JavaScript include:
 
 ```text
-                        WEB UI
-                           │
-                           ▼
-                         TABLER
-                   Application Shell
-                           │
-         ┌─────────────────┼──────────────────┐
-         │                 │                  │
-         ▼                 ▼                  ▼
-       JINJA             HTMX              ALPINE
-   HTML rendering    Server actions    Browser behavior
-         │
-         ├─────────────────┬──────────────────┐
-         ▼                 ▼                  ▼
-     TABULATOR        FULLCALENDAR         ECHARTS
-       Tables           Calendar           Analytics
-         │                 │                  │
-         └─────────────────┼──────────────────┘
-                           ▼
-                        FASTAPI
-                           │
-                           ▼
-                      POSTGRESQL
+advanced graph exploration
+large interactive network visualizations
+complex timeline manipulation
+highly interactive research-board layouts
+specialized drag/drop evidence mapping
+real-time collaborative editing
 ```
 
-## My conclusion
+Any such component must still consume FastAPI-governed domain data and must not become an independent authoritative store.
 
-I think this is a **much better solution than Drupal** for the Global News Intelligence Platform.
+---
 
-We should **not be building the UI from scratch** in the sense of hand-coding every visual component.
+## 34. Repository Structure
 
-We should be assembling a custom intelligence application from established components:
-
-> **Tabler provides the application shell.
-> Jinja renders it.
-> HTMX makes it dynamic.
-> Alpine handles lightweight client behavior.
-> Tabulator handles massive tables.
-> FullCalendar handles the Intelligence Calendar.
-> ECharts handles analytics.
-> SQLAdmin provides low-level administrative CRUD.
-> FastAPI and PostgreSQL remain the single application and data backbone.**
-
-The only parts we build ourselves are the parts that make **your platform unique**: the Breaking view, Story intelligence interface, Source management workflows, Intelligence Calendar workflows, Monitor builder, AI Analysis interface, new-development displays, cross-language comparisons, and research tools.
-
-I should make this a new architecture document named:
+Recommended Web UI organization:
 
 ```text
-docs/architecture/WEB_UI_IMPLEMENTATION_STRATEGY.md
+app/
+└── web/
+    ├── routes/
+    ├── view_models/
+    ├── templates/
+    │   ├── layouts/
+    │   ├── pages/
+    │   ├── partials/
+    │   ├── components/
+    │   └── errors/
+    ├── static/
+    │   ├── css/
+    │   ├── js/
+    │   ├── images/
+    │   └── vendor/
+    │       ├── tabler/
+    │       ├── htmx/
+    │       ├── alpine/
+    │       ├── tabulator/
+    │       ├── fullcalendar/
+    │       └── echarts/
+    └── ui/
+        ├── dashboard/
+        ├── breaking/
+        ├── stories/
+        ├── documents/
+        ├── sources/
+        ├── monitors/
+        ├── calendar/
+        ├── publisher_workspace/
+        ├── ai/
+        └── system/
 ```
 
-and then integrate the resulting decisions into the **Web UI**, **Core Technology Stack**, **Repository Structure**, and **Decisions Already Made** sections of `MASTER_TECHNICAL_SPECIFICATION.md`.
+The exact layout may evolve, but boundaries between routes, templates, reusable components, browser assets, and product-specific UI modules should remain clear.
 
-[1]: https://tabler.io/repositories?utm_source=chatgpt.com "Tabler Repositories - Open Source Projects and Contributions"
-[2]: https://fastapi.tiangolo.com/advanced/templates/?utm_source=chatgpt.com "Templates - FastAPI"
-[3]: https://github.com/bigskysoftware/htmx?utm_source=chatgpt.com "GitHub - bigskysoftware/htmx: </> htmx - high power tools for HTML · GitHub"
-[4]: https://github.com/alpinejs/alpine?utm_source=chatgpt.com "GitHub - alpinejs/alpine: A rugged, minimal framework for composing JavaScript behavior in your markup. · GitHub"
-[5]: https://www.tabulator.info/community/about/?utm_source=chatgpt.com "About Tabulator | Tabulator"
-[6]: https://fullcalendar.io/license?utm_source=chatgpt.com "License | FullCalendar"
-[7]: https://github.com/apache/echarts?utm_source=chatgpt.com "GitHub - apache/echarts: Apache ECharts is a powerful, interactive charting and data visualization library for browser · GitHub"
-[8]: https://github.com/smithyhq/sqladmin?utm_source=chatgpt.com "GitHub - smithyhq/sqladmin: SQLAlchemy Admin for FastAPI and Starlette · GitHub"
-[9]: https://www.drupal.org/docs/7/nodes-content-types-and-fields?utm_source=chatgpt.com "Nodes, content types and fields | Drupal 7 | Drupal Wiki guide on Drupal.org"
+---
 
+## 35. Template and Partial Design Principles
+
+Recommended practices:
+
+```text
+one shared application layout
+small reusable components
+HTMX partials separate from full pages where useful
+minimal business logic in templates
+view models for complex presentation state
+stable element IDs for HTMX targets
+explicit empty/loading/error states
+```
+
+Templates should render state already determined by application services rather than implementing domain decisions in Jinja expressions.
+
+---
+
+## 36. UI Testing Strategy
+
+The UI should be tested at several layers.
+
+### 36.1 Route and Rendering Tests
+
+Test:
+
+```text
+HTTP status
+required content
+filter parameters
+pagination
+permissions
+HTMX fragment responses
+empty states
+error states
+```
+
+### 36.2 Service Tests
+
+Domain behavior should primarily be tested below the template layer.
+
+Examples:
+
+```text
+source lifecycle
+classification filtering
+story operations
+Calendar transitions
+Publisher Workspace provenance
+AI routing decisions
+```
+
+### 36.3 Browser Tests
+
+Add browser automation selectively for critical workflows such as:
+
+```text
+source creation/edit/verification
+combined document filtering
+story review
+Calendar editing
+monitor creation
+Publisher Workspace clip/export flow
+```
+
+Do not require end-to-end browser tests for every trivial presentation detail.
+
+---
+
+## 37. Failure and Empty-State Design
+
+Operational intelligence software must expose failure clearly.
+
+The UI should distinguish:
+
+```text
+no data exists
+no data matches filters
+source has never been polled
+source is stale
+source verification failed
+worker failed
+AI result failed validation
+Calendar event is unconfirmed
+Story has low-confidence membership
+classification is low confidence
+```
+
+These states must not collapse into a generic blank table or ambiguous error message.
+
+---
+
+## 38. Auditability and Provenance in the UI
+
+Where practical, operator-facing intelligence should expose provenance.
+
+Examples:
+
+```text
+Why is this topic assigned?
+Which model classified it?
+Which source supports this Calendar Event?
+Which document version produced this research clip?
+Why was this Story updated?
+Which AI provider produced this comparison?
+```
+
+The UI should make it possible to navigate from derived intelligence back toward supporting evidence.
+
+This is especially important for Publisher Workspace, Story Intelligence, Calendar validation, and AI-generated analysis.
+
+---
+
+## 39. Saved Views and Operator Efficiency
+
+As datasets grow, the UI should eventually support reusable views.
+
+Examples:
+
+```text
+South Korea + Elections + NEC + Last 7 Days
+China + Semiconductors + Export Controls
+Taiwan + Military + PLA + Last 24 Hours
+Failed source endpoints
+High-priority Calendar events this week
+Publisher Workspace projects in Fact Checking
+```
+
+Saved views should persist governed query definitions rather than browser-only snapshots where practical.
+
+---
+
+## 40. Dashboard Strategy
+
+The Dashboard should be an operator launch surface, not a dumping ground for every metric.
+
+High-value dashboard modules may include:
+
+```text
+Breaking stories
+New developments
+Critical Calendar events
+High-priority alerts
+Source-health degradation
+Ingestion failures
+AI operational warnings
+Publisher Workspace active projects
+```
+
+Deep analytics belong on dedicated screens.
+
+Dashboard cards should retrieve bounded, purpose-built data rather than issuing large generic queries.
+
+---
+
+## 41. Navigation Strategy
+
+Initial navigation may include:
+
+```text
+Dashboard
+Breaking
+Intelligence Calendar
+Stories
+Documents
+Alerts
+Sources
+Geographies
+Topics
+YouTube
+Monitors
+Entities
+Search
+Publisher Workspace
+AI Analysis
+System
+```
+
+`Publisher Workspace` supersedes the older ambiguous `Research` navigation label when the full research subsystem is implemented.
+
+A lightweight Research entry may temporarily exist during incremental development, but long-term terminology should follow the Publisher Workspace specification.
+
+---
+
+## 42. Open-Source Component Boundary
+
+Open-source components provide reusable presentation and interaction primitives.
+
+They do **not** dictate the intelligence domain model.
+
+Examples:
+
+```text
+Tabler
+    provides cards/forms/navigation
+    does not define Story state
+
+Tabulator
+    provides interactive table rendering
+    does not define document filtering semantics
+
+FullCalendar
+    provides calendar visualization
+    does not define event validation/recurrence policy
+
+ECharts
+    provides chart rendering
+    does not define analytical truth
+
+SQLAdmin
+    provides CRUD convenience
+    does not replace operator workflows
+```
+
+This boundary is a core architectural rule.
+
+---
+
+## 43. Development Sequence
+
+The Web UI should grow with backend capability rather than attempting to build every future screen immediately.
+
+Suggested progression:
+
+```text
+Core Platform
+    Dashboard / Sources / Documents / Runs / Failures
+        ↓
+Classification + Monitoring
+    Geography / Topic / Entity / Document Type filters
+    Monitor builder
+        ↓
+Expanded Acquisition
+    source extraction/configuration tools
+        ↓
+YouTube
+    video/transcript intelligence
+        ↓
+AI Routing
+    AI operations and derived-analysis panels
+        ↓
+Story Intelligence
+    evolving Story and new-development interfaces
+        ↓
+Intelligence Calendar
+    validation, monitoring, outcome workflows
+        ↓
+Publisher Workspace
+    evidence clips, citations, media, exports
+```
+
+Some tracks may overlap, but the UI should not simulate backend capabilities that do not yet exist.
+
+---
+
+## 44. Decisions Recorded by This Strategy
+
+The following are considered current architectural decisions:
+
+- The Web UI is a custom Intelligence Operations Console.
+- FastAPI and PostgreSQL remain authoritative.
+- Jinja2 is the server-rendering layer.
+- HTMX 2.x handles dynamic server interaction.
+- Alpine.js handles lightweight browser-only behavior.
+- Tabler provides the application shell/design system.
+- Tabulator handles data-heavy result windows.
+- FullCalendar Standard provides Intelligence Calendar visualization only.
+- Apache ECharts provides analytical visualization only.
+- SQLAdmin provides separate low-level administrative CRUD.
+- Server-side filtering/pagination remain authoritative for large datasets.
+- Geography uses the canonical classification model and is not synonymous with publisher country.
+- Topics, Entities, and Document Types come from the Unified Classification subsystem.
+- Story state comes from Story Intelligence.
+- Calendar state comes from the Intelligence Calendar subsystem.
+- Publisher Workspace is a first-class operator workflow.
+- AI UI actions route through the AI Router.
+- Drupal is not the primary application/CMS layer.
+- React/Next.js are not introduced initially.
+- Progressive enhancement is the default.
+- A mandatory Node.js build pipeline is not required initially.
+- Richer client-side components may be added later for demonstrated local needs.
+- Browser components never become competing authoritative domain stores.
+
+---
+
+## 45. External Component References
+
+The following project references are retained as implementation resources. Exact versions should be pinned by the implementation dependency-management process rather than hard-coded in this architectural rationale unless a specific compatibility decision requires it.
+
+- Tabler: https://tabler.io/
+- FastAPI templates: https://fastapi.tiangolo.com/advanced/templates/
+- HTMX: https://htmx.org/
+- Alpine.js: https://alpinejs.dev/
+- Tabulator: https://tabulator.info/
+- FullCalendar: https://fullcalendar.io/
+- Apache ECharts: https://echarts.apache.org/
+- SQLAdmin: https://aminalaee.dev/sqladmin/
+- Drupal documentation: https://www.drupal.org/docs/
+
+---
+
+## 46. Final Architecture Summary
+
+```text
+                         OPERATOR
+                            │
+                            ▼
+                    INTELLIGENCE CONSOLE
+                            │
+                            ▼
+                          TABLER
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+      JINJA                HTMX              ALPINE
+ server rendering      server actions     local behavior
+        │                   │                   │
+        ├──────────────┬─────┴─────┬────────────┤
+        ▼              ▼           ▼            ▼
+   TABULATOR      FULLCALENDAR   ECHARTS   CUSTOM WORKFLOWS
+      tables         calendar    analytics       │
+        │              │           │             ├── Stories
+        │              │           │             ├── Sources
+        │              │           │             ├── Monitors
+        │              │           │             ├── Publisher Workspace
+        │              │           │             └── AI Analysis
+        └──────────────┴─────┬─────┴─────────────┘
+                             ▼
+                          FASTAPI
+                             │
+                    Application Services
+                             │
+       ┌─────────────────────┼──────────────────────┐
+       ▼                     ▼                      ▼
+ Classification       Story / Calendar        AI Routing
+       │               / Publisher                │
+       └─────────────────────┼──────────────────────┘
+                             ▼
+                         POSTGRESQL
+                    Authoritative State
+```
+
+The intended result is a maintainable, high-density intelligence interface that uses mature UI components without surrendering domain ownership to those components.
+
+The platform builds the parts that are unique to intelligence operations and reuses established components for ordinary presentation mechanics.

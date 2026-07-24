@@ -123,6 +123,8 @@ An event may therefore exist in the platform before the first related news docum
 
 This changes the system from purely reactive monitoring into partially anticipatory intelligence.
 
+The Intelligence Calendar must reuse the platform-wide canonical geography, topic, entity, and document-type systems defined in `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`. The Calendar must not maintain a parallel or incompatible taxonomy merely for event filtering. Calendar-specific relationship tables may carry event roles and confidence while referencing the same canonical records used by documents, stories, and observed Events.
+
 ---
 
 ## 3. Core Intelligence Model
@@ -658,10 +660,12 @@ Language detection
 Keyword / Regex matching
       │
       ▼
-Topic classification
+UNIFIED DOCUMENT CLASSIFICATION
       │
-      ▼
-Entity extraction
+      ├── Geography
+      ├── Hierarchical Topics
+      ├── Entities
+      └── Document Type
       │
       ▼
 FUTURE EVENT DETECTION
@@ -1196,6 +1200,8 @@ outcome_summary
 metadata
 ```
 
+Calendar event geography should use canonical geography relationships rather than relying only on the scalar `country`, `region`, and `city` convenience fields above. Those fields may remain useful for display, indexing, schedule defaults, or denormalized snapshots, but canonical multi-geography semantics belong in normalized event-geography relationships.
+
 Recommended `event_type` values:
 
 ```text
@@ -1217,7 +1223,36 @@ official_calendar
 
 ## 16. Relational Tables
 
-### 16.1 Event Topics
+All Calendar classification relationships must reference the same canonical classification records used elsewhere in the platform.
+
+### 16.1 Event Geographies
+
+```text
+intelligence_calendar_event_geographies
+```
+
+Fields:
+
+```text
+event_id
+geography_id
+relationship_role
+confidence
+created_at
+```
+
+Possible roles:
+
+```text
+primary_subject
+secondary_subject
+location_of_event
+participant_origin
+target_location
+mentioned
+```
+
+### 16.2 Event Topics
 
 ```text
 intelligence_calendar_event_topics
@@ -1234,7 +1269,7 @@ created_at
 
 ---
 
-### 16.2 Event Entities
+### 16.3 Event Entities
 
 ```text
 intelligence_calendar_event_entities
@@ -1266,7 +1301,7 @@ subject
 
 ---
 
-### 16.3 Event Sources
+### 16.4 Event Sources
 
 ```text
 intelligence_calendar_event_sources
@@ -1292,7 +1327,7 @@ created_at
 
 ---
 
-### 16.4 Event Documents
+### 16.5 Event Documents
 
 ```text
 intelligence_calendar_event_documents
@@ -1325,7 +1360,7 @@ correction
 
 ---
 
-### 16.5 Event Stories
+### 16.6 Event Stories
 
 ```text
 intelligence_calendar_event_stories
@@ -1343,7 +1378,7 @@ created_at
 
 ---
 
-### 16.6 Event Monitors
+### 16.7 Event Monitors
 
 ```text
 intelligence_calendar_event_monitors
@@ -1363,7 +1398,7 @@ created_at
 
 ---
 
-### 16.7 Event History
+### 16.8 Event History
 
 ```text
 intelligence_calendar_event_history
@@ -1404,7 +1439,7 @@ DESCRIPTION_CHANGED
 
 ---
 
-### 16.8 Event Watch Sources
+### 16.9 Event Watch Sources
 
 ```text
 intelligence_calendar_event_watch_sources
@@ -1429,7 +1464,7 @@ deactivation_at
 
 ---
 
-### 16.9 Event Search Terms
+### 16.10 Event Search Terms
 
 ```text
 intelligence_calendar_event_search_terms
@@ -1458,7 +1493,7 @@ semantic_query
 
 ---
 
-### 16.10 Event Monitor Templates
+### 16.11 Event Monitor Templates
 
 ```text
 intelligence_calendar_monitor_templates
@@ -1865,6 +1900,10 @@ INGESTION LAYER
 CONTENT NORMALIZATION
         │
         ▼
+UNIFIED DOCUMENT CLASSIFICATION
+ Geography / Topics / Entities / Type
+        │
+        ▼
 FUTURE EVENT DETECTION
         │
         ▼
@@ -1949,10 +1988,14 @@ story clustering
 event resolution
 entity disambiguation
 topic classification
+geography classification
+document-type context
 cross-language correlation
 duplicate detection
 new-development detection
 ```
+
+Calendar relationships should act as weighted priors alongside document geography, topics, entities, time proximity, and semantic similarity. They must not force a document into a story or event solely because publication time overlaps a Calendar Event.
 
 ---
 
@@ -2386,6 +2429,8 @@ System
 
 ---
 
+Calendar filtering and event detail views should use the canonical classification system. Geography filters must query event-geography relationships rather than assuming that a single scalar country field fully describes the event. Topic and entity selectors must use the same canonical records used in document and story workflows.
+
 ## 37. Intelligence Calendar Main Views
 
 Recommended views:
@@ -2415,7 +2460,9 @@ Intelligence Calendar
 
 ---
 
-## 38. Country Filters
+## 38. Geography Filters
+
+Calendar filtering must support one or more canonical geographies and should allow region-to-country hierarchy filtering. Initial high-value options include:
 
 ```text
 United States
@@ -2431,6 +2478,8 @@ Indo-Pacific
 ---
 
 ## 39. Topic Filters
+
+Calendar topic filtering must use the canonical hierarchical taxonomy defined by the Unified Document Classification System. Parent-topic filters should optionally include descendant topics.
 
 ```text
 Politics
@@ -2595,8 +2644,9 @@ The Intelligence Calendar should support:
 ```text
 keyword search
 entity search
-country search
-topic search
+geography search
+country / region hierarchy search
+topic / taxonomy-branch search
 date range
 event type
 validation status
@@ -2771,10 +2821,12 @@ Add:
 event validation
 calendar priority
 expected news importance
+event geographies
 event topics
 event entities
 event sources
 event history
+canonical classification reuse
 ```
 
 ### Calendar Phase 3 — Official and Recurring Calendar Ingestion
@@ -2889,7 +2941,8 @@ PRE-EVENT MONITORING
       FUTURE EVENT DETECTION
                 │
                 ▼
-      TOPICS + ENTITIES + AI
+   CANONICAL CLASSIFICATION + AI
+ Geography / Topics / Entities / Type
                 │
                 ▼
         STORY CLUSTERING
@@ -2935,3 +2988,12 @@ The Intelligence Calendar and Automated Event Scheduler should be treated as a f
 Its purpose is not merely to display dates.
 
 Its purpose is to give the platform advance awareness of important future events and automatically prepare the monitoring system before those events occur.
+
+
+---
+
+## 52. Classification System Dependency
+
+The Intelligence Calendar depends on `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md` for canonical geography, topic, entity, document-type, confidence, provenance, and taxonomy-versioning rules.
+
+Calendar-specific tables add event relationships and event roles; they do not redefine the underlying canonical classification vocabularies.
