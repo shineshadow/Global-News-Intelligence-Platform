@@ -88,9 +88,19 @@ async def test_frozen_topic_roots_are_seeded(database_session_factory):
     assert all(row.is_active for row in rows)
 
 
-async def test_initial_geographies_are_seeded(database_session_factory):
+async def test_foundational_geographies_are_seeded(
+    database_session_factory,
+):
     async with database_session_factory() as session:
-        rows = (await session.scalars(select(Geography))).all()
+        rows = (
+            await session.scalars(
+                select(Geography).where(
+                    Geography.slug.in_(
+                        EXPECTED_GEOGRAPHY_SLUGS
+                    )
+                )
+            )
+        ).all()
 
     assert {row.slug for row in rows} == EXPECTED_GEOGRAPHY_SLUGS
     assert all(row.is_active for row in rows)

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 1Eg8aroonCWf9stJgpayKwlivgquL6tTAQh6mdIZqzWWIRlXFOMrWA2KbHUcVcf
+\restrict fObQP1QvPglaa4d93Q7u9wnld1xQCPqny36q5yyvTkCyH6h0fEJEXVvbAmCrKYF
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -521,13 +521,15 @@ CREATE TABLE public.geographies (
     name character varying(255) NOT NULL,
     native_name character varying(255),
     geography_type character varying(50) NOT NULL,
-    iso_code character varying(20),
-    country_code character varying(10),
-    region_code character varying(50),
     is_active boolean DEFAULT true NOT NULL,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    iso_alpha2 character varying(2),
+    iso_alpha3 character varying(3),
+    CONSTRAINT ck_geographies_ck_geographies_geography_type CHECK (((geography_type)::text = ANY ((ARRAY['world'::character varying, 'region'::character varying, 'subregion'::character varying, 'intermediate_region'::character varying, 'country_or_area'::character varying, 'country'::character varying, 'territory'::character varying, 'nation_or_homeland'::character varying, 'de_facto_state'::character varying, 'state_province'::character varying, 'city'::character varying, 'maritime_area'::character varying, 'custom_region'::character varying])::text[]))),
+    CONSTRAINT ck_geographies_ck_geographies_iso_alpha2_format CHECK (((iso_alpha2 IS NULL) OR ((iso_alpha2)::text ~ '^[A-Z]{2}$'::text))),
+    CONSTRAINT ck_geographies_ck_geographies_iso_alpha3_format CHECK (((iso_alpha3 IS NULL) OR ((iso_alpha3)::text ~ '^[A-Z]{3}$'::text)))
 );
 
 
@@ -1294,24 +1296,10 @@ CREATE INDEX ix_entity_aliases_normalized_language ON public.entity_aliases USIN
 
 
 --
--- Name: ix_geographies_country_code; Type: INDEX; Schema: public; Owner: news_intelligence_app
---
-
-CREATE INDEX ix_geographies_country_code ON public.geographies USING btree (country_code);
-
-
---
 -- Name: ix_geographies_parent_name; Type: INDEX; Schema: public; Owner: news_intelligence_app
 --
 
 CREATE INDEX ix_geographies_parent_name ON public.geographies USING btree (parent_id, name);
-
-
---
--- Name: ix_geographies_region_code; Type: INDEX; Schema: public; Owner: news_intelligence_app
---
-
-CREATE INDEX ix_geographies_region_code ON public.geographies USING btree (region_code);
 
 
 --
@@ -1466,6 +1454,20 @@ CREATE UNIQUE INDEX uq_document_type_assignments_active_primary ON public.docume
 --
 
 CREATE UNIQUE INDEX uq_document_type_assignments_active_type ON public.document_type_assignments USING btree (document_id, document_type_id) WHERE is_active;
+
+
+--
+-- Name: uq_geographies_iso_alpha2; Type: INDEX; Schema: public; Owner: news_intelligence_app
+--
+
+CREATE UNIQUE INDEX uq_geographies_iso_alpha2 ON public.geographies USING btree (iso_alpha2) WHERE (iso_alpha2 IS NOT NULL);
+
+
+--
+-- Name: uq_geographies_iso_alpha3; Type: INDEX; Schema: public; Owner: news_intelligence_app
+--
+
+CREATE UNIQUE INDEX uq_geographies_iso_alpha3 ON public.geographies USING btree (iso_alpha3) WHERE (iso_alpha3 IS NOT NULL);
 
 
 --
@@ -1656,5 +1658,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 1Eg8aroonCWf9stJgpayKwlivgquL6tTAQh6mdIZqzWWIRlXFOMrWA2KbHUcVcf
+\unrestrict fObQP1QvPglaa4d93Q7u9wnld1xQCPqny36q5yyvTkCyH6h0fEJEXVvbAmCrKYF
 
