@@ -1,4 +1,5 @@
 from app.repositories import (
+    classification_repository,
     document_repository,
     document_version_repository,
     ingestion_run_repository,
@@ -8,6 +9,7 @@ from app.repositories import (
 )
 
 __all__ = [
+    "classification_repository",
     "document_repository",
     "document_version_repository",
     "ingestion_run_repository",

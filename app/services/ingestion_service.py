@@ -23,6 +23,9 @@ from app.repositories import (
     source_endpoint_repository,
     source_repository,
 )
+from app.services.classification_service import (
+    classify_document_deterministically,
+)
 from app.services.exceptions import (
     InvalidUpdateError,
     ResourceNotFoundError,
@@ -525,6 +528,32 @@ async def _finish_successful_fetch(
                             source=source,
                             endpoint=endpoint,
                             retrieved_at=finished_at,
+                        )
+
+                    try:
+                        classification_summary = (
+                            await classify_document_deterministically(
+                                session,
+                                document_id,
+                                trigger="ingestion",
+                            )
+                        )
+                        if classification_summary.status == "failed":
+                            logger.warning(
+                                "Deterministic classification failed "
+                                "after preserving document %s: %s",
+                                document_id,
+                                classification_summary.error,
+                            )
+                    except Exception as exc:
+                        # Classification is enrichment. A classifier/config
+                        # failure must never discard a valid raw document.
+                        logger.warning(
+                            "Deterministic classification could not run "
+                            "after preserving document %s: %s",
+                            document_id,
+                            exc,
+                            exc_info=True,
                         )
 
                     if action == "created":

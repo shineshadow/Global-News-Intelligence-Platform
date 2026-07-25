@@ -73,10 +73,36 @@ class Geography(Base):
 
     __tablename__ = "geographies"
     __table_args__ = (
+        CheckConstraint(
+            "iso_alpha2 IS NULL OR iso_alpha2 ~ '^[A-Z]{2}$'",
+            name="iso_alpha2_format",
+        ),
+        CheckConstraint(
+            "iso_alpha3 IS NULL OR iso_alpha3 ~ '^[A-Z]{3}$'",
+            name="iso_alpha3_format",
+        ),
+        CheckConstraint(
+            "geography_type IN ('world', 'region', 'subregion', "
+            "'intermediate_region', 'country_or_area', 'country', "
+            "'territory', 'nation_or_homeland', 'de_facto_state', "
+            "'state_province', 'city', 'maritime_area', "
+            "'custom_region')",
+            name="geography_type",
+        ),
         Index("ix_geographies_parent_name", "parent_id", "name"),
         Index("ix_geographies_type_active", "geography_type", "is_active"),
-        Index("ix_geographies_country_code", "country_code"),
-        Index("ix_geographies_region_code", "region_code"),
+        Index(
+            "uq_geographies_iso_alpha2",
+            "iso_alpha2",
+            unique=True,
+            postgresql_where=text("iso_alpha2 IS NOT NULL"),
+        ),
+        Index(
+            "uq_geographies_iso_alpha3",
+            "iso_alpha3",
+            unique=True,
+            postgresql_where=text("iso_alpha3 IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -89,9 +115,8 @@ class Geography(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     native_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     geography_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    iso_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    country_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    region_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    iso_alpha2: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    iso_alpha3: Mapped[str | None] = mapped_column(String(3), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
