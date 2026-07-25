@@ -27,15 +27,25 @@ NON_NULLABLE_SOURCE_FIELDS = {
 }
 
 
+LEGACY_SOURCE_TYPE_MAP = {
+    "news": "news_organization",
+    "research": "research_institute",
+}
+
+
 def _normalize_source_values(
     values: dict[str, Any],
 ) -> dict[str, Any]:
-    """Convert schema-specific values into ORM-compatible values."""
+    """Convert legacy/API values into canonical ORM-compatible values."""
 
     website_url = values.get("website_url")
 
     if website_url is not None:
         values["website_url"] = str(website_url)
+
+    source_type = values.get("source_type")
+    if source_type in LEGACY_SOURCE_TYPE_MAP:
+        values["source_type"] = LEGACY_SOURCE_TYPE_MAP[source_type]
 
     return values
 

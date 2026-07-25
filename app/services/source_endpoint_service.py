@@ -22,6 +22,8 @@ from app.services.exceptions import (
 
 NON_NULLABLE_ENDPOINT_FIELDS = {
     "endpoint_type",
+    "endpoint_format",
+    "acquisition_method",
     "url",
     "poll_interval_seconds",
     "endpoint_metadata",
@@ -31,14 +33,46 @@ NON_NULLABLE_ENDPOINT_FIELDS = {
 def _normalize_endpoint_values(
     values: dict[str, Any],
 ) -> dict[str, Any]:
-    """Convert schema-specific values into ORM-compatible values."""
+    """Normalize legacy endpoint values into canonical dimensions."""
 
     url = values.get("url")
 
     if url is not None:
         values["url"] = str(url)
 
+    endpoint_type = values.get("endpoint_type")
+
+    if endpoint_type in {"rss", "atom"}:
+        values["endpoint_type"] = "feed"
+        values["endpoint_format"] = endpoint_type
+        values["acquisition_method"] = "feed_parser"
+    elif endpoint_type == "feed":
+        if values.get("endpoint_format") is None:
+            values["endpoint_format"] = "rss"
+        if values.get("acquisition_method") is None:
+            values["acquisition_method"] = "feed_parser"
+
     return values
+
+
+def _validate_endpoint_create(
+    values: dict[str, Any],
+) -> None:
+    missing = sorted(
+        field_name
+        for field_name in (
+            "endpoint_type",
+            "endpoint_format",
+            "acquisition_method",
+        )
+        if not values.get(field_name)
+    )
+
+    if missing:
+        raise InvalidUpdateError(
+            "Endpoint creation requires canonical dimensions: "
+            + ", ".join(missing)
+        )
 
 
 def _validate_endpoint_update(
@@ -70,6 +104,7 @@ async def create_source_endpoint(
     values = _normalize_endpoint_values(
         data.model_dump()
     )
+    _validate_endpoint_create(values)
 
     values["source_id"] = source_id
     values["status"] = "active"

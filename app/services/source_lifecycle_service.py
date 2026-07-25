@@ -18,6 +18,12 @@ from app.services.exceptions import (
     ResourceConflictError,
     ResourceNotFoundError,
 )
+from app.services.source_endpoint_service import (
+    _normalize_endpoint_values,
+)
+from app.services.source_service import (
+    _normalize_source_values,
+)
 
 
 def _utcnow() -> datetime:
@@ -92,23 +98,24 @@ async def create_source(
                 "that website URL."
             )
 
+    values = {
+        "name": form.name,
+        "native_name": form.native_name,
+        "country": form.country,
+        "primary_language": form.primary_language,
+        "source_type": form.source_type,
+        "status": "active",
+        "priority": form.priority,
+        "website_url": form.website_url,
+        "source_metadata": {
+            "created_from": "web",
+        },
+    }
+    _normalize_source_values(values)
+
     source = await source_repository.create_source(
         session,
-        {
-            "name": form.name,
-            "native_name": form.native_name,
-            "country": form.country,
-            "primary_language": (
-                form.primary_language
-            ),
-            "source_type": form.source_type,
-            "status": "active",
-            "priority": form.priority,
-            "website_url": form.website_url,
-            "source_metadata": {
-                "created_from": "web",
-            },
-        },
+        values,
     )
 
     await _commit_or_conflict(
@@ -145,20 +152,21 @@ async def update_source(
                 "that website URL."
             )
 
+    values = {
+        "name": form.name,
+        "native_name": form.native_name,
+        "country": form.country,
+        "primary_language": form.primary_language,
+        "source_type": form.source_type,
+        "priority": form.priority,
+        "website_url": form.website_url,
+    }
+    _normalize_source_values(values)
+
     source = await source_repository.update_source(
         session,
         source,
-        {
-            "name": form.name,
-            "native_name": form.native_name,
-            "country": form.country,
-            "primary_language": (
-                form.primary_language
-            ),
-            "source_type": form.source_type,
-            "priority": form.priority,
-            "website_url": form.website_url,
-        },
+        values,
     )
 
     await _commit_or_conflict(
@@ -285,37 +293,31 @@ async def create_endpoint(
             "that URL."
         )
 
+    values = {
+        "source_id": source_id,
+        "name": form.name,
+        "endpoint_type": form.endpoint_type,
+        "url": form.url,
+
+        # Never immediately schedule a newly-entered endpoint.
+        "status": "disabled",
+
+        "poll_interval_seconds": form.poll_interval_seconds,
+
+        "endpoint_metadata": _pending_verification_metadata(
+            {
+                "created_from": "web",
+            },
+            reason="new_endpoint",
+        ),
+    }
+    _normalize_endpoint_values(values)
+
     endpoint = (
         await source_endpoint_repository
         .create_source_endpoint(
             session,
-            {
-                "source_id": source_id,
-                "name": form.name,
-                "endpoint_type": (
-                    form.endpoint_type
-                ),
-                "url": form.url,
-
-                # Never immediately schedule a
-                # newly-entered endpoint.
-                "status": "disabled",
-
-                "poll_interval_seconds": (
-                    form.poll_interval_seconds
-                ),
-
-                "endpoint_metadata":
-                    _pending_verification_metadata(
-                        {
-                            "created_from":
-                                "web",
-                        },
-                        reason=(
-                            "new_endpoint"
-                        ),
-                    ),
-            },
+            values,
         )
     )
 
@@ -353,19 +355,23 @@ async def update_endpoint(
 
     old_url = endpoint.url
 
-    retrieval_changed = (
-        form.url != endpoint.url
-        or form.endpoint_type
-        != endpoint.endpoint_type
-    )
-
     values = {
         "name": form.name,
         "endpoint_type": form.endpoint_type,
         "url": form.url,
-        "poll_interval_seconds":
-            form.poll_interval_seconds,
+        "poll_interval_seconds": form.poll_interval_seconds,
     }
+    _normalize_endpoint_values(values)
+
+    retrieval_changed = (
+        values["url"] != endpoint.url
+        or values["endpoint_type"] != endpoint.endpoint_type
+        or values["endpoint_format"] != endpoint.endpoint_format
+        or (
+            values["acquisition_method"]
+            != endpoint.acquisition_method
+        )
+    )
 
     if retrieval_changed:
         values.update(

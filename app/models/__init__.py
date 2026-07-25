@@ -16,6 +16,13 @@ from app.models.document_version import DocumentVersion
 from app.models.ingestion_run import IngestionRun
 from app.models.source import Source
 from app.models.source_endpoint import SourceEndpoint
+from app.models.source_reference import (
+    AcquisitionMethod,
+    EndpointFormat,
+    EndpointType,
+    Platform,
+    SourceType,
+)
 
 __all__ = [
     "Base",
@@ -31,7 +38,12 @@ __all__ = [
     "EntityAlias",
     "Geography",
     "IngestionRun",
+    "AcquisitionMethod",
+    "EndpointFormat",
+    "EndpointType",
+    "Platform",
     "Source",
     "SourceEndpoint",
+    "SourceType",
     "Topic",
 ]

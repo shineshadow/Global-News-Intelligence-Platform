@@ -1,7 +1,16 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, DateTime, Index, String, Text, func, text
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +60,10 @@ class Source(Base):
 
     source_type: Mapped[str] = mapped_column(
         String(50),
+        ForeignKey(
+            "source_types.slug",
+            ondelete="RESTRICT",
+        ),
         nullable=False,
         index=True,
     )

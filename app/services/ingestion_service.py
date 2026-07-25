@@ -209,7 +209,9 @@ def _current_document_values(
     return {
         "source_id": source.id,
         "source_endpoint_id": endpoint.id,
-        "source_type": endpoint.endpoint_type,
+        # Deprecated compatibility value retained through GFA-D.
+        "source_type": endpoint.endpoint_format,
+        "ingestion_format": endpoint.endpoint_format,
         "external_id": item.external_id,
         "canonical_url": item.canonical_url,
         "title_original": item.title_original,
@@ -317,7 +319,7 @@ async def _persist_feed_item(
     source: Source,
     endpoint: SourceEndpoint,
     retrieved_at: datetime,
-) -> DocumentAction:
+) -> tuple[DocumentAction, int]:
     """Create, update, or exactly deduplicate one feed item."""
 
     document = (
@@ -349,12 +351,12 @@ async def _persist_feed_item(
     )
 
     if document is None:
-        await document_repository.create_document(
+        document = await document_repository.create_document(
             session,
             values,
         )
 
-        return "created"
+        return "created", document.id
 
     if document.content_hash == item.content_hash:
         # Refresh identity, metadata, country, and retrieval time
@@ -365,7 +367,7 @@ async def _persist_feed_item(
             values,
         )
 
-        return "unchanged"
+        return "unchanged", document.id
 
     changed_fields = _changed_document_fields(
         document,
@@ -384,7 +386,7 @@ async def _persist_feed_item(
         values,
     )
 
-    return "updated"
+    return "updated", document.id
 
 
 async def _finish_successful_fetch(
@@ -522,7 +524,7 @@ async def _finish_successful_fetch(
             for item in result.feed.items:
                 try:
                     async with session.begin_nested():
-                        action = await _persist_feed_item(
+                        action, document_id = await _persist_feed_item(
                             session,
                             item,
                             source=source,

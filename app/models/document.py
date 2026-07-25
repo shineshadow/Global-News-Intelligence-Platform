@@ -49,6 +49,11 @@ class Document(Base):
             "source_type",
             "published_at",
         ),
+        Index(
+            "ix_documents_ingestion_format_published_at",
+            "ingestion_format",
+            "published_at",
+        ),
     )
 
     id: Mapped[int] = mapped_column(
@@ -77,10 +82,22 @@ class Document(Base):
         index=True,
     )
 
+    # Deprecated compatibility field. GFA-D removes this after all
+    # consumers migrate to ingestion_format/content_format.
     source_type: Mapped[str] = mapped_column(
         String(30),
         nullable=False,
         server_default="rss",
+        index=True,
+    )
+
+    ingestion_format: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey(
+            "endpoint_formats.slug",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
         index=True,
     )
 

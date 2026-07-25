@@ -108,6 +108,8 @@ async def create_document(
 
                 source_type="rss",
 
+                ingestion_format="rss",
+
                 external_id=
                     f"external-{value}",
 

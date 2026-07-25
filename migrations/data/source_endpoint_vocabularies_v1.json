@@ -1,0 +1,458 @@
+{
+  "catalog_version": "1.0",
+  "source_types": [
+    {
+      "slug": "media_organization",
+      "name": "Media Organization",
+      "parent_slug": null
+    },
+    {
+      "slug": "news_organization",
+      "name": "News Organization",
+      "parent_slug": "media_organization"
+    },
+    {
+      "slug": "news_agency",
+      "name": "News Agency / Wire Service",
+      "parent_slug": "news_organization"
+    },
+    {
+      "slug": "newspaper",
+      "name": "Newspaper",
+      "parent_slug": "news_organization"
+    },
+    {
+      "slug": "magazine",
+      "name": "Magazine",
+      "parent_slug": "news_organization"
+    },
+    {
+      "slug": "digital_news_outlet",
+      "name": "Digital News Outlet",
+      "parent_slug": "news_organization"
+    },
+    {
+      "slug": "broadcaster",
+      "name": "Broadcaster",
+      "parent_slug": "media_organization"
+    },
+    {
+      "slug": "public_broadcaster",
+      "name": "Public Broadcaster",
+      "parent_slug": "broadcaster"
+    },
+    {
+      "slug": "commercial_broadcaster",
+      "name": "Commercial Broadcaster",
+      "parent_slug": "broadcaster"
+    },
+    {
+      "slug": "state_media",
+      "name": "State Media",
+      "parent_slug": "media_organization"
+    },
+    {
+      "slug": "government",
+      "name": "Government",
+      "parent_slug": null
+    },
+    {
+      "slug": "executive_branch",
+      "name": "Executive Branch",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "legislature",
+      "name": "Legislature",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "court",
+      "name": "Court / Judiciary",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "election_authority",
+      "name": "Election Authority",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "regulator",
+      "name": "Regulator",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "central_bank",
+      "name": "Central Bank",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "statistical_agency",
+      "name": "Statistical Agency",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "law_enforcement",
+      "name": "Law Enforcement",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "military",
+      "name": "Military",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "intelligence_agency",
+      "name": "Intelligence Agency",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "diplomatic_mission",
+      "name": "Diplomatic Mission",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "local_government",
+      "name": "Local / Subnational Government",
+      "parent_slug": "government"
+    },
+    {
+      "slug": "international_organization",
+      "name": "International Organization",
+      "parent_slug": null
+    },
+    {
+      "slug": "political_party",
+      "name": "Political Party",
+      "parent_slug": null
+    },
+    {
+      "slug": "company",
+      "name": "Company",
+      "parent_slug": null
+    },
+    {
+      "slug": "financial_institution",
+      "name": "Financial Institution",
+      "parent_slug": "company"
+    },
+    {
+      "slug": "university",
+      "name": "University / College",
+      "parent_slug": null
+    },
+    {
+      "slug": "research_institute",
+      "name": "Research Institute",
+      "parent_slug": null
+    },
+    {
+      "slug": "think_tank",
+      "name": "Think Tank",
+      "parent_slug": "research_institute"
+    },
+    {
+      "slug": "ngo",
+      "name": "Non-Governmental Organization",
+      "parent_slug": null
+    },
+    {
+      "slug": "labor_union",
+      "name": "Labor Union",
+      "parent_slug": null
+    },
+    {
+      "slug": "trade_association",
+      "name": "Trade / Industry Association",
+      "parent_slug": null
+    },
+    {
+      "slug": "religious_organization",
+      "name": "Religious Organization",
+      "parent_slug": null
+    },
+    {
+      "slug": "individual",
+      "name": "Individual",
+      "parent_slug": null
+    },
+    {
+      "slug": "journalist",
+      "name": "Journalist",
+      "parent_slug": "individual"
+    },
+    {
+      "slug": "analyst",
+      "name": "Analyst / Researcher",
+      "parent_slug": "individual"
+    },
+    {
+      "slug": "activist",
+      "name": "Activist",
+      "parent_slug": "individual"
+    },
+    {
+      "slug": "content_creator",
+      "name": "Content Creator",
+      "parent_slug": "individual"
+    },
+    {
+      "slug": "public_official",
+      "name": "Public Official",
+      "parent_slug": "individual"
+    },
+    {
+      "slug": "other",
+      "name": "Other",
+      "parent_slug": null
+    }
+  ],
+  "endpoint_types": [
+    {
+      "slug": "website",
+      "name": "Website"
+    },
+    {
+      "slug": "feed",
+      "name": "Feed"
+    },
+    {
+      "slug": "api",
+      "name": "API"
+    },
+    {
+      "slug": "email",
+      "name": "Email"
+    },
+    {
+      "slug": "social_platform",
+      "name": "Social Platform"
+    },
+    {
+      "slug": "video_platform",
+      "name": "Video Platform"
+    },
+    {
+      "slug": "podcast",
+      "name": "Podcast"
+    },
+    {
+      "slug": "file_repository",
+      "name": "File Repository"
+    },
+    {
+      "slug": "manual",
+      "name": "Manual"
+    },
+    {
+      "slug": "other",
+      "name": "Other"
+    }
+  ],
+  "endpoint_formats": [
+    {
+      "slug": "html",
+      "name": "HTML"
+    },
+    {
+      "slug": "rss",
+      "name": "RSS"
+    },
+    {
+      "slug": "atom",
+      "name": "Atom"
+    },
+    {
+      "slug": "json_feed",
+      "name": "JSON Feed"
+    },
+    {
+      "slug": "json",
+      "name": "JSON"
+    },
+    {
+      "slug": "xml",
+      "name": "XML"
+    },
+    {
+      "slug": "email_message",
+      "name": "Email Message"
+    },
+    {
+      "slug": "pdf",
+      "name": "PDF"
+    },
+    {
+      "slug": "plain_text",
+      "name": "Plain Text"
+    },
+    {
+      "slug": "csv",
+      "name": "CSV"
+    },
+    {
+      "slug": "tsv",
+      "name": "TSV"
+    },
+    {
+      "slug": "video",
+      "name": "Video"
+    },
+    {
+      "slug": "audio",
+      "name": "Audio"
+    },
+    {
+      "slug": "ical",
+      "name": "iCalendar"
+    },
+    {
+      "slug": "binary",
+      "name": "Binary"
+    },
+    {
+      "slug": "other",
+      "name": "Other"
+    }
+  ],
+  "acquisition_methods": [
+    {
+      "slug": "http_fetch",
+      "name": "HTTP Fetch"
+    },
+    {
+      "slug": "feed_parser",
+      "name": "Feed Parser"
+    },
+    {
+      "slug": "api_client",
+      "name": "API Client"
+    },
+    {
+      "slug": "web_scraper",
+      "name": "Web Scraper"
+    },
+    {
+      "slug": "browser_automation",
+      "name": "Browser Automation"
+    },
+    {
+      "slug": "imap",
+      "name": "IMAP"
+    },
+    {
+      "slug": "pop3",
+      "name": "POP3"
+    },
+    {
+      "slug": "file_download",
+      "name": "File Download"
+    },
+    {
+      "slug": "ftp",
+      "name": "FTP"
+    },
+    {
+      "slug": "sftp",
+      "name": "SFTP"
+    },
+    {
+      "slug": "platform_api",
+      "name": "Platform API"
+    },
+    {
+      "slug": "webhook",
+      "name": "Webhook"
+    },
+    {
+      "slug": "manual",
+      "name": "Manual"
+    },
+    {
+      "slug": "other",
+      "name": "Other"
+    }
+  ],
+  "platforms": [
+    {
+      "slug": "youtube",
+      "name": "YouTube"
+    },
+    {
+      "slug": "vimeo",
+      "name": "Vimeo"
+    },
+    {
+      "slug": "x",
+      "name": "X"
+    },
+    {
+      "slug": "truth_social",
+      "name": "Truth Social"
+    },
+    {
+      "slug": "facebook",
+      "name": "Facebook"
+    },
+    {
+      "slug": "instagram",
+      "name": "Instagram"
+    },
+    {
+      "slug": "threads",
+      "name": "Threads"
+    },
+    {
+      "slug": "telegram",
+      "name": "Telegram"
+    },
+    {
+      "slug": "rumble",
+      "name": "Rumble"
+    },
+    {
+      "slug": "reddit",
+      "name": "Reddit"
+    },
+    {
+      "slug": "tiktok",
+      "name": "TikTok"
+    },
+    {
+      "slug": "linkedin",
+      "name": "LinkedIn"
+    },
+    {
+      "slug": "bluesky",
+      "name": "Bluesky"
+    },
+    {
+      "slug": "mastodon",
+      "name": "Mastodon"
+    },
+    {
+      "slug": "discord",
+      "name": "Discord"
+    },
+    {
+      "slug": "twitch",
+      "name": "Twitch"
+    },
+    {
+      "slug": "substack",
+      "name": "Substack"
+    },
+    {
+      "slug": "medium",
+      "name": "Medium"
+    },
+    {
+      "slug": "github",
+      "name": "GitHub"
+    },
+    {
+      "slug": "other",
+      "name": "Other"
+    }
+  ]
+}
