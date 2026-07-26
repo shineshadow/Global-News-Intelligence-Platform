@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 1ZaavhCGEbvKmeth9SG7XAzNKfp9ksHdS3Oh9G3WC1t4GVqOYOvsIMMSUIKiqlC
+\restrict rJ4durIyo9Sq39P6NgoRuYjtDaLlsDNJKIZhZEMNzld8ra7XbhlvZjNj2SnnnYt
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -18,6 +18,41 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: prevent_entity_type_hierarchy_cycle(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.prevent_entity_type_hierarchy_cycle() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF EXISTS (
+                WITH RECURSIVE descendants(entity_type_id) AS (
+                    SELECT child_entity_type_id
+                    FROM entity_type_hierarchy_edges
+                    WHERE parent_entity_type_id = NEW.child_entity_type_id
+
+                    UNION
+
+                    SELECT edge.child_entity_type_id
+                    FROM entity_type_hierarchy_edges AS edge
+                    JOIN descendants
+                      ON edge.parent_entity_type_id =
+                         descendants.entity_type_id
+                )
+                SELECT 1
+                FROM descendants
+                WHERE entity_type_id = NEW.parent_entity_type_id
+            ) THEN
+                RAISE EXCEPTION
+                    'entity type hierarchy edge would create a cycle';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$;
+
 
 SET default_tablespace = '';
 
@@ -575,6 +610,376 @@ ALTER SEQUENCE public.entity_aliases_id_seq OWNED BY public.entity_aliases.id;
 
 
 --
+-- Name: entity_geographies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.entity_geographies (
+    id bigint NOT NULL,
+    confidence numeric(5,4),
+    evidence jsonb DEFAULT '{}'::jsonb NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    valid_from timestamp with time zone,
+    valid_to timestamp with time zone,
+    is_active boolean DEFAULT true NOT NULL,
+    superseded_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    entity_id bigint NOT NULL,
+    geography_id bigint NOT NULL,
+    relationship_type character varying(100) NOT NULL,
+    assignment_method character varying(50) NOT NULL,
+    CONSTRAINT ck_entity_geographies_confidence_range CHECK (((confidence IS NULL) OR ((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))),
+    CONSTRAINT ck_entity_geographies_valid_interval CHECK (((valid_to IS NULL) OR (valid_from IS NULL) OR (valid_to >= valid_from)))
+);
+
+
+--
+-- Name: entity_geographies_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.entity_geographies_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: entity_geographies_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.entity_geographies_id_seq OWNED BY public.entity_geographies.id;
+
+
+--
+-- Name: entity_geography_relationship_type_external_mappings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.entity_geography_relationship_type_external_mappings (
+    id bigint NOT NULL,
+    confidence numeric(5,4),
+    evidence jsonb DEFAULT '{}'::jsonb NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    valid_from timestamp with time zone,
+    valid_to timestamp with time zone,
+    is_active boolean DEFAULT true NOT NULL,
+    superseded_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    relationship_type character varying(100) NOT NULL,
+    external_resource_id bigint NOT NULL,
+    mapping_relation character varying(50) NOT NULL,
+    resource_kind character varying(50) DEFAULT 'property'::character varying NOT NULL,
+    CONSTRAINT ck_entity_geography_relationship_type_external_mappings_1e59 CHECK (((resource_kind)::text = 'property'::text)),
+    CONSTRAINT ck_entity_geography_relationship_type_external_mappings_4161 CHECK (((confidence IS NULL) OR ((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))),
+    CONSTRAINT ck_entity_geography_relationship_type_external_mappings_d474 CHECK (((valid_to IS NULL) OR (valid_from IS NULL) OR (valid_to >= valid_from)))
+);
+
+
+--
+-- Name: entity_geography_relationship_type_external_mappings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.entity_geography_relationship_type_external_mappings_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: entity_geography_relationship_type_external_mappings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.entity_geography_relationship_type_external_mappings_id_seq OWNED BY public.entity_geography_relationship_type_external_mappings.id;
+
+
+--
+-- Name: entity_geography_relationship_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.entity_geography_relationship_types (
+    slug character varying(100) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: entity_type_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.entity_type_assignments (
+    id bigint NOT NULL,
+    confidence numeric(5,4),
+    evidence jsonb DEFAULT '{}'::jsonb NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    valid_from timestamp with time zone,
+    valid_to timestamp with time zone,
+    is_active boolean DEFAULT true NOT NULL,
+    superseded_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    entity_id bigint NOT NULL,
+    entity_type_id bigint NOT NULL,
+    assignment_method character varying(50) NOT NULL,
+    is_primary boolean DEFAULT false NOT NULL,
+    CONSTRAINT ck_entity_type_assignments_confidence_range CHECK (((confidence IS NULL) OR ((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))),
+    CONSTRAINT ck_entity_type_assignments_valid_interval CHECK (((valid_to IS NULL) OR (valid_from IS NULL) OR (valid_to >= valid_from)))
+);
+
+
+--
+-- Name: entity_type_assignments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.entity_type_assignments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: entity_type_assignments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.entity_type_assignments_id_seq OWNED BY public.entity_type_assignments.id;
+
+
+--
+-- Name: entity_type_external_mappings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.entity_type_external_mappings (
+    id bigint NOT NULL,
+    confidence numeric(5,4),
+    evidence jsonb DEFAULT '{}'::jsonb NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    valid_from timestamp with time zone,
+    valid_to timestamp with time zone,
+    is_active boolean DEFAULT true NOT NULL,
+    superseded_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    entity_type_id bigint NOT NULL,
+    external_resource_id bigint NOT NULL,
+    mapping_relation character varying(50) NOT NULL,
+    resource_kind character varying(50) NOT NULL,
+    CONSTRAINT ck_entity_type_external_mappings_confidence_range CHECK (((confidence IS NULL) OR ((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))),
+    CONSTRAINT ck_entity_type_external_mappings_resource_kind CHECK (((resource_kind)::text = ANY ((ARRAY['concept'::character varying, 'class'::character varying])::text[]))),
+    CONSTRAINT ck_entity_type_external_mappings_valid_interval CHECK (((valid_to IS NULL) OR (valid_from IS NULL) OR (valid_to >= valid_from)))
+);
+
+
+--
+-- Name: entity_type_external_mappings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.entity_type_external_mappings_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: entity_type_external_mappings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.entity_type_external_mappings_id_seq OWNED BY public.entity_type_external_mappings.id;
+
+
+--
+-- Name: entity_type_hierarchy_edges; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.entity_type_hierarchy_edges (
+    id bigint NOT NULL,
+    parent_entity_type_id bigint NOT NULL,
+    child_entity_type_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_entity_type_hierarchy_edges_different_nodes CHECK ((parent_entity_type_id <> child_entity_type_id))
+);
+
+
+--
+-- Name: entity_type_hierarchy_edges_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.entity_type_hierarchy_edges_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: entity_type_hierarchy_edges_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.entity_type_hierarchy_edges_id_seq OWNED BY public.entity_type_hierarchy_edges.id;
+
+
+--
+-- Name: entity_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.entity_types (
+    id bigint NOT NULL,
+    slug character varying(255) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: entity_types_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.entity_types_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: entity_types_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.entity_types_id_seq OWNED BY public.entity_types.id;
+
+
+--
+-- Name: external_semantic_authorities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.external_semantic_authorities (
+    slug character varying(100) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    authority_uri text
+);
+
+
+--
+-- Name: external_semantic_resource_kinds; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.external_semantic_resource_kinds (
+    slug character varying(50) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: external_semantic_resources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.external_semantic_resources (
+    id bigint NOT NULL,
+    scheme_id bigint NOT NULL,
+    resource_kind character varying(50) NOT NULL,
+    external_identifier character varying(512) NOT NULL,
+    external_uri text,
+    name character varying(512),
+    description text,
+    source_created_at timestamp with time zone,
+    source_modified_at timestamp with time zone,
+    source_retired_at timestamp with time zone,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    first_retrieved_at timestamp with time zone,
+    last_retrieved_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: external_semantic_resources_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.external_semantic_resources_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: external_semantic_resources_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.external_semantic_resources_id_seq OWNED BY public.external_semantic_resources.id;
+
+
+--
+-- Name: external_semantic_schemes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.external_semantic_schemes (
+    id bigint NOT NULL,
+    authority_slug character varying(100) NOT NULL,
+    slug character varying(100) NOT NULL,
+    name character varying(255) NOT NULL,
+    scheme_uri text,
+    preferred_prefix character varying(50),
+    version_label character varying(100),
+    version_date date,
+    last_retrieved_at timestamp with time zone,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: external_semantic_schemes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.external_semantic_schemes_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: external_semantic_schemes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.external_semantic_schemes_id_seq OWNED BY public.external_semantic_schemes.id;
+
+
+--
 -- Name: geographies; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -736,6 +1141,43 @@ CREATE SEQUENCE public.platforms_id_seq
 --
 
 ALTER SEQUENCE public.platforms_id_seq OWNED BY public.platforms.id;
+
+
+--
+-- Name: semantic_assignment_methods; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.semantic_assignment_methods (
+    slug character varying(50) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: semantic_mapping_relations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.semantic_mapping_relations (
+    slug character varying(50) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    relation_family character varying(20) NOT NULL,
+    applicable_resource_kind character varying(50) NOT NULL,
+    external_identifier character varying(100) NOT NULL,
+    external_uri text NOT NULL,
+    is_symmetric boolean NOT NULL,
+    is_transitive boolean NOT NULL,
+    inverse_slug character varying(50),
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
 
 
 --
@@ -995,6 +1437,62 @@ ALTER TABLE ONLY public.entity_aliases ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: entity_geographies id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geographies ALTER COLUMN id SET DEFAULT nextval('public.entity_geographies_id_seq'::regclass);
+
+
+--
+-- Name: entity_geography_relationship_type_external_mappings id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geography_relationship_type_external_mappings ALTER COLUMN id SET DEFAULT nextval('public.entity_geography_relationship_type_external_mappings_id_seq'::regclass);
+
+
+--
+-- Name: entity_type_assignments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_assignments ALTER COLUMN id SET DEFAULT nextval('public.entity_type_assignments_id_seq'::regclass);
+
+
+--
+-- Name: entity_type_external_mappings id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_external_mappings ALTER COLUMN id SET DEFAULT nextval('public.entity_type_external_mappings_id_seq'::regclass);
+
+
+--
+-- Name: entity_type_hierarchy_edges id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_hierarchy_edges ALTER COLUMN id SET DEFAULT nextval('public.entity_type_hierarchy_edges_id_seq'::regclass);
+
+
+--
+-- Name: entity_types id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_types ALTER COLUMN id SET DEFAULT nextval('public.entity_types_id_seq'::regclass);
+
+
+--
+-- Name: external_semantic_resources id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_resources ALTER COLUMN id SET DEFAULT nextval('public.external_semantic_resources_id_seq'::regclass);
+
+
+--
+-- Name: external_semantic_schemes id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_schemes ALTER COLUMN id SET DEFAULT nextval('public.external_semantic_schemes_id_seq'::regclass);
+
+
+--
 -- Name: geographies id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1156,6 +1654,94 @@ ALTER TABLE ONLY public.entity_aliases
 
 
 --
+-- Name: entity_geographies pk_entity_geographies; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geographies
+    ADD CONSTRAINT pk_entity_geographies PRIMARY KEY (id);
+
+
+--
+-- Name: entity_geography_relationship_type_external_mappings pk_entity_geography_relationship_type_external_mappings; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geography_relationship_type_external_mappings
+    ADD CONSTRAINT pk_entity_geography_relationship_type_external_mappings PRIMARY KEY (id);
+
+
+--
+-- Name: entity_geography_relationship_types pk_entity_geography_relationship_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geography_relationship_types
+    ADD CONSTRAINT pk_entity_geography_relationship_types PRIMARY KEY (slug);
+
+
+--
+-- Name: entity_type_assignments pk_entity_type_assignments; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_assignments
+    ADD CONSTRAINT pk_entity_type_assignments PRIMARY KEY (id);
+
+
+--
+-- Name: entity_type_external_mappings pk_entity_type_external_mappings; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_external_mappings
+    ADD CONSTRAINT pk_entity_type_external_mappings PRIMARY KEY (id);
+
+
+--
+-- Name: entity_type_hierarchy_edges pk_entity_type_hierarchy_edges; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_hierarchy_edges
+    ADD CONSTRAINT pk_entity_type_hierarchy_edges PRIMARY KEY (id);
+
+
+--
+-- Name: entity_types pk_entity_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_types
+    ADD CONSTRAINT pk_entity_types PRIMARY KEY (id);
+
+
+--
+-- Name: external_semantic_authorities pk_external_semantic_authorities; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_authorities
+    ADD CONSTRAINT pk_external_semantic_authorities PRIMARY KEY (slug);
+
+
+--
+-- Name: external_semantic_resource_kinds pk_external_semantic_resource_kinds; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_resource_kinds
+    ADD CONSTRAINT pk_external_semantic_resource_kinds PRIMARY KEY (slug);
+
+
+--
+-- Name: external_semantic_resources pk_external_semantic_resources; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_resources
+    ADD CONSTRAINT pk_external_semantic_resources PRIMARY KEY (id);
+
+
+--
+-- Name: external_semantic_schemes pk_external_semantic_schemes; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_schemes
+    ADD CONSTRAINT pk_external_semantic_schemes PRIMARY KEY (id);
+
+
+--
 -- Name: geographies pk_geographies; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1193,6 +1779,22 @@ ALTER TABLE ONLY public.language_tags
 
 ALTER TABLE ONLY public.platforms
     ADD CONSTRAINT pk_platforms PRIMARY KEY (id);
+
+
+--
+-- Name: semantic_assignment_methods pk_semantic_assignment_methods; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.semantic_assignment_methods
+    ADD CONSTRAINT pk_semantic_assignment_methods PRIMARY KEY (slug);
+
+
+--
+-- Name: semantic_mapping_relations pk_semantic_mapping_relations; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.semantic_mapping_relations
+    ADD CONSTRAINT pk_semantic_mapping_relations PRIMARY KEY (slug);
 
 
 --
@@ -1292,6 +1894,54 @@ ALTER TABLE ONLY public.entity_aliases
 
 
 --
+-- Name: entity_type_hierarchy_edges uq_entity_type_hierarchy_edges_parent_child; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_hierarchy_edges
+    ADD CONSTRAINT uq_entity_type_hierarchy_edges_parent_child UNIQUE (parent_entity_type_id, child_entity_type_id);
+
+
+--
+-- Name: entity_types uq_entity_types_slug; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_types
+    ADD CONSTRAINT uq_entity_types_slug UNIQUE (slug);
+
+
+--
+-- Name: external_semantic_resources uq_external_semantic_resources_id_kind; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_resources
+    ADD CONSTRAINT uq_external_semantic_resources_id_kind UNIQUE (id, resource_kind);
+
+
+--
+-- Name: external_semantic_resources uq_external_semantic_resources_scheme_identifier; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_resources
+    ADD CONSTRAINT uq_external_semantic_resources_scheme_identifier UNIQUE (scheme_id, external_identifier);
+
+
+--
+-- Name: external_semantic_schemes uq_external_semantic_schemes_authority_slug; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_schemes
+    ADD CONSTRAINT uq_external_semantic_schemes_authority_slug UNIQUE (authority_slug, slug);
+
+
+--
+-- Name: external_semantic_schemes uq_external_semantic_schemes_slug; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_schemes
+    ADD CONSTRAINT uq_external_semantic_schemes_slug UNIQUE (slug);
+
+
+--
 -- Name: geographies uq_geographies_slug; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1305,6 +1955,14 @@ ALTER TABLE ONLY public.geographies
 
 ALTER TABLE ONLY public.platforms
     ADD CONSTRAINT uq_platforms_slug UNIQUE (slug);
+
+
+--
+-- Name: semantic_mapping_relations uq_semantic_mapping_relations_slug_kind; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.semantic_mapping_relations
+    ADD CONSTRAINT uq_semantic_mapping_relations_slug_kind UNIQUE (slug, applicable_resource_kind);
 
 
 --
@@ -1606,6 +2264,76 @@ CREATE INDEX ix_entity_aliases_normalized_language ON public.entity_aliases USIN
 
 
 --
+-- Name: ix_entity_geographies_entity_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_geographies_entity_active ON public.entity_geographies USING btree (entity_id, is_active);
+
+
+--
+-- Name: ix_entity_geographies_geography_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_geographies_geography_active ON public.entity_geographies USING btree (geography_id, is_active);
+
+
+--
+-- Name: ix_entity_geographies_relationship_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_geographies_relationship_active ON public.entity_geographies USING btree (relationship_type, is_active);
+
+
+--
+-- Name: ix_entity_geographies_validity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_geographies_validity ON public.entity_geographies USING btree (valid_from, valid_to);
+
+
+--
+-- Name: ix_entity_type_assignments_entity_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_type_assignments_entity_active ON public.entity_type_assignments USING btree (entity_id, is_active);
+
+
+--
+-- Name: ix_entity_type_assignments_type_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_type_assignments_type_active ON public.entity_type_assignments USING btree (entity_type_id, is_active);
+
+
+--
+-- Name: ix_entity_type_hierarchy_edges_child; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_type_hierarchy_edges_child ON public.entity_type_hierarchy_edges USING btree (child_entity_type_id);
+
+
+--
+-- Name: ix_entity_types_active_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_types_active_name ON public.entity_types USING btree (is_active, name);
+
+
+--
+-- Name: ix_external_semantic_resources_kind_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_external_semantic_resources_kind_active ON public.external_semantic_resources USING btree (resource_kind, is_active);
+
+
+--
+-- Name: ix_external_semantic_schemes_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_external_semantic_schemes_active ON public.external_semantic_schemes USING btree (is_active);
+
+
+--
 -- Name: ix_geographies_parent_name; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1851,6 +2579,48 @@ CREATE UNIQUE INDEX uq_document_type_assignments_active_type ON public.document_
 
 
 --
+-- Name: uq_entity_geographies_active_fact; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_entity_geographies_active_fact ON public.entity_geographies USING btree (entity_id, geography_id, relationship_type) WHERE is_active;
+
+
+--
+-- Name: uq_entity_geography_type_external_mappings_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_entity_geography_type_external_mappings_active ON public.entity_geography_relationship_type_external_mappings USING btree (relationship_type, external_resource_id) WHERE is_active;
+
+
+--
+-- Name: uq_entity_type_assignments_active_primary; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_entity_type_assignments_active_primary ON public.entity_type_assignments USING btree (entity_id) WHERE (is_active AND is_primary);
+
+
+--
+-- Name: uq_entity_type_assignments_active_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_entity_type_assignments_active_type ON public.entity_type_assignments USING btree (entity_id, entity_type_id) WHERE is_active;
+
+
+--
+-- Name: uq_entity_type_external_mappings_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_entity_type_external_mappings_active ON public.entity_type_external_mappings USING btree (entity_type_id, external_resource_id) WHERE is_active;
+
+
+--
+-- Name: uq_external_semantic_resources_active_uri; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_external_semantic_resources_active_uri ON public.external_semantic_resources USING btree (external_uri) WHERE (is_active AND (external_uri IS NOT NULL));
+
+
+--
 -- Name: uq_geographies_iso_alpha2; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1862,6 +2632,13 @@ CREATE UNIQUE INDEX uq_geographies_iso_alpha2 ON public.geographies USING btree 
 --
 
 CREATE UNIQUE INDEX uq_geographies_iso_alpha3 ON public.geographies USING btree (iso_alpha3) WHERE (iso_alpha3 IS NOT NULL);
+
+
+--
+-- Name: entity_type_hierarchy_edges ck_entity_type_hierarchy_edges_acyclic; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER ck_entity_type_hierarchy_edges_acyclic AFTER INSERT OR UPDATE OF parent_entity_type_id, child_entity_type_id ON public.entity_type_hierarchy_edges DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION public.prevent_entity_type_hierarchy_cycle();
 
 
 --
@@ -2049,6 +2826,150 @@ ALTER TABLE ONLY public.entity_aliases
 
 
 --
+-- Name: entity_geographies fk_entity_geographies_assignment_method_semantic_assign_b32a; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geographies
+    ADD CONSTRAINT fk_entity_geographies_assignment_method_semantic_assign_b32a FOREIGN KEY (assignment_method) REFERENCES public.semantic_assignment_methods(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_geographies fk_entity_geographies_entity_id_entities; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geographies
+    ADD CONSTRAINT fk_entity_geographies_entity_id_entities FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_geographies fk_entity_geographies_geography_id_geographies; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geographies
+    ADD CONSTRAINT fk_entity_geographies_geography_id_geographies FOREIGN KEY (geography_id) REFERENCES public.geographies(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_geographies fk_entity_geographies_relationship_type_entity_geograph_a3d4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geographies
+    ADD CONSTRAINT fk_entity_geographies_relationship_type_entity_geograph_a3d4 FOREIGN KEY (relationship_type) REFERENCES public.entity_geography_relationship_types(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_geography_relationship_type_external_mappings fk_entity_geography_relationship_type_external_mappings_5b8c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geography_relationship_type_external_mappings
+    ADD CONSTRAINT fk_entity_geography_relationship_type_external_mappings_5b8c FOREIGN KEY (relationship_type) REFERENCES public.entity_geography_relationship_types(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_geography_relationship_type_external_mappings fk_entity_geography_type_mappings_relation_kind; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geography_relationship_type_external_mappings
+    ADD CONSTRAINT fk_entity_geography_type_mappings_relation_kind FOREIGN KEY (mapping_relation, resource_kind) REFERENCES public.semantic_mapping_relations(slug, applicable_resource_kind) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_geography_relationship_type_external_mappings fk_entity_geography_type_mappings_resource_kind; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_geography_relationship_type_external_mappings
+    ADD CONSTRAINT fk_entity_geography_type_mappings_resource_kind FOREIGN KEY (external_resource_id, resource_kind) REFERENCES public.external_semantic_resources(id, resource_kind) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_type_assignments fk_entity_type_assignments_assignment_method_semantic_a_5725; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_assignments
+    ADD CONSTRAINT fk_entity_type_assignments_assignment_method_semantic_a_5725 FOREIGN KEY (assignment_method) REFERENCES public.semantic_assignment_methods(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_type_assignments fk_entity_type_assignments_entity_id_entities; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_assignments
+    ADD CONSTRAINT fk_entity_type_assignments_entity_id_entities FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_type_assignments fk_entity_type_assignments_entity_type_id_entity_types; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_assignments
+    ADD CONSTRAINT fk_entity_type_assignments_entity_type_id_entity_types FOREIGN KEY (entity_type_id) REFERENCES public.entity_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_type_external_mappings fk_entity_type_external_mappings_entity_type_id_entity_types; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_external_mappings
+    ADD CONSTRAINT fk_entity_type_external_mappings_entity_type_id_entity_types FOREIGN KEY (entity_type_id) REFERENCES public.entity_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_type_external_mappings fk_entity_type_external_mappings_relation_kind; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_external_mappings
+    ADD CONSTRAINT fk_entity_type_external_mappings_relation_kind FOREIGN KEY (mapping_relation, resource_kind) REFERENCES public.semantic_mapping_relations(slug, applicable_resource_kind) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_type_external_mappings fk_entity_type_external_mappings_resource_kind; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_external_mappings
+    ADD CONSTRAINT fk_entity_type_external_mappings_resource_kind FOREIGN KEY (external_resource_id, resource_kind) REFERENCES public.external_semantic_resources(id, resource_kind) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_type_hierarchy_edges fk_entity_type_hierarchy_edges_child_entity_type_id_ent_93c4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_hierarchy_edges
+    ADD CONSTRAINT fk_entity_type_hierarchy_edges_child_entity_type_id_ent_93c4 FOREIGN KEY (child_entity_type_id) REFERENCES public.entity_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: entity_type_hierarchy_edges fk_entity_type_hierarchy_edges_parent_entity_type_id_en_573f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity_type_hierarchy_edges
+    ADD CONSTRAINT fk_entity_type_hierarchy_edges_parent_entity_type_id_en_573f FOREIGN KEY (parent_entity_type_id) REFERENCES public.entity_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: external_semantic_resources fk_external_semantic_resources_resource_kind_external_s_ec79; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_resources
+    ADD CONSTRAINT fk_external_semantic_resources_resource_kind_external_s_ec79 FOREIGN KEY (resource_kind) REFERENCES public.external_semantic_resource_kinds(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: external_semantic_resources fk_external_semantic_resources_scheme_id_external_seman_a194; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_resources
+    ADD CONSTRAINT fk_external_semantic_resources_scheme_id_external_seman_a194 FOREIGN KEY (scheme_id) REFERENCES public.external_semantic_schemes(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: external_semantic_schemes fk_external_semantic_schemes_authority_slug_external_se_a7a6; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.external_semantic_schemes
+    ADD CONSTRAINT fk_external_semantic_schemes_authority_slug_external_se_a7a6 FOREIGN KEY (authority_slug) REFERENCES public.external_semantic_authorities(slug) ON DELETE RESTRICT;
+
+
+--
 -- Name: geographies fk_geographies_parent_id_geographies; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2078,6 +2999,22 @@ ALTER TABLE ONLY public.ingestion_runs
 
 ALTER TABLE ONLY public.language_tag_aliases
     ADD CONSTRAINT fk_language_tag_aliases_canonical_tag_language_tags FOREIGN KEY (canonical_tag) REFERENCES public.language_tags(tag) ON DELETE CASCADE;
+
+
+--
+-- Name: semantic_mapping_relations fk_semantic_mapping_relations_applicable_resource_kind__5a60; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.semantic_mapping_relations
+    ADD CONSTRAINT fk_semantic_mapping_relations_applicable_resource_kind__5a60 FOREIGN KEY (applicable_resource_kind) REFERENCES public.external_semantic_resource_kinds(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: semantic_mapping_relations fk_semantic_mapping_relations_inverse_slug; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.semantic_mapping_relations
+    ADD CONSTRAINT fk_semantic_mapping_relations_inverse_slug FOREIGN KEY (inverse_slug) REFERENCES public.semantic_mapping_relations(slug) ON DELETE RESTRICT;
 
 
 --
@@ -2156,5 +3093,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 1ZaavhCGEbvKmeth9SG7XAzNKfp9ksHdS3Oh9G3WC1t4GVqOYOvsIMMSUIKiqlC
+\unrestrict rJ4durIyo9Sq39P6NgoRuYjtDaLlsDNJKIZhZEMNzld8ra7XbhlvZjNj2SnnnYt
 

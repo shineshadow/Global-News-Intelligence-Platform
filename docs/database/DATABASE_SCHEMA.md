@@ -1,9 +1,9 @@
 # Global News Intelligence Platform — Current Database Schema
 
 **Document type:** Living implementation reference  
-**Snapshot date:** 2026-07-25
-**Platform phase:** Global Foundation Audit — GFA-B complete
-**Alembic revision:** `f72c9a1e4b6d`
+**Snapshot date:** 2026-07-26
+**Platform phase:** Global Foundation Audit — GFA-C.5 frozen
+**Alembic revision:** `c51d8e2f4a90`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -28,12 +28,13 @@ Future database design work should consult this document before adding or changi
 
 ## 2. Current Schema Summary
 
-The current Phase 2 Step 22 schema contains **23 tables**:
+The current schema contains **36 tables**:
 
 1 Alembic infrastructure table
 15 pre-GFA application/classification tables
 5 GFA-A reference-catalog tables
 2 GFA-B language-foundation tables
+13 GFA-C semantic-entity foundation tables
 
 | Table | Purpose |
 |---|---|
@@ -60,14 +61,29 @@ The current Phase 2 Step 22 schema contains **23 tables**:
 | `platforms` | Canonical external platform catalog. |
 | `language_tags` | Canonical BCP 47 language-tag registry used by persisted language fields. |
 | `language_tag_aliases` | Accepted aliases mapping external/legacy language values to canonical tags. |
+| `semantic_assignment_methods` | Canonical semantic-assertion derivation methods. |
+| `entity_types` | Canonical GNI entity-type registry. |
+| `entity_type_hierarchy_edges` | Directed acyclic entity-type hierarchy edges. |
+| `entity_type_assignments` | Historical/current entity-to-type assertions. |
+| `external_semantic_authorities` | Organizations responsible for external semantic schemes. |
+| `external_semantic_schemes` | External ontologies, vocabularies, and namespaces. |
+| `external_semantic_resource_kinds` | Canonical external semantic resource kinds. |
+| `external_semantic_resources` | Reusable external concepts, classes, properties, and individuals. |
+| `semantic_mapping_relations` | Typed SKOS, OWL, and RDFS mapping relations. |
+| `entity_type_external_mappings` | Strongly typed entity-type mappings to external resources. |
+| `entity_geography_relationship_types` | Canonical entity-geography semantic properties. |
+| `entity_geographies` | Historical/current typed entity-geography assertions. |
+| `entity_geography_relationship_type_external_mappings` | Strongly typed external property mappings for entity-geography relationship types. |
 
 Current Alembic revision:
 
 ```text
-f72c9a1e4b6d
+c51d8e2f4a90
 ```
 
-No custom PostgreSQL enum types, extensions, database functions, or triggers are present in this snapshot.
+No custom PostgreSQL enum types or extensions are present. One
+PostgreSQL function and one deferred constraint trigger enforce the
+acyclic entity-type hierarchy.
 
 Step 22 is an additive schema expansion. No Phase 1 table was repurposed or renamed.
 
@@ -185,7 +201,7 @@ Stores the Alembic migration revision currently applied to the database.
 Current value at this snapshot:
 
 ```text
-f72c9a1e4b6d
+c51d8e2f4a90
 ```
 
 ---
@@ -1521,17 +1537,18 @@ A discrepancy between the implemented schema and a future specification may simp
 
 # 28. Snapshot Verification
 
-This document was updated from the post-GFA-B schema-only PostgreSQL dump committed on 2026-07-25.
+This document was updated from the post-GFA-C.5 seed-candidate
+schema-only PostgreSQL dump generated on 2026-07-26.
 
 Observed/verified characteristics:
 
 ```text
 PostgreSQL server:    17.10
 pg_dump version:      17.10
-Alembic revision:     f72c9a1e4b6d
+Alembic revision:     c51d8e2f4a90
 Schema:               public
-Total tables:         23
-Application tables:   22
+Total tables:         36
+Application tables:   35
 Infrastructure tables: 1
 ```
 
@@ -1671,3 +1688,145 @@ GFA-B requires the following invariants:
 9. Aliases resolve to one canonical language_tags entry.
 10. Canonical document-language values are stored independently of source-language metadata.
 ```
+
+# 29. GFA-C Semantic Entity Foundation Candidate
+
+Alembic revision `a84c1d9e7f32` adds the implementation candidate for
+GFA-C.4.1 through GFA-C.4.3.
+
+This section documents the schema verified by applying the full Alembic
+history to an isolated PostgreSQL 17.10 database and running the
+repository test suite and GFA-C verification SQL.
+
+## Canonical entity types
+
+```text
+entity_types
+entity_type_hierarchy_edges
+entity_type_assignments
+semantic_assignment_methods
+```
+
+Entity types use stable slugs. Hierarchy edges form a database-enforced
+directed acyclic graph. Type assignments are multi-valued and
+historical, with a partial unique index enforcing one active primary
+type per entity.
+
+## External semantic mappings
+
+```text
+external_semantic_authorities
+external_semantic_schemes
+external_semantic_resource_kinds
+external_semantic_resources
+semantic_mapping_relations
+entity_type_external_mappings
+```
+
+Composite foreign keys enforce agreement between an external
+resource's kind and the selected mapping relation's applicable kind.
+External resources are stored once and reused.
+
+A partial unique index on each strongly typed mapping table permits at
+most one active semantic relation for a given canonical-resource and
+external-resource pair. A changed interpretation must supersede the
+old mapping before its replacement becomes active.
+
+## Entity-geography assertions
+
+```text
+entity_geography_relationship_types
+entity_geographies
+entity_geography_relationship_type_external_mappings
+```
+
+`entity_geographies` stores explicit typed relationships to canonical
+geography rows. A partial unique index prevents duplicate active facts
+for the same entity, geography, and relationship type.
+
+Relationship-type external mappings are constrained to external
+properties and property-applicable mapping relations.
+
+## Assertion lifecycle
+
+Semantic assertion tables distinguish:
+
+```text
+is_active / superseded_at
+    assertion lifecycle
+
+valid_from / valid_to
+    real-world temporal applicability
+```
+
+Confidence is nullable and constrained to the inclusive range zero
+through one when supplied. Evidence and provenance are separate JSONB
+values. Service-created assertions store them as append-only
+`supporting_evidence` and `provenance_records` arrays. Rediscovery of an
+active fact locks that row and appends only distinct incoming records;
+legacy unstructured objects are preserved as the first record during
+normalization, so duplicate discovery cannot silently discard support.
+
+## Compatibility state
+
+The migration is additive. These legacy columns remain temporarily:
+
+```text
+entities.entity_type
+entities.country_or_jurisdiction
+```
+
+They are scheduled for guarded removal during GFA-C.6 after application
+consumers and fixtures use the normalized assertions.
+
+# 30. GFA-C.5 Standards-Derived Seed Vocabulary — Frozen
+
+Alembic revision `c51d8e2f4a90` populates the GFA-C schema without
+adding tables or columns.
+
+## Seed inventory
+
+```text
+entity_types                                             32
+entity_type_hierarchy_edges                              27
+entity_geography_relationship_types                      10
+external_semantic_authorities                             4
+external_semantic_schemes                                 4
+external_semantic_resources                              23
+entity_type_external_mappings                            29
+entity_geography_relationship_type_external_mappings      5
+```
+
+Every seeded reference or resource row carries
+`metadata.seed_set = gfa_c_5`. Seeded mapping assertions carry
+`provenance.seed_set = gfa_c_5`.
+
+## Semantic boundaries
+
+The entity vocabulary has five initial roots:
+
+```text
+person
+organization
+animal
+object
+other
+```
+
+Geographies, events, points of interest, and abstract controlled
+concepts remain owned by their respective subsystems.
+
+The relationship vocabulary stores reviewed domain types in metadata,
+applies those domains to descendants, uses canonical geography as its
+range, and remains many-valued.
+
+## Standards mappings
+
+IPTC Concept Nature supplies the four fundamental concept mappings.
+Schema.org supplies reviewed practical class and property mappings.
+Wikidata and SKOS namespaces are registered, but no Wikidata QID is
+seeded without individual review.
+
+Mapping direction is always GNI to external. Class and property
+hierarchy relations are used where equivalence would be too strong.
+Relationships without a defensible property mapping remain unmapped.

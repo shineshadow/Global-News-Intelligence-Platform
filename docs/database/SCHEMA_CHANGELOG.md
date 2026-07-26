@@ -6,6 +6,114 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-26 — GFA-C.5 Standards-Derived Seed Vocabulary Frozen
+
+**Alembic revision:** `c51d8e2f4a90`
+**Revises:** `a84c1d9e7f32`
+
+Seeded the first global vocabulary for the GFA-C semantic entity
+foundation:
+
+```text
+32 canonical entity types
+27 reviewed hierarchy edges
+10 entity-geography relationship types
+4 external semantic authorities
+4 external semantic schemes
+23 external semantic resources
+29 entity-type external mappings
+5 relationship-property external mappings
+```
+
+The seed preserves IPTC QCodes and Schema.org identifier case. Mapping
+relations are kind-compatible and use explicit GNI-to-external
+direction. Uncertain relationship mappings are intentionally absent.
+
+Relationship metadata records reviewed canonical domains, descendant
+applicability, canonical geography range, and many-valued cardinality.
+Geography, event, POI, and abstract-concept boundaries remain outside
+the entity-type vocabulary.
+
+The migration is data-only and reversible independently of the
+GFA-C.4 schema foundation.
+
+Formal review narrowed the Schema.org mappings for `person`,
+`university`, `founded_in`, and `born_in` so none asserts equivalence
+beyond the external definition and GNI domain/range.
+
+The complete migration history, 24 focused semantic tests, all 107
+repository tests, and the expanded GFA-C verification SQL completed
+successfully against isolated PostgreSQL 17.10.
+
+---
+
+## 2026-07-26 — GFA-C Semantic Entity Foundation Candidate
+
+**Alembic revision:** `a84c1d9e7f32`
+**Revises:** `f72c9a1e4b6d`
+
+Added the normalized schema foundations specified by GFA-C.4.1 through
+GFA-C.4.3.
+
+### New tables
+
+```text
+semantic_assignment_methods
+entity_types
+entity_type_hierarchy_edges
+entity_type_assignments
+
+external_semantic_authorities
+external_semantic_schemes
+external_semantic_resource_kinds
+external_semantic_resources
+semantic_mapping_relations
+entity_type_external_mappings
+
+entity_geography_relationship_types
+entity_geographies
+entity_geography_relationship_type_external_mappings
+```
+
+### Integrity model
+
+The migration adds:
+
+```text
+database-enforced acyclic entity-type hierarchy
+one active assignment per entity/type pair
+one active primary type per entity
+typed external resource/mapping-relation compatibility
+one active mapping relation per canonical/external resource pair
+one active entity-geography row per semantic fact
+confidence and temporal-interval checks
+historical assertion lifecycle fields
+duplicate-discovery evidence and provenance accumulation
+```
+
+The migration seeds six semantic assignment methods, five external
+semantic resource kinds, and twelve semantic mapping relations.
+
+### Compatibility window
+
+This revision is additive. The legacy columns:
+
+```text
+entities.entity_type
+entities.country_or_jurisdiction
+```
+
+remain temporarily for repository consumer migration. They are
+deprecated and are not the canonical source of entity type or geography
+truth after GFA-C adoption. GFA-C.6 performs the guarded destructive
+cleanup after fixtures and consumers have migrated.
+
+`CURRENT_SCHEMA.sql` was regenerated from an isolated PostgreSQL 17.10
+database after the full Alembic history, all 101 repository tests, and
+the GFA-C verification SQL completed successfully.
+
+---
+
 ## 2026-07-25 — GFA-B Global Language Foundation
 
 **Alembic revision:** `f72c9a1e4b6d`
