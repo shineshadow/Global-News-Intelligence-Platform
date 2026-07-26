@@ -13,6 +13,21 @@ from app.models.classification import (
 )
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
+from app.models.entity_semantics import (
+    EntityGeography,
+    EntityGeographyRelationshipType,
+    EntityGeographyRelationshipTypeExternalMapping,
+    EntityType,
+    EntityTypeAssignment,
+    EntityTypeExternalMapping,
+    EntityTypeHierarchyEdge,
+    ExternalSemanticAuthority,
+    ExternalSemanticResource,
+    ExternalSemanticResourceKind,
+    ExternalSemanticScheme,
+    SemanticAssignmentMethod,
+    SemanticMappingRelation,
+)
 from app.models.ingestion_run import IngestionRun
 from app.models.language import LanguageTag, LanguageTagAlias
 from app.models.source import Source
@@ -26,6 +41,7 @@ from app.models.source_reference import (
 )
 
 __all__ = [
+    "AcquisitionMethod",
     "Base",
     "ClassificationRun",
     "Document",
@@ -35,16 +51,28 @@ __all__ = [
     "DocumentType",
     "DocumentTypeAssignment",
     "DocumentVersion",
+    "EndpointFormat",
+    "EndpointType",
     "Entity",
     "EntityAlias",
+    "EntityGeography",
+    "EntityGeographyRelationshipType",
+    "EntityGeographyRelationshipTypeExternalMapping",
+    "EntityType",
+    "EntityTypeAssignment",
+    "EntityTypeExternalMapping",
+    "EntityTypeHierarchyEdge",
+    "ExternalSemanticAuthority",
+    "ExternalSemanticResource",
+    "ExternalSemanticResourceKind",
+    "ExternalSemanticScheme",
     "Geography",
     "IngestionRun",
     "LanguageTag",
     "LanguageTagAlias",
-    "AcquisitionMethod",
-    "EndpointFormat",
-    "EndpointType",
     "Platform",
+    "SemanticAssignmentMethod",
+    "SemanticMappingRelation",
     "Source",
     "SourceEndpoint",
     "SourceType",
