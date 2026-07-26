@@ -6,6 +6,69 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-25 — GFA-B Global Language Foundation
+
+**Alembic revision:** `f72c9a1e4b6d`
+**Revises:** `e13a6f4c92b7`
+
+Established the platform-wide BCP 47 language foundation.
+
+### New tables
+
+```text
+language_tags
+language_tag_aliases
+```
+
+## Persisted language fields
+
+Persisted language fields were widened to varchar(255) and linked to the canonical language-tag registry:
+
+sources.primary_language
+documents.language
+document_versions.language
+classification_runs.language
+entity_aliases.language
+
+## Legacy values
+
+Legacy values were normalized without inventing language information:
+
+en-us / en_US → en-US
+zh-tw / zh_TW → zh-TW
+English        → en
+en-au          → en-AU
+ko-kr          → ko-KR
+zh-hant        → zh-Hant
+NULL           → NULL
+und            → und
+zxx            → zxx
+
+## RSS/Atom ingestion
+
+RSS/Atom ingestion now preserves raw language provenance in document metadata through:
+
+`language_raw`
+`language_source`
+`language_normalization`
+`language_error`
+
+## Live ingestion
+
+Live ingestion verified canonical language storage and provenance after migration
+
+## GFA-A scheduler compatibility defect
+
+During live verification, a pre-existing GFA-A scheduler compatibility defect was discovered. The scheduler still searched for `rss` and `atom` in `endpoint_type` after GFA-A had normalized those values into `endpoint_format`. The due-endpoint query was corrected to require:
+
+endpoint_type       = feed
+endpoint_format     = rss | atom
+acquisition_method  = feed_parser
+
+A regression test now protects this canonical dimensional separation.
+
+---
+
 ## 2026-07-24 — Phase 2 Step 22 Canonical Classification Foundation
 
 **Alembic revision:** `d7b4f2a19c6e`  

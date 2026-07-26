@@ -4,6 +4,8 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from app.repositories import source_endpoint_repository
+
 from app.models import (
     Document,
     DocumentVersion,
@@ -85,6 +87,38 @@ async def create_source_and_endpoint(
         source_id,
         endpoint_response.json()["id"],
     )
+
+
+async def test_due_query_uses_canonical_feed_dimensions(
+    client,
+    database_session_factory,
+) -> None:
+    _, endpoint_id = await create_source_and_endpoint(
+        client
+    )
+
+    async with database_session_factory() as session:
+        endpoint = await session.get(
+            SourceEndpoint,
+            endpoint_id,
+        )
+
+        assert endpoint is not None
+        assert endpoint.status == "active"
+        assert endpoint.endpoint_type == "feed"
+        assert endpoint.endpoint_format == "rss"
+        assert endpoint.acquisition_method == "feed_parser"
+        assert endpoint.next_poll_at is None
+
+        due_ids = await (
+            source_endpoint_repository
+            .list_due_source_endpoint_ids(
+                session,
+                limit=500,
+            )
+        )
+
+    assert endpoint_id in due_ids
 
 
 async def test_poll_creates_document_and_run(

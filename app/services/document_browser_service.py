@@ -8,6 +8,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.language_tags import require_language_tag
 from app.models import (
     Document,
     DocumentVersion,
@@ -206,8 +207,11 @@ async def browse_documents(
         )
 
     if language:
+        canonical_language = require_language_tag(
+            language
+        )
         conditions.append(
-            effective_language == language
+            effective_language == canonical_language
         )
 
     cutoff = _time_cutoff(time_window)

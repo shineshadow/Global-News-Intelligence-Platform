@@ -3,6 +3,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.language_tags import require_language_tag
 from app.models import Source
 from app.repositories import source_repository
 from app.schemas import (
@@ -15,6 +16,7 @@ from app.services.exceptions import (
     ResourceConflictError,
     ResourceNotFoundError,
 )
+from app.services.language_service import ensure_language_tag
 
 
 NON_NULLABLE_SOURCE_FIELDS = {
@@ -42,6 +44,12 @@ def _normalize_source_values(
 
     if website_url is not None:
         values["website_url"] = str(website_url)
+
+    primary_language = values.get("primary_language")
+    if primary_language is not None:
+        values["primary_language"] = require_language_tag(
+            primary_language
+        )
 
     source_type = values.get("source_type")
     if source_type in LEGACY_SOURCE_TYPE_MAP:
@@ -83,6 +91,11 @@ async def create_source(
 
     try:
         async with session.begin():
+            await ensure_language_tag(
+                session,
+                values["primary_language"],
+            )
+
             website_url = values.get("website_url")
 
             if website_url is not None:
@@ -167,6 +180,12 @@ async def update_source(
 
     try:
         async with session.begin():
+            if "primary_language" in values:
+                await ensure_language_tag(
+                    session,
+                    values["primary_language"],
+                )
+
             source = await source_repository.get_source_by_id(
                 session,
                 source_id,

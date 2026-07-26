@@ -213,7 +213,12 @@ class EntityAlias(Base):
     )
     alias: Mapped[str] = mapped_column(String(512), nullable=False)
     language: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="und"
+        String(255),
+        ForeignKey(
+            "language_tags.tag",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
     )
     script: Mapped[str | None] = mapped_column(String(50), nullable=True)
     alias_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -311,7 +316,14 @@ class ClassificationRun(Base):
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default="running"
     )
-    language: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    language: Mapped[str | None] = mapped_column(
+        String(255),
+        ForeignKey(
+            "language_tags.tag",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
     classifier_versions: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,

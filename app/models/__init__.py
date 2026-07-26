@@ -14,6 +14,7 @@ from app.models.classification import (
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.ingestion_run import IngestionRun
+from app.models.language import LanguageTag, LanguageTagAlias
 from app.models.source import Source
 from app.models.source_endpoint import SourceEndpoint
 from app.models.source_reference import (
@@ -38,6 +39,8 @@ __all__ = [
     "EntityAlias",
     "Geography",
     "IngestionRun",
+    "LanguageTag",
+    "LanguageTagAlias",
     "AcquisitionMethod",
     "EndpointFormat",
     "EndpointType",

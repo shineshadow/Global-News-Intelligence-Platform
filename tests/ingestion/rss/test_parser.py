@@ -65,7 +65,7 @@ def test_parse_rss_feed() -> None:
 
     assert parsed.title == "Example RSS News"
     assert parsed.version == "rss20"
-    assert parsed.language == "en-us"
+    assert parsed.language == "en-US"
     assert len(parsed.items) == 1
 
     item = parsed.items[0]
@@ -87,6 +87,13 @@ def test_parse_rss_feed() -> None:
     assert len(item.content_hash) == 64
     assert item.item_metadata["tags"][0]["term"] == (
         "Politics"
+    )
+    assert item.language == "en-US"
+    assert item.item_metadata["language_raw"] == "en-us"
+    assert item.item_metadata["language_source"] == "feed"
+    assert (
+        item.item_metadata["language_normalization"]
+        == "normalized"
     )
 
 

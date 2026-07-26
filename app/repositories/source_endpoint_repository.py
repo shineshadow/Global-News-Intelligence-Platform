@@ -119,7 +119,7 @@ async def list_due_source_endpoint_ids(
     limit: int = 500,
 ) -> list[int]:
     """
-    Return active RSS/Atom endpoints that are due for polling.
+    Return active feed-parser RSS/Atom endpoints that are due for polling.
 
     A never-polled endpoint has next_poll_at = NULL and is therefore
     immediately eligible.
@@ -134,9 +134,11 @@ async def list_due_source_endpoint_ids(
         .where(
             Source.status == "active",
             SourceEndpoint.status == "active",
-            SourceEndpoint.endpoint_type.in_(
+            SourceEndpoint.endpoint_type == "feed",
+            SourceEndpoint.endpoint_format.in_(
                 ("rss", "atom")
             ),
+            SourceEndpoint.acquisition_method == "feed_parser",
             or_(
                 SourceEndpoint.next_poll_at.is_(None),
                 SourceEndpoint.next_poll_at <= func.now(),

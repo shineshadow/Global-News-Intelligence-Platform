@@ -127,7 +127,11 @@ class Document(Base):
     )
 
     language: Mapped[str | None] = mapped_column(
-        String(20),
+        String(255),
+        ForeignKey(
+            "language_tags.tag",
+            ondelete="RESTRICT",
+        ),
         nullable=True,
         index=True,
     )

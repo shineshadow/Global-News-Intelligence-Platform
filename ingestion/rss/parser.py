@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 
 import feedparser
 
+from app.language_tags import normalize_external_language_tag
 from ingestion.rss.exceptions import FeedParseError
 from ingestion.rss.types import (
     ParsedFeed,
@@ -275,7 +276,7 @@ def _parse_item(
     entry: Any,
     *,
     base_url: str,
-    feed_language: str | None,
+    feed_language_raw: str | None,
     feed_version: str | None,
 ) -> ParsedFeedItem:
     """Normalize one feedparser entry."""
@@ -301,10 +302,27 @@ def _parse_item(
         max_length=512,
     )
 
-    language = _limited_string(
-        entry.get("language") or feed_language,
-        max_length=20,
+    entry_language_raw = _optional_string(
+        entry.get("language")
     )
+    raw_language = (
+        entry_language_raw
+        if entry_language_raw is not None
+        else feed_language_raw
+    )
+    language_source = (
+        "entry"
+        if entry_language_raw is not None
+        else (
+            "feed"
+            if feed_language_raw is not None
+            else None
+        )
+    )
+    language_result = normalize_external_language_tag(
+        raw_language
+    )
+    language = language_result.canonical_tag
 
     published_at = _entry_published_at(entry)
     source_updated_at = _entry_updated_at(entry)
@@ -336,6 +354,10 @@ def _parse_item(
 
     metadata = {
         "feed_version": feed_version,
+        "language_raw": language_result.raw_value,
+        "language_source": language_source,
+        "language_normalization": language_result.status,
+        "language_error": language_result.error,
         "published_text": _optional_string(
             _raw_feedparser_value(
                 entry,
@@ -420,16 +442,19 @@ def parse_feed(
 
     feed = parsed.get("feed") or {}
 
-    feed_language = _limited_string(
-        feed.get("language"),
-        max_length=20,
+    feed_language_raw = _optional_string(
+        feed.get("language")
     )
+    feed_language_result = normalize_external_language_tag(
+        feed_language_raw
+    )
+    feed_language = feed_language_result.canonical_tag
 
     parsed_items = tuple(
         _parse_item(
             entry,
             base_url=base_url,
-            feed_language=feed_language,
+            feed_language_raw=feed_language_raw,
             feed_version=version,
         )
         for entry in entries

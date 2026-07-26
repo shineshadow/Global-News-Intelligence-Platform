@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
+from app.language_tags import require_language_tag
+
 
 SourceStatus = Literal["active", "disabled"]
 SourcePriority = Literal["low", "normal", "high", "critical"]
@@ -28,7 +30,7 @@ class SourceBase(BaseModel):
 
     primary_language: str = Field(
         min_length=1,
-        max_length=20,
+        max_length=255,
     )
 
     source_type: str = Field(
@@ -57,6 +59,14 @@ class SourceBase(BaseModel):
             return value.strip()
 
         return value
+
+    @field_validator("primary_language")
+    @classmethod
+    def canonicalize_primary_language(
+        cls,
+        value: str,
+    ) -> str:
+        return require_language_tag(value)
 
     @field_validator(
         "native_name",
@@ -100,7 +110,7 @@ class SourceUpdate(BaseModel):
     primary_language: str | None = Field(
         default=None,
         min_length=1,
-        max_length=20,
+        max_length=255,
     )
 
     source_type: str | None = Field(
@@ -128,6 +138,16 @@ class SourceUpdate(BaseModel):
             return value.strip()
 
         return value
+
+    @field_validator("primary_language")
+    @classmethod
+    def canonicalize_optional_primary_language(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+        return require_language_tag(value)
 
     @field_validator(
         "native_name",

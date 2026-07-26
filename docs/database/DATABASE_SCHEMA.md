@@ -1,9 +1,9 @@
 # Global News Intelligence Platform — Current Database Schema
 
 **Document type:** Living implementation reference  
-**Snapshot date:** 2026-07-24  
-**Platform phase:** Phase 2 — Monitoring and Classification Foundation, Step 22  
-**Alembic revision:** `d7b4f2a19c6e`  
+**Snapshot date:** 2026-07-25
+**Platform phase:** Global Foundation Audit — GFA-B complete
+**Alembic revision:** `f72c9a1e4b6d`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -28,7 +28,12 @@ Future database design work should consult this document before adding or changi
 
 ## 2. Current Schema Summary
 
-The current Phase 2 Step 22 schema contains **16 tables**: one Alembic infrastructure table and 15 application tables.
+The current Phase 2 Step 22 schema contains **23 tables**:
+
+1 Alembic infrastructure table
+15 pre-GFA application/classification tables
+5 GFA-A reference-catalog tables
+2 GFA-B language-foundation tables
 
 | Table | Purpose |
 |---|---|
@@ -48,11 +53,18 @@ The current Phase 2 Step 22 schema contains **16 tables**: one Alembic infrastru
 | `document_geographies` | Historical/current document-to-geography classification assertions. |
 | `document_entities` | Historical/current document-to-entity classification assertions. |
 | `document_type_assignments` | Historical/current semantic document-type assignments. |
+| `source_types` | Canonical source-organization type catalog. |
+| `endpoint_types` | Canonical acquisition endpoint-type catalog. |
+| `endpoint_formats` | Canonical endpoint-format catalog. |
+| `acquisition_methods` | Canonical retrieval/acquisition-method catalog. |
+| `platforms` | Canonical external platform catalog. |
+| `language_tags` | Canonical BCP 47 language-tag registry used by persisted language fields. |
+| `language_tag_aliases` | Accepted aliases mapping external/legacy language values to canonical tags. |
 
 Current Alembic revision:
 
 ```text
-d7b4f2a19c6e
+f72c9a1e4b6d
 ```
 
 No custom PostgreSQL enum types, extensions, database functions, or triggers are present in this snapshot.
@@ -173,7 +185,7 @@ Stores the Alembic migration revision currently applied to the database.
 Current value at this snapshot:
 
 ```text
-d7b4f2a19c6e
+f72c9a1e4b6d
 ```
 
 ---
@@ -194,7 +206,7 @@ A Source is distinct from a Source Endpoint. One source may own multiple endpoin
 | `name` | `varchar(255)` | No | — | Canonical display name. |
 | `native_name` | `varchar(255)` | Yes | — | Native-language source name when available. |
 | `country` | `varchar(100)` | No | — | Home country/jurisdiction of the source organization. |
-| `primary_language` | `varchar(20)` | No | — | Primary source language. |
+| `primary_language` | `varchar(255)` | No | — | Primary source language. |
 | `source_type` | `varchar(50)` | No | — | Source organization/type classification used by the application. |
 | `status` | `varchar(30)` | No | `'active'` | Lifecycle status. |
 | `priority` | `varchar(20)` | No | `'normal'` | Polling/operational priority. |
@@ -202,6 +214,12 @@ A Source is distinct from a Source Endpoint. One source may own multiple endpoin
 | `metadata` | `jsonb` | No | `{}` | Extensible source metadata. |
 | `created_at` | `timestamptz` | No | `now()` | Creation timestamp. |
 | `updated_at` | `timestamptz` | No | `now()` | Last application-managed update timestamp. |
+| `primary_language` | `varchar(255)` | No | — | Canonical BCP 47 primary language tag for the source. |
+| `source_type` | `varchar(50)` | No | — | Canonical source type referencing `source_types.slug`. |
+
+## Language invariant
+
+`sources.primary_language` describesical source type referencing `source_types.slug`. |
 
 ## Important semantic invariant
 
@@ -210,6 +228,12 @@ A Source is distinct from a Source Endpoint. One source may own multiple endpoin
 It **must not** be treated as the authoritative geography of every document published by that source.
 
 Canonical document geography now belongs in `geographies` plus `document_geographies`.
+
+source organization and must not be copied blindly into `documents.language`.
+
+`documents.language` stores the language observed in the individual document.
+
+It must not be inferred from `sources.primary_language`; a source can publish documents in languages other than its primary language.
 
 ## Constraints
 
@@ -253,7 +277,10 @@ Represents individual pollable acquisition endpoints belonging to a Source.
 | `id` | `bigint` | No | sequence | Primary key. |
 | `source_id` | `bigint` | No | — | Parent Source. |
 | `name` | `varchar(255)` | Yes | — | Endpoint-specific name. |
-| `endpoint_type` | `varchar(30)` | No | `'rss'` | Acquisition endpoint type. |
+| `endpoint_type` | `varchar(50)` | No | — | Canonical endpoint category, such as `feed`. |
+| `endpoint_format` | `varchar(50)` | No | — | Canonical serialization/content format, such as `rss` or `atom`. |
+| `acquisition_method` | `varchar(50)` | No | — | Retrieval mechanism, such as `feed_parser`. |
+| `platform` | `varchar(50)` | Yes | — | Optional canonical external platform. |
 | `url` | `text` | No | — | Pollable endpoint URL. |
 | `status` | `varchar(30)` | No | `'active'` | Endpoint lifecycle status. |
 | `poll_interval_seconds` | `integer` | No | `900` | Normal polling interval. |
@@ -307,7 +334,7 @@ Stores the current normalized representation of an ingested content item.
 | `title_original` | `text` | No | — | Original-language title. |
 | `summary_original` | `text` | Yes | — | Original source summary/description. |
 | `content_original` | `text` | Yes | — | Original source content when supplied/extracted. |
-| `language` | `varchar(20)` | Yes | — | Document language when known. |
+| `language` | `varchar(255)` | Yes | — | Document language when known. |
 | `country` | `varchar(100)` | Yes | — | Legacy Phase 1 document country field. |
 | `author` | `varchar(512)` | Yes | — | Source-provided author/byline. |
 | `published_at` | `timestamptz` | Yes | — | Original publication timestamp. |
@@ -380,7 +407,7 @@ Stores historical snapshots when an existing document changes.
 | `title_original` | `text` | No | — | Title snapshot. |
 | `summary_original` | `text` | Yes | — | Summary snapshot. |
 | `content_original` | `text` | Yes | — | Content snapshot. |
-| `language` | `varchar(20)` | Yes | — | Language snapshot. |
+| `language` | `varchar(255)` | Yes | — | Language snapshot. |
 | `country` | `varchar(100)` | Yes | — | Legacy Phase 1 country snapshot. |
 | `author` | `varchar(512)` | Yes | — | Author snapshot. |
 | `published_at` | `timestamptz` | Yes | — | Publication timestamp snapshot. |
@@ -648,7 +675,7 @@ Stores multilingual, abbreviated, transliterated, alternate, and historical name
 | `id` | `bigint` | No | sequence | Primary key. |
 | `entity_id` | `bigint` | No | — | Canonical entity. |
 | `alias` | `varchar(512)` | No | — | Alias text. |
-| `language` | `varchar(20)` | No | `'und'` | Language; `und` means undetermined. |
+| `language` | `varchar(255)` | No | `'und'` | Language; `und` means undetermined. |
 | `script` | `varchar(50)` | Yes | — | Optional script identifier. |
 | `alias_type` | `varchar(50)` | Yes | — | Alias category. |
 | `is_preferred` | `boolean` | No | `false` | Preferred alias indicator. |
@@ -667,6 +694,8 @@ Stores multilingual, abbreviated, transliterated, alternate, and historical name
 ```text
 ix_entity_aliases_normalized_language
 ```
+
+`language` remains NOT NULL but no longer has an automatic `und` default.
 
 ---
 
@@ -763,7 +792,7 @@ Provides an auditable execution record for a document-classification pass.
 | `started_at` | `timestamptz` | No | `now()` | Run start. |
 | `completed_at` | `timestamptz` | Yes | — | Run completion. |
 | `status` | `varchar(30)` | No | `'running'` | Run lifecycle status. |
-| `language` | `varchar(20)` | Yes | — | Classification input language. |
+| `language` | `varchar(255)` | Yes | — | Classification input language. |
 | `classifier_versions` | `jsonb` | No | `{}` | Participating classifier versions. |
 | `ruleset_version` | `varchar(100)` | Yes | — | Deterministic ruleset version. |
 | `llm_provider` | `varchar(100)` | Yes | — | LLM provider when used. |
@@ -1492,17 +1521,17 @@ A discrepancy between the implemented schema and a future specification may simp
 
 # 28. Snapshot Verification
 
-This document was updated from the post-Step-22 schema-only PostgreSQL dump committed on 2026-07-24.
+This document was updated from the post-GFA-B schema-only PostgreSQL dump committed on 2026-07-25.
 
 Observed/verified characteristics:
 
 ```text
 PostgreSQL server:    17.10
 pg_dump version:      17.10
-Alembic revision:     d7b4f2a19c6e
+Alembic revision:     f72c9a1e4b6d
 Schema:               public
-Total tables:         16
-Application tables:   15
+Total tables:         23
+Application tables:   22
 Infrastructure tables: 1
 ```
 
@@ -1532,3 +1561,113 @@ ingestion_runs
 ```
 
 The implemented Step 22 schema now provides the persistence foundation for deterministic classification, classification-aware filtering, monitor rules, and later AI-assisted enrichment.
+
+## GFA-B: Language Tag Canonicalization
+
+GFA-B defines the canonical representation and interpretation of language tags used by the platform.
+
+### `language_tags`
+
+`language_tags` stores the canonical set of supported language tags.
+
+Language tags MUST use **BCP 47 / RFC 5646** syntax and canonical presentation. Each stored tag represents the normalized form used internally by the system.
+
+Examples:
+
+```text
+en
+en-US
+zh-Hans
+zh-Hant-TW
+sr-Cyrl
+sr-Latn
+und
+zxx
+```
+
+External language-tag input MUST be treated as **case-insensitive**. Input such as `EN-us`, `en-US`, and `En-uS` refers to the same language tag.
+
+The database MUST store and return the canonical presentation of the tag rather than preserving arbitrary input casing.
+
+Language, script, and region subtags remain semantically distinct. Normalization MUST NOT collapse these distinctions.
+
+For example:
+
+```text
+zh
+zh-Hans
+zh-Hant
+zh-CN
+zh-TW
+```
+
+represent different levels or types of language identification and MUST NOT be treated as interchangeable merely because they share the same primary language subtag.
+
+### `language_tag_aliases`
+
+`language_tag_aliases` maps accepted alternative, deprecated, legacy, or otherwise non-canonical language-tag representations to their canonical `language_tags` entry.
+
+Aliases exist to normalize external input without allowing multiple internal representations of the same canonical language tag.
+
+External matching against aliases MUST be case-insensitive.
+
+The canonical tag referenced by an alias remains the authoritative stored representation.
+
+### Missing and Special Language Values
+
+Language values have distinct meanings:
+
+```text
+NULL
+```
+
+means that the language is **missing or unknown**. No positive language determination has been made.
+
+```text
+und
+```
+
+means **undetermined**. The system positively determined that a language value applies but could not identify which language it is.
+
+```text
+zxx
+```
+
+means **nonlinguistic or not applicable**. The content does not contain linguistic material for which a document language can meaningfully be assigned.
+
+These values MUST NOT be treated as equivalent.
+
+In particular:
+
+```text
+NULL != und
+NULL != zxx
+und  != zxx
+```
+
+### Document Language Semantics
+
+The document language represents the language of the document content itself.
+
+The language of the source, publisher, website, feed, account, domain, or ingestion channel MUST NOT determine the document language.
+
+For example, an English-language website may publish a Korean-language document. The source may be associated with English, while the document language remains Korean.
+
+Source-language metadata may be retained independently, but it MUST NOT override or infer the canonical document language solely from the source.
+
+### GFA-B Rules
+
+GFA-B requires the following invariants:
+
+```text
+1. Language tags conform to BCP 47 / RFC 5646.
+2. External language-tag input is matched case-insensitively.
+3. Stored language tags use canonical presentation.
+4. NULL means missing or unknown.
+5. und means positively undetermined.
+6. zxx means nonlinguistic or not applicable.
+7. Language, script, and region remain distinct.
+8. Source language does not determine document language.
+9. Aliases resolve to one canonical language_tags entry.
+10. Canonical document-language values are stored independently of source-language metadata.
+```

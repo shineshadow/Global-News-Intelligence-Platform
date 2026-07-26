@@ -1,0 +1,82 @@
+{
+  "language_tags": [
+    {
+      "tag": "en",
+      "language_subtag": "en",
+      "script_subtag": null,
+      "region_subtag": null,
+      "is_private_use": false
+    },
+    {
+      "tag": "en-US",
+      "language_subtag": "en",
+      "script_subtag": null,
+      "region_subtag": "US",
+      "is_private_use": false
+    },
+    {
+      "tag": "en-AU",
+      "language_subtag": "en",
+      "script_subtag": null,
+      "region_subtag": "AU",
+      "is_private_use": false
+    },
+    {
+      "tag": "ko",
+      "language_subtag": "ko",
+      "script_subtag": null,
+      "region_subtag": null,
+      "is_private_use": false
+    },
+    {
+      "tag": "ko-KR",
+      "language_subtag": "ko",
+      "script_subtag": null,
+      "region_subtag": "KR",
+      "is_private_use": false
+    },
+    {
+      "tag": "ja",
+      "language_subtag": "ja",
+      "script_subtag": null,
+      "region_subtag": null,
+      "is_private_use": false
+    },
+    {
+      "tag": "zh-Hant",
+      "language_subtag": "zh",
+      "script_subtag": "Hant",
+      "region_subtag": null,
+      "is_private_use": false
+    },
+    {
+      "tag": "zh-TW",
+      "language_subtag": "zh",
+      "script_subtag": null,
+      "region_subtag": "TW",
+      "is_private_use": false
+    },
+    {
+      "tag": "und",
+      "language_subtag": "und",
+      "script_subtag": null,
+      "region_subtag": null,
+      "is_private_use": false
+    },
+    {
+      "tag": "zxx",
+      "language_subtag": "zxx",
+      "script_subtag": null,
+      "region_subtag": null,
+      "is_private_use": false
+    }
+  ],
+  "aliases": [
+    {
+      "alias_key": "english",
+      "alias": "English",
+      "canonical_tag": "en",
+      "alias_type": "legacy_name"
+    }
+  ]
+}

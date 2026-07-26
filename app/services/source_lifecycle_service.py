@@ -18,6 +18,7 @@ from app.services.exceptions import (
     ResourceConflictError,
     ResourceNotFoundError,
 )
+from app.services.language_service import ensure_language_tag
 from app.services.source_endpoint_service import (
     _normalize_endpoint_values,
 )
@@ -112,6 +113,10 @@ async def create_source(
         },
     }
     _normalize_source_values(values)
+    await ensure_language_tag(
+        session,
+        values["primary_language"],
+    )
 
     source = await source_repository.create_source(
         session,
@@ -162,6 +167,10 @@ async def update_source(
         "website_url": form.website_url,
     }
     _normalize_source_values(values)
+    await ensure_language_tag(
+        session,
+        values["primary_language"],
+    )
 
     source = await source_repository.update_source(
         session,

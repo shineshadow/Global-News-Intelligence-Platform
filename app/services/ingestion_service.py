@@ -30,6 +30,7 @@ from app.services.exceptions import (
     InvalidUpdateError,
     ResourceNotFoundError,
 )
+from app.services.language_service import ensure_language_tag
 from ingestion.rss import (
     FeedHTTPStatusError,
     FeedPollResult,
@@ -321,6 +322,8 @@ async def _persist_feed_item(
     retrieved_at: datetime,
 ) -> tuple[DocumentAction, int]:
     """Create, update, or exactly deduplicate one feed item."""
+
+    await ensure_language_tag(session, item.language)
 
     document = (
         await document_repository

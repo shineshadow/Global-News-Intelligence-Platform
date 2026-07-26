@@ -54,7 +54,11 @@ class Source(Base):
     )
 
     primary_language: Mapped[str] = mapped_column(
-        String(20),
+        String(255),
+        ForeignKey(
+            "language_tags.tag",
+            ondelete="RESTRICT",
+        ),
         nullable=False,
     )
 
