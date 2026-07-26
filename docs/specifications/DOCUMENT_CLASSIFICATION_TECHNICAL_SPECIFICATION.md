@@ -556,15 +556,31 @@ Recommended `entities` fields:
 
 ```text
 id
-entity_type
 canonical_name
 canonical_name_native
-country_or_jurisdiction
 is_active
 metadata
 created_at
 updated_at
 ```
+
+Entity type and geography are separate, typed semantic assertions:
+
+```text
+entity_type_assignments
+    entity_id
+    entity_type_id
+    assignment method, confidence, validity, evidence, provenance
+
+entity_geographies
+    entity_id
+    geography_id
+    relationship_type
+    assignment method, confidence, validity, evidence, provenance
+```
+
+The entity row must not collapse these many-valued, historical facts
+into free-text type or jurisdiction fields.
 
 Recommended `entity_aliases` fields:
 

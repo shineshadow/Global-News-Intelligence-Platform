@@ -146,20 +146,14 @@ class Geography(Base):
 
 
 class Entity(Base):
-    """Canonical real-world or conceptual entity."""
+    """Canonical real-world entity."""
 
     __tablename__ = "entities"
-    __table_args__ = (
-        Index("ix_entities_type_active", "entity_type", "is_active"),
-        Index("ix_entities_canonical_name", "canonical_name"),
-        Index("ix_entities_country_or_jurisdiction", "country_or_jurisdiction"),
-    )
+    __table_args__ = (Index("ix_entities_canonical_name", "canonical_name"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
     canonical_name: Mapped[str] = mapped_column(String(512), nullable=False)
     canonical_name_native: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    country_or_jurisdiction: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
-    from app.models.document_version import DocumentVersion    
+    from app.models.document_version import DocumentVersion
     from app.models.source import Source
     from app.models.source_endpoint import SourceEndpoint
 
@@ -98,7 +98,6 @@ class Document(Base):
             ondelete="RESTRICT",
         ),
         nullable=False,
-        index=True,
     )
 
     external_id: Mapped[str | None] = mapped_column(

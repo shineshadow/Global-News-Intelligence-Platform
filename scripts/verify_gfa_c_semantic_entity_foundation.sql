@@ -205,13 +205,22 @@ JOIN semantic_mapping_relations AS relation
 WHERE mapping.resource_kind <> resource.resource_kind
    OR mapping.resource_kind <> relation.applicable_resource_kind;
 
-\echo '=== LEGACY COMPATIBILITY COLUMNS: EXPECT 2 UNTIL GFA-C.6 ==='
-SELECT column_name
+\echo '=== LEGACY COMPATIBILITY COLUMNS: EXPECT 0 AFTER GFA-C.6 ==='
+SELECT count(*) AS legacy_columns
 FROM information_schema.columns
 WHERE table_schema = 'public'
   AND table_name = 'entities'
   AND column_name IN (
       'entity_type',
       'country_or_jurisdiction'
-  )
-ORDER BY column_name;
+  );
+
+\echo '=== LEGACY COMPATIBILITY INDEXES: EXPECT 0 AFTER GFA-C.6 ==='
+SELECT count(*) AS legacy_indexes
+FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = 'entities'
+  AND indexname IN (
+      'ix_entities_type_active',
+      'ix_entities_country_or_jurisdiction'
+  );

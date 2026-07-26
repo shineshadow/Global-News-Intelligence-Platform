@@ -2,8 +2,8 @@
 
 **Document type:** Living implementation reference  
 **Snapshot date:** 2026-07-26
-**Platform phase:** Global Foundation Audit — GFA-C.5 frozen
-**Alembic revision:** `c51d8e2f4a90`
+**Platform phase:** Global Foundation Audit — GFA-C frozen
+**Alembic revision:** `d62e9f3a5b01`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -78,7 +78,7 @@ The current schema contains **36 tables**:
 Current Alembic revision:
 
 ```text
-c51d8e2f4a90
+d62e9f3a5b01
 ```
 
 No custom PostgreSQL enum types or extensions are present. One
@@ -201,7 +201,7 @@ Stores the Alembic migration revision currently applied to the database.
 Current value at this snapshot:
 
 ```text
-c51d8e2f4a90
+d62e9f3a5b01
 ```
 
 ---
@@ -653,10 +653,8 @@ Stores canonical resolved entities independent of raw mention text.
 | Column | PostgreSQL type | Null | Default | Semantics |
 |---|---|---:|---|---|
 | `id` | `bigint` | No | sequence | Primary key. |
-| `entity_type` | `varchar(50)` | No | — | Application-level entity category. |
 | `canonical_name` | `varchar(512)` | No | — | Canonical identity/display name. |
 | `canonical_name_native` | `varchar(512)` | Yes | — | Native-language canonical name. |
-| `country_or_jurisdiction` | `varchar(255)` | Yes | — | Optional jurisdictional context. |
 | `is_active` | `boolean` | No | `true` | Active/retired state. |
 | `metadata` | `jsonb` | No | `{}` | Extensible metadata. |
 | `created_at` | `timestamptz` | No | `now()` | Creation timestamp. |
@@ -672,8 +670,6 @@ No unique constraint exists on `canonical_name`; real-world names are not global
 
 ```text
 ix_entities_canonical_name
-ix_entities_country_or_jurisdiction
-ix_entities_type_active
 ```
 
 ---
@@ -1213,8 +1209,6 @@ ix_geographies_type_active
 
 ```text
 ix_entities_canonical_name
-ix_entities_country_or_jurisdiction
-ix_entities_type_active
 ```
 
 ### Entity Aliases
@@ -1537,7 +1531,7 @@ A discrepancy between the implemented schema and a future specification may simp
 
 # 28. Snapshot Verification
 
-This document was updated from the post-GFA-C.5 seed-candidate
+This document was updated from the frozen GFA-C.6
 schema-only PostgreSQL dump generated on 2026-07-26.
 
 Observed/verified characteristics:
@@ -1545,7 +1539,7 @@ Observed/verified characteristics:
 ```text
 PostgreSQL server:    17.10
 pg_dump version:      17.10
-Alembic revision:     c51d8e2f4a90
+Alembic revision:     d62e9f3a5b01
 Schema:               public
 Total tables:         36
 Application tables:   35
@@ -1769,15 +1763,10 @@ normalization, so duplicate discovery cannot silently discard support.
 
 ## Compatibility state
 
-The migration is additive. These legacy columns remain temporarily:
-
-```text
-entities.entity_type
-entities.country_or_jurisdiction
-```
-
-They are scheduled for guarded removal during GFA-C.6 after application
-consumers and fixtures use the normalized assertions.
+GFA-C.6 closes the additive compatibility window. Entity type and
+entity-geography meaning are represented only by
+`entity_type_assignments` and `entity_geographies`; the legacy
+free-text columns and their indexes are absent.
 
 # 30. GFA-C.5 Standards-Derived Seed Vocabulary — Frozen
 
@@ -1830,3 +1819,29 @@ seeded without individual review.
 Mapping direction is always GNI to external. Class and property
 hierarchy relations are used where equivalence would be too strong.
 Relationships without a defensible property mapping remain unmapped.
+
+# 31. GFA-C.6 Guarded Legacy Cleanup — Frozen
+
+Alembic revision `d62e9f3a5b01` removes the two deprecated semantic
+columns and their indexes from `entities`.
+
+The upgrade requires `entities` to be empty. This is an intentional
+data-safety boundary: the audited inventory contained zero rows, and
+no approved transformation can infer typed, temporal,
+provenance-bearing assertions from either legacy string. Unexpected
+rows therefore block the migration for explicit operator review.
+
+The downgrade also requires an empty `entities` table, then restores
+the exact legacy column nullability and indexes. It refuses to invent
+legacy values for entities created under the normalized schema.
+
+Verified results:
+
+```text
+unexpected legacy row blocks cleanup                       yes
+legacy columns after clean upgrade                           0
+legacy indexes after clean upgrade                           0
+required GFA-C tables                                       13
+repository tests passed                                    110
+guarded downgrade and re-upgrade passed                    yes
+```

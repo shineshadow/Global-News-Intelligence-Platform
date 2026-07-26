@@ -272,12 +272,10 @@ async def test_entity_alias_matching(
     async with database_session_factory() as session:
         async with session.begin():
             entity = Entity(
-                entity_type="agency",
                 canonical_name=(
                     "National Election Commission "
                     "of South Korea"
                 ),
-                country_or_jurisdiction="South Korea",
                 entity_metadata={},
             )
             session.add(entity)

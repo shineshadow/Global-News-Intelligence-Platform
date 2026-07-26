@@ -22,7 +22,6 @@ from app.services.exceptions import InvalidUpdateError
 
 async def _seed_entity_semantics(session):
     entity = Entity(
-        entity_type="legacy_fixture",
         canonical_name="Example Organization",
         entity_metadata={},
     )

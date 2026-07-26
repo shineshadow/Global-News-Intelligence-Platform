@@ -6,6 +6,47 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-26 — GFA-C.6 Guarded Legacy Cleanup Frozen
+
+**Alembic revision:** `d62e9f3a5b01`
+**Revises:** `c51d8e2f4a90`
+
+Closed the GFA-C additive compatibility window by removing:
+
+```text
+entities.entity_type
+entities.country_or_jurisdiction
+ix_entities_type_active
+ix_entities_country_or_jurisdiction
+```
+
+Entity type and entity-geography semantics now exist only in the
+normalized, historical assertion tables introduced by GFA-C.4.
+
+The migration repeats the GFA-C.1 inventory assumption at execution
+time. It refuses to upgrade if `entities` contains any row, because no
+approved lossless mapping exists from the two legacy strings to typed,
+provenance-bearing assertions. The downgrade has the same empty-table
+guard because it cannot reconstruct removed legacy values for newer
+entities.
+
+Repository consumers and fixtures no longer write either legacy
+field. Three direct tests verify the destructive guard and absence
+from both the ORM and PostgreSQL schema. The clean upgrade, guarded
+downgrade/re-upgrade, GFA-C verification SQL, and all 110 repository
+tests passed against isolated PostgreSQL 17.10.
+
+The final drift audit also removed a stale ORM-only request for a
+redundant `documents.ingestion_format` index. The database already
+provides the composite
+`ix_documents_ingestion_format_published_at`; no schema DDL changed.
+
+Formal freeze review found and corrected one stale narrative test
+count. It found no remaining code, schema, migration-safety, semantic,
+test, or documentation blocker. GFA-C is frozen at this revision.
+
+---
+
 ## 2026-07-26 — GFA-C.5 Standards-Derived Seed Vocabulary Frozen
 
 **Alembic revision:** `c51d8e2f4a90`

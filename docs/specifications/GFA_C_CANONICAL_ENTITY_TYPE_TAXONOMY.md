@@ -2762,6 +2762,221 @@ No GFA-C.5 freeze blockers remain.
 
 ## 10. GFA-C.6 — Migration, Tests, and Verification
 
+**Status:** FROZEN
+
+### 10.1 Scope
+
+GFA-C.6 closes the temporary compatibility window retained by
+GFA-C.4. It migrates the last repository fixtures to the normalized
+model and removes:
+
+```text
+entities.entity_type
+entities.country_or_jurisdiction
+ix_entities_type_active
+ix_entities_country_or_jurisdiction
+```
+
+No GFA-C.4.4 is introduced. Type and geography meaning remain owned by
+the frozen GFA-C.4.1 and GFA-C.4.3 assertion models.
+
+### 10.2 Consumer and Data Preflight
+
+Repository-wide inspection found:
+
+```text
+production reads of either legacy field                    0
+production writes of either legacy field                   0
+test fixtures writing entities.entity_type                 2
+test fixtures writing country_or_jurisdiction              1
+persisted rows in the original GFA-C.1 inventory           0
+```
+
+The affected fixtures used the strings only to satisfy the old ORM
+constructor. Their behavior depends on entity aliases or normalized
+type/geography assertions, so removing those arguments loses no test
+meaning.
+
+The final repository drift audit also found a pre-existing GFA-A ORM
+declaration for a redundant single-column
+`documents.ingestion_format` index that no migration created. The
+implemented schema already has
+`ix_documents_ingestion_format_published_at`, whose leading column
+supports the same lookup prefix. Removing the stale `index=True`
+declaration aligns metadata with the frozen schema without changing
+database DDL.
+
+### 10.3 Guarded Migration Policy
+
+Revision `d62e9f3a5b01` repeats the inventory assumption before any
+destructive DDL:
+
+```text
+if entities contains zero rows
+    remove the legacy indexes and columns
+else
+    abort the migration transaction
+```
+
+Any row is treated as unmapped. This conservative rule is necessary
+because `entity_type` is required on the legacy schema and
+`country_or_jurisdiction` does not identify whether it means
+headquarters, jurisdiction, operation, residence, citizenship, or
+another relationship. Automatically translating either value would
+invent semantics, temporal scope, evidence, or provenance.
+
+An operator encountering the guard must first apply a separately
+reviewed, provenance-preserving migration or explicitly remove the
+unexpected rows. GFA-C.6 never drops or guesses their meaning.
+
+The downgrade uses the same empty-table guard. On an empty table it
+restores the exact legacy columns, nullability, and indexes. It refuses
+to fabricate a required legacy type for entities created after
+upgrade.
+
+### 10.4 Model and Fixture Migration
+
+The `Entity` ORM now contains identity and lifecycle fields only:
+
+```text
+id
+canonical_name
+canonical_name_native
+is_active
+metadata
+created_at
+updated_at
+```
+
+Entity type is assigned through `entity_type_assignments`.
+Entity-geography facts are asserted through `entity_geographies`.
+The alias-classification and semantic-service fixtures create entity
+identity first and use their actual normalized or alias dependencies.
+
+### 10.5 Direct Tests
+
+Three C.6-specific tests prove:
+
+```text
+the migration guard rejects an unexpected entity row
+the Entity ORM exposes neither legacy column
+the Entity ORM exposes neither legacy index
+PostgreSQL exposes neither legacy column at migration head
+PostgreSQL exposes neither legacy index at migration head
+```
+
+The focused affected suite passed 18 tests, including entity alias
+classification, normalized type assignment, entity-geography
+assertions, evidence accumulation, temporal constraints, and the
+absence of inferred geography ancestors.
+
+### 10.6 Verification
+
+Validation used a fresh isolated PostgreSQL 17.10 cluster.
+
+```text
+full history through GFA-C.5                              passed
+upgrade with one unexpected legacy entity                 rejected
+clean GFA-C.6 upgrade                                     passed
+legacy columns after upgrade                                   0
+legacy indexes after upgrade                                   0
+GFA-C verification SQL                                   passed
+guarded downgrade to GFA-C.5                             passed
+re-upgrade to GFA-C.6                                    passed
+focused affected tests                               18 passed
+complete repository suite                           110 passed
+schema-only snapshot regenerated                         yes
+Alembic model/schema drift operations                       0
+```
+
+### 10.7 Formal Freeze Review
+
+The formal review examined:
+
+```text
+consumer and fixture migration completeness
+repeatability of the zero-row preflight assumption
+failure behavior with unexpected entity data
+transactional destructive DDL ordering
+downgrade fidelity and its no-fabrication guard
+ORM and physical-schema agreement
+legacy column and index absence
+normalized assertion continuity
+verification SQL coverage
+focused and repository-wide regression results
+documentation and schema-snapshot consistency
+```
+
+One documentation-only blocker was found during review: the narrative
+focused-test count remained at 17 after the direct guard test raised
+the final count to 18. The count was corrected to match the executed
+test result. No code, data-safety, schema, or semantic blocker was
+found.
+
+The destructive boundary is explicit and fails closed. No legacy
+value is silently lost, guessed, or copied into a semantically
+stronger assertion. The migration cannot proceed outside the reviewed
+zero-row inventory without a separate approved remediation.
+
+No GFA-C.6 freeze blockers remain.
+
+### 10.8 GFA-C.6 — FROZEN
+
 ## 11. Frozen Invariants
 
+The completed GFA-C foundation freezes the following invariants:
+
+```text
+entities represent canonical real-world identity, not abstract topics
+geographies, events, POIs, and abstract concepts remain separate
+entity types are canonical reference rows arranged as a DAG
+entity type is asserted through entity_type_assignments
+entity-geography meaning is an explicit typed relationship
+entity-geography assertions remain many-valued unless separately constrained
+no geography-ancestor assertion is inferred automatically
+assertions preserve lifecycle separately from real-world validity
+confidence and validity intervals are database constrained
+duplicate discovery accumulates distinct evidence and provenance
+external resources and mapping relations are kind compatible
+one canonical/external pair has at most one active mapping relation
+uncertain standards mappings remain absent rather than invented
+mapping direction is GNI canonical resource to external resource
+entities contain no free-text type or jurisdiction compatibility field
+unexpected legacy entity rows block destructive compatibility cleanup
+```
+
+These invariants may be extended only through a separately reviewed
+post-GFA-C change. They must not be weakened through fixture
+shortcuts, implicit inference, untyped metadata, or compatibility
+columns.
+
 ## 12. Verification Results
+
+The final frozen implementation at Alembic revision
+`d62e9f3a5b01` was verified on 2026-07-26 against isolated PostgreSQL
+17.10:
+
+```text
+GFA-C semantic foundation tables                            13
+seeded entity types                                         32
+seeded hierarchy edges                                      27
+seeded entity-geography relationship types                  10
+seeded external semantic resources                          23
+seeded entity-type mappings                                 29
+seeded relationship-property mappings                        5
+legacy entity semantic columns                               0
+legacy entity semantic indexes                               0
+invalid or contradictory active mappings                     0
+invalid confidence or validity assertions                    0
+entity-boundary leaks                                        0
+invented uncertain property mappings                         0
+focused GFA-C.6 and affected-consumer tests                  18
+complete repository tests                                  110
+Alembic model/schema drift operations                        0
+```
+
+The unexpected-row guard rejected destructive cleanup as designed.
+The clean upgrade, guarded downgrade, re-upgrade, complete GFA-C
+verification SQL, and regenerated schema-only snapshot all passed.
+
+**GFA-C — FROZEN**

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rJ4durIyo9Sq39P6NgoRuYjtDaLlsDNJKIZhZEMNzld8ra7XbhlvZjNj2SnnnYt
+\restrict tb40Sozhe3t1e4lhOutGbNifY5bW2B9C1wbShiYo0UnQeQSBiFoRbW3AnlWWtza
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -542,10 +542,8 @@ ALTER SEQUENCE public.endpoint_types_id_seq OWNED BY public.endpoint_types.id;
 
 CREATE TABLE public.entities (
     id bigint NOT NULL,
-    entity_type character varying(50) NOT NULL,
     canonical_name character varying(512) NOT NULL,
     canonical_name_native character varying(512),
-    country_or_jurisdiction character varying(255),
     is_active boolean DEFAULT true NOT NULL,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -2243,20 +2241,6 @@ CREATE INDEX ix_entities_canonical_name ON public.entities USING btree (canonica
 
 
 --
--- Name: ix_entities_country_or_jurisdiction; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_entities_country_or_jurisdiction ON public.entities USING btree (country_or_jurisdiction);
-
-
---
--- Name: ix_entities_type_active; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_entities_type_active ON public.entities USING btree (entity_type, is_active);
-
-
---
 -- Name: ix_entity_aliases_normalized_language; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3093,5 +3077,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rJ4durIyo9Sq39P6NgoRuYjtDaLlsDNJKIZhZEMNzld8ra7XbhlvZjNj2SnnnYt
+\unrestrict tb40Sozhe3t1e4lhOutGbNifY5bW2B9C1wbShiYo0UnQeQSBiFoRbW3AnlWWtza
 
