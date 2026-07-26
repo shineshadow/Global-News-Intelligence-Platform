@@ -3,6 +3,11 @@ from app.services.classification_service import (
     classify_document_by_id,
     classify_document_deterministically,
 )
+from app.services.entity_semantics_service import (
+    assert_entity_geography,
+    assign_entity_type,
+    supersede_entity_geography,
+)
 from app.services.exceptions import (
     InvalidUpdateError,
     ResourceConflictError,
@@ -21,7 +26,10 @@ __all__ = [
     "ResourceConflictError",
     "ResourceNotFoundError",
     "ServiceError",
+    "assert_entity_geography",
+    "assign_entity_type",
     "classify_document_by_id",
     "classify_document_deterministically",
     "poll_source_endpoint",
+    "supersede_entity_geography",
 ]
