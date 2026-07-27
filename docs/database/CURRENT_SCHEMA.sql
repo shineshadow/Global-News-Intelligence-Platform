@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict GzRdRcgjH8p7BMLxNsny3jGPF10gQy898X9Mq1vtMmvJgdVsS74idQEUajWG2RT
+\restrict h6sJQZsPcwADHnDIG21qKsiGP06Um1A5MeRxRSe8GeRRXYvgmsg9TbpJae5oiRP
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -18,6 +18,131 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: preserve_monitor_revision_immutability(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.preserve_monitor_revision_immutability() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            inconsistent_hierarchy boolean;
+        BEGIN
+            IF TG_OP = 'DELETE' THEN
+                IF OLD.sealed_at IS NOT NULL THEN
+                    RAISE EXCEPTION
+                        'sealed Monitor revisions cannot be deleted';
+                END IF;
+                RETURN OLD;
+            END IF;
+
+            IF OLD.sealed_at IS NOT NULL THEN
+                RAISE EXCEPTION
+                    'sealed Monitor revisions cannot be updated';
+            END IF;
+            IF NEW.sealed_at IS NULL THEN
+                RAISE EXCEPTION
+                    'the only permitted Monitor revision update is sealing';
+            END IF;
+            IF (
+                NEW.id,
+                NEW.monitor_id,
+                NEW.revision_number,
+                NEW.criteria_version,
+                NEW.minimum_confidence,
+                NEW.effective_from,
+                NEW.text_query,
+                NEW.match_all_in_profile,
+                NEW.change_reason,
+                NEW.created_at
+            ) IS DISTINCT FROM (
+                OLD.id,
+                OLD.monitor_id,
+                OLD.revision_number,
+                OLD.criteria_version,
+                OLD.minimum_confidence,
+                OLD.effective_from,
+                OLD.text_query,
+                OLD.match_all_in_profile,
+                OLD.change_reason,
+                OLD.created_at
+            ) THEN
+                RAISE EXCEPTION
+                    'Monitor revision criteria cannot change while sealing';
+            END IF;
+
+            SELECT EXISTS (
+                SELECT 1
+                FROM (
+                    SELECT revision_id
+                    FROM monitor_revision_geographies
+                    WHERE revision_id = NEW.id
+                    GROUP BY revision_id
+                    HAVING count(DISTINCT include_descendants) > 1
+                    UNION ALL
+                    SELECT revision_id
+                    FROM monitor_revision_topics
+                    WHERE revision_id = NEW.id
+                    GROUP BY revision_id
+                    HAVING count(DISTINCT include_descendants) > 1
+                    UNION ALL
+                    SELECT revision_id
+                    FROM monitor_revision_document_types
+                    WHERE revision_id = NEW.id
+                    GROUP BY revision_id
+                    HAVING count(DISTINCT include_descendants) > 1
+                    UNION ALL
+                    SELECT revision_id
+                    FROM monitor_revision_source_types
+                    WHERE revision_id = NEW.id
+                    GROUP BY revision_id
+                    HAVING count(DISTINCT include_descendants) > 1
+                ) AS mixed_policies
+            ) INTO inconsistent_hierarchy;
+            IF inconsistent_hierarchy THEN
+                RAISE EXCEPTION
+                    'one Monitor hierarchy dimension cannot mix descendant policies';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: preserve_monitor_revision_selectors(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.preserve_monitor_revision_selectors() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            old_sealed timestamptz;
+            new_sealed timestamptz;
+        BEGIN
+            IF TG_OP IN ('UPDATE', 'DELETE') THEN
+                SELECT sealed_at INTO old_sealed
+                FROM monitor_revisions
+                WHERE id = OLD.revision_id;
+                IF old_sealed IS NOT NULL THEN
+                    RAISE EXCEPTION
+                        'selectors of sealed Monitor revisions cannot change';
+                END IF;
+            END IF;
+            IF TG_OP IN ('INSERT', 'UPDATE') THEN
+                SELECT sealed_at INTO new_sealed
+                FROM monitor_revisions
+                WHERE id = NEW.revision_id;
+                IF new_sealed IS NOT NULL THEN
+                    RAISE EXCEPTION
+                        'selectors cannot be added to a sealed Monitor revision';
+                END IF;
+            END IF;
+            RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+        END;
+        $$;
+
 
 --
 -- Name: prevent_entity_type_hierarchy_cycle(); Type: FUNCTION; Schema: public; Owner: -
@@ -93,10 +218,32 @@ CREATE FUNCTION public.require_monitor_current_revision() RETURNS trigger
                     WHERE revision.monitor_id = monitor.id
                       AND revision.revision_number =
                           monitor.current_revision_number
+                      AND revision.sealed_at IS NOT NULL
                 )
             ) THEN
                 RAISE EXCEPTION
-                    'every monitor must reference an existing current revision';
+                    'every monitor must reference an existing sealed current revision';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+
+
+--
+-- Name: require_monitor_revisions_sealed(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.require_monitor_revisions_sealed() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM monitor_revisions
+                WHERE sealed_at IS NULL
+            ) THEN
+                RAISE EXCEPTION
+                    'every Monitor revision must be sealed before commit';
             END IF;
             RETURN NULL;
         END;
@@ -1534,6 +1681,7 @@ CREATE TABLE public.monitor_revisions (
     match_all_in_profile boolean DEFAULT false NOT NULL,
     change_reason text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    sealed_at timestamp with time zone,
     CONSTRAINT ck_monitor_revisions_criteria_version CHECK ((criteria_version = 1)),
     CONSTRAINT ck_monitor_revisions_minimum_confidence_range CHECK (((minimum_confidence IS NULL) OR ((minimum_confidence >= (0)::numeric) AND (minimum_confidence <= (1)::numeric)))),
     CONSTRAINT ck_monitor_revisions_revision_positive CHECK ((revision_number > 0)),
@@ -2710,6 +2858,14 @@ ALTER TABLE ONLY public.geographies
 
 
 --
+-- Name: monitor_evaluation_runs uq_monitor_evaluation_runs_monitor_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs
+    ADD CONSTRAINT uq_monitor_evaluation_runs_monitor_id UNIQUE (monitor_id, id);
+
+
+--
 -- Name: monitor_matches uq_monitor_matches_monitor_document; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3553,6 +3709,83 @@ CREATE CONSTRAINT TRIGGER coverage_profiles_require_default AFTER INSERT OR DELE
 
 
 --
+-- Name: monitor_revision_content_formats monitor_revision_content_formats_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_content_formats_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_content_formats FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_document_types monitor_revision_document_types_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_document_types_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_document_types FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_entities monitor_revision_entities_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_entities_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_entities FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_entity_roles monitor_revision_entity_roles_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_entity_roles_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_entity_roles FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_geographies monitor_revision_geographies_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_geographies_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_geographies FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_languages monitor_revision_languages_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_languages_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_languages FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_source_types monitor_revision_source_types_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_source_types_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_source_types FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_sources monitor_revision_sources_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_sources_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_sources FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_topics monitor_revision_topics_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_topics_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_topics FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revisions monitor_revisions_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revisions_preserve_immutability BEFORE DELETE OR UPDATE ON public.monitor_revisions FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_immutability();
+
+
+--
+-- Name: monitor_revisions monitor_revisions_require_seal; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER monitor_revisions_require_seal AFTER INSERT OR UPDATE OF sealed_at ON public.monitor_revisions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_monitor_revisions_sealed();
+
+
+--
 -- Name: monitors monitors_require_current_revision; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4111,11 +4344,11 @@ ALTER TABLE ONLY public.monitor_matches
 
 
 --
--- Name: monitor_matches fk_monitor_matches_first_evaluation_run_id_monitor_eval_1c46; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: monitor_matches fk_monitor_matches_first_evaluation_run; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.monitor_matches
-    ADD CONSTRAINT fk_monitor_matches_first_evaluation_run_id_monitor_eval_1c46 FOREIGN KEY (first_evaluation_run_id) REFERENCES public.monitor_evaluation_runs(id) ON DELETE SET NULL;
+    ADD CONSTRAINT fk_monitor_matches_first_evaluation_run FOREIGN KEY (monitor_id, first_evaluation_run_id) REFERENCES public.monitor_evaluation_runs(monitor_id, id) ON DELETE RESTRICT;
 
 
 --
@@ -4127,11 +4360,11 @@ ALTER TABLE ONLY public.monitor_matches
 
 
 --
--- Name: monitor_matches fk_monitor_matches_last_evaluation_run_id_monitor_evalu_fb3b; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: monitor_matches fk_monitor_matches_last_evaluation_run; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.monitor_matches
-    ADD CONSTRAINT fk_monitor_matches_last_evaluation_run_id_monitor_evalu_fb3b FOREIGN KEY (last_evaluation_run_id) REFERENCES public.monitor_evaluation_runs(id) ON DELETE SET NULL;
+    ADD CONSTRAINT fk_monitor_matches_last_evaluation_run FOREIGN KEY (monitor_id, last_evaluation_run_id) REFERENCES public.monitor_evaluation_runs(monitor_id, id) ON DELETE RESTRICT;
 
 
 --
@@ -4394,5 +4627,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict GzRdRcgjH8p7BMLxNsny3jGPF10gQy898X9Mq1vtMmvJgdVsS74idQEUajWG2RT
+\unrestrict h6sJQZsPcwADHnDIG21qKsiGP06Um1A5MeRxRSe8GeRRXYvgmsg9TbpJae5oiRP
 

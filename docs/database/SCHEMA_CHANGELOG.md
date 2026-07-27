@@ -6,9 +6,10 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
-## 2026-07-27 — Step 25 Monitor Rule Engine Freeze Candidate
+## 2026-07-27 — Step 25 Monitor Rule Engine Frozen
 
-**Alembic revision:** `b25c7d9e1f30`
+**Freeze revision:** `c25f4a7b9d02`
+**Foundation revision:** `b25c7d9e1f30`
 **Revises:** `f8a1c2d3e4b5`
 
 Added normalized, Coverage-Profile-owned Monitors with immutable criteria
@@ -20,17 +21,26 @@ references live in nine normalized selector tables; Boolean expressions and
 regular expressions remain outside this versioned contract. Empty criteria
 require explicit `match_all_in_profile` acknowledgement.
 
-Deferred database triggers require every Monitor to identify a real current
-revision. Application row locks serialize evaluation with pause, archive, and
-revision changes. Repeated and concurrent matches accumulate first/last
-revision, first/last timestamp, and observation count without duplicate
-logical matches.
+Deferred database triggers require every Monitor to identify a real, sealed
+current revision. Application row locks serialize evaluation with pause,
+archive, and revision changes. Repeated and concurrent matches accumulate
+first/last revision, first/last timestamp, and observation count without
+duplicate logical matches.
 
 The migration creates no Monitor or Step 26 alert state. Downgrade succeeds
 when Step 25 tables are empty and refuses to discard configuration or history.
 
-Formal freeze review is still required before this candidate is declared
-frozen.
+Formal review found and corrected two blockers. Revision criteria and
+normalized selectors are now sealed and database-immutable, including a guard
+against mixed descendant policy within one hierarchy dimension. The hardening
+migration refuses to seal ambiguous preexisting policy. Match evaluation
+provenance now uses composite foreign keys requiring each evaluation run to
+belong to the same Monitor.
+
+All 179 repository tests, the Step 25 verification SQL, empty hardening
+downgrade/re-upgrade, destructive-downgrade refusal, and the Alembic drift
+check passed against isolated PostgreSQL 17.10. Step 25 is frozen at
+`c25f4a7b9d02`.
 
 ---
 
@@ -665,7 +675,7 @@ The current work sequence is:
 
 ```text
 Step 24   — Classification-aware document filters (frozen; no schema change)
-Step 25   — Monitor Rule Engine (freeze candidate)
+Step 25   — Monitor Rule Engine (frozen)
 Step 26   — Alerts / ntfy
 ```
 

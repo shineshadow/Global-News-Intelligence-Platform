@@ -2,8 +2,8 @@
 
 **Document type:** Living implementation reference  
 **Snapshot date:** 2026-07-27
-**Platform phase:** Step 25 — Monitor Rule Engine freeze candidate
-**Alembic revision:** `b25c7d9e1f30`
+**Platform phase:** Step 25 — Monitor Rule Engine frozen
+**Alembic revision:** `c25f4a7b9d02`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -105,13 +105,14 @@ The current schema contains **60 tables**:
 Current Alembic revision:
 
 ```text
-b25c7d9e1f30
+c25f4a7b9d02
 ```
 
-No custom PostgreSQL enum types or extensions are present. Three PostgreSQL
-functions and four deferred constraint triggers enforce the acyclic entity-type
-hierarchy, the exactly-one-active-default coverage-profile invariant, and valid
-Monitor current-revision references.
+No custom PostgreSQL enum types or extensions are present. Six PostgreSQL
+functions, five deferred constraint triggers, and ten immediate history
+triggers enforce the acyclic entity-type hierarchy, the
+exactly-one-active-default coverage-profile invariant, and sealed immutable
+Monitor revisions.
 
 Step 22 is an additive schema expansion. No Phase 1 table was repurposed or renamed.
 
@@ -1985,11 +1986,12 @@ replacements and polling-policy writes lock the profile row so same-profile
 writes cannot silently interleave. Existing API, web, and CSV-inventory
 priority inputs persist through the default profile.
 
-# 34. Step 25 Monitor Rule Engine — Freeze Candidate
+# 34. Step 25 Monitor Rule Engine — Frozen
 
 Alembic revision `b25c7d9e1f30` adds thirteen normalized tables for
-profile-owned Monitors, immutable criteria revisions, evaluation history, and
-idempotent document matches.
+profile-owned Monitors, versioned criteria, evaluation history, and idempotent
+document matches. Freeze-hardening revision `c25f4a7b9d02` seals revision
+history and binds evaluation provenance to the same Monitor.
 
 The current revision contains scalar criteria only:
 
@@ -2009,15 +2011,19 @@ descendant policy.
 Each Monitor identifies one current revision by `(monitor_id,
 current_revision_number)`. Deferred constraint triggers permit atomic Monitor
 creation and revision changes while rejecting a committed Monitor that points
-to a nonexistent revision. Application services serialize lifecycle,
-revision, and evaluation operations on the Monitor row.
+to a nonexistent or unsealed revision. Once sealed, immediate triggers reject
+revision updates, deletes, and selector changes. Sealing also rejects mixed
+descendant policies within any one Step 24 hierarchy dimension. Application
+services serialize lifecycle, revision, and evaluation operations on the
+Monitor row.
 
 `monitor_matches` permits one row per Monitor/document pair. A repeated match
 preserves the first revision and timestamp, updates the last revision and
 timestamp, and increments `observation_count`. `monitor_evaluation_runs`
 records activation, ingestion, enrichment, and manual evaluations. Step 25
 creates no alert, delivery, destination, or notification table; those remain
-Step 26 responsibilities.
+Step 26 responsibilities. Composite foreign keys require the first and last
+evaluation-run references on a match to belong to that same Monitor.
 
 The downgrade is deliberately guarded. It succeeds only when Monitor
 configuration and history are empty and otherwise refuses destructive loss.

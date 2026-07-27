@@ -231,6 +231,10 @@ class MonitorRevision(Base):
         nullable=False,
         server_default=func.now(),
     )
+    sealed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
 
 class _MonitorRevisionMemberMixin:
@@ -398,6 +402,11 @@ class MonitorEvaluationRun(Base):
             name="fk_monitor_evaluation_runs_revision",
             ondelete="RESTRICT",
         ),
+        UniqueConstraint(
+            "monitor_id",
+            "id",
+            name="uq_monitor_evaluation_runs_monitor_id",
+        ),
         Index(
             "ix_monitor_evaluation_runs_monitor_started",
             "monitor_id",
@@ -499,6 +508,18 @@ class MonitorMatch(Base):
             name="fk_monitor_matches_last_revision",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["monitor_id", "first_evaluation_run_id"],
+            ["monitor_evaluation_runs.monitor_id", "monitor_evaluation_runs.id"],
+            name="fk_monitor_matches_first_evaluation_run",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["monitor_id", "last_evaluation_run_id"],
+            ["monitor_evaluation_runs.monitor_id", "monitor_evaluation_runs.id"],
+            name="fk_monitor_matches_last_evaluation_run",
+            ondelete="RESTRICT",
+        ),
         Index(
             "ix_monitor_matches_monitor_last",
             "monitor_id",
@@ -535,12 +556,10 @@ class MonitorMatch(Base):
     )
     first_evaluation_run_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey("monitor_evaluation_runs.id", ondelete="SET NULL"),
         nullable=True,
     )
     last_evaluation_run_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey("monitor_evaluation_runs.id", ondelete="SET NULL"),
         nullable=True,
     )
     first_matched_at: Mapped[datetime] = mapped_column(

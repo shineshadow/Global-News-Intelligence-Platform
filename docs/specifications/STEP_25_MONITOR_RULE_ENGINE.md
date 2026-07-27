@@ -1,6 +1,6 @@
 # Step 25 — Monitor Rule Engine
 
-**Status:** FREEZE CANDIDATE  
+**Status:** FROZEN
 **Depends on:** Step 24 — FROZEN  
 **Date:** 2026-07-27
 
@@ -105,9 +105,21 @@ activate             execute current revision
 An active Monitor cannot be edited in place. It must be paused first. Prior
 revisions and matches remain auditable.
 
-The Monitor row records the current revision number through a deferred
-composite foreign key. A transaction cannot commit with a nonexistent current
-revision.
+The Monitor row records the current revision number. Deferred constraint
+triggers prevent a transaction from committing with a nonexistent or unsealed
+current revision.
+
+Revision construction is explicit:
+
+```text
+insert scalar revision
+insert normalized selectors
+validate one descendant policy per hierarchy dimension
+seal revision
+```
+
+Every committed revision must be sealed. Database triggers reject subsequent
+revision updates, deletes, or selector changes.
 
 ## 6. Lifecycle
 
@@ -177,9 +189,9 @@ The migration creates no seeded Monitor. Downgrade is permitted only when all
 Monitor, revision, evaluation, and match tables are empty. Meaningful operator
 configuration or history blocks destructive downgrade.
 
-## 10. Freeze-Candidate Proofs
+## 10. Formal Freeze Review
 
-The freeze candidate must directly prove:
+The formal freeze review directly proved:
 
 ```text
 normalized canonical references and immutable revisions
@@ -202,20 +214,31 @@ lossless empty downgrade and destructive-downgrade rejection
 complete repository regression and zero Alembic drift
 ```
 
-Candidate validation on PostgreSQL 17.10:
+Formal validation on PostgreSQL 17.10:
 
 ```text
-Step 25 schema verification                              passed
-13 expected Monitor tables                              present
-invalid current-revision references                          0
-duplicate logical matches                                    0
-selector JSON columns                                        0
-premature Step 26 tables                                     0
-repository tests                                    175 passed
-Alembic drift operations                                     0
-empty downgrade and re-upgrade                          passed
-destructive-downgrade refusal                           passed
+Step 25 schema verification                                 passed
+13 expected Monitor tables                                 present
+unsealed revisions                                               0
+mixed hierarchy descendant policies                              0
+mixed-policy hardening upgrade refusal                      passed
+invalid current-revision references                              0
+duplicate logical matches                                        0
+cross-Monitor evaluation references                              0
+selector JSON columns                                            0
+premature Step 26 tables                                         0
+repository tests                                        179 passed
+Alembic drift operations                                         0
+empty hardening downgrade and re-upgrade                    passed
+destructive-downgrade refusal                              passed
 ```
 
-This status is not a freeze declaration. Step 25 remains subject to a separate
-formal freeze review.
+The review found and corrected two blockers:
+
+1. Service-only revision immutability was strengthened with database sealing
+   and immutable normalized selector history.
+2. Match evaluation-run references now use composite foreign keys requiring
+   the evaluation to belong to the same Monitor.
+
+Step 25 is frozen at Alembic revision `c25f4a7b9d02`. Step 26 may depend on
+the normalized Monitor, evaluation, and new-match contracts defined here.

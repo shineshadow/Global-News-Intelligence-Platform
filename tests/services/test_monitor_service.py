@@ -2,22 +2,31 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func, select
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import DBAPIError, ProgrammingError
 
 from app.models import (
+    ContentFormat,
     CoverageProfile,
     Document,
+    DocumentType,
+    Entity,
+    Geography,
+    LanguageTag,
     Monitor,
     MonitorEvaluationRun,
     MonitorMatch,
     MonitorRevision,
+    MonitorRevisionEntityRole,
     MonitorRevisionGeography,
     Source,
+    SourceType,
+    Topic,
 )
 from app.schemas.document_match import (
     DocumentMatchCriteria,
     HierarchyIdMatch,
+    HierarchySlugMatch,
 )
 from app.schemas.monitor import (
     MonitorCreate,
@@ -129,6 +138,7 @@ async def test_monitor_revision_is_normalized_and_database_current(
     assert loaded.criteria.language_tags == ("en-US",)
     assert loaded.criteria.text_query == "Korea"
     assert geography_count == 1
+    assert loaded.revision.sealed_at is not None
 
     async with database_session_factory() as session:
         with pytest.raises(ProgrammingError):
@@ -141,6 +151,251 @@ async def test_monitor_revision_is_normalized_and_database_current(
                         current_revision_number=7,
                     )
                 )
+
+
+async def test_step_24_criteria_round_trip_without_semantic_loss(
+    database_session_factory,
+) -> None:
+    effective_from = datetime.now(UTC).replace(microsecond=0)
+    async with database_session_factory() as session, session.begin():
+        geography_ids = tuple(
+            (
+                await session.scalars(
+                    select(Geography.id).where(Geography.is_active.is_(True)).limit(2)
+                )
+            ).all()
+        )
+        topic_ids = tuple(
+            (
+                await session.scalars(
+                    select(Topic.id).where(Topic.is_active.is_(True)).limit(2)
+                )
+            ).all()
+        )
+        document_type_ids = tuple(
+            (
+                await session.scalars(
+                    select(DocumentType.id)
+                    .where(DocumentType.is_active.is_(True))
+                    .limit(2)
+                )
+            ).all()
+        )
+        content_formats = tuple(
+            (
+                await session.scalars(
+                    select(ContentFormat.slug)
+                    .where(ContentFormat.is_active.is_(True))
+                    .limit(2)
+                )
+            ).all()
+        )
+        source_types = tuple(
+            (
+                await session.scalars(
+                    select(SourceType.slug).where(SourceType.is_active.is_(True)).limit(2)
+                )
+            ).all()
+        )
+        language_tags = tuple(
+            (
+                await session.scalars(
+                    select(LanguageTag.tag).where(LanguageTag.is_active.is_(True)).limit(2)
+                )
+            ).all()
+        )
+        entity = Entity(
+            canonical_name="Step 25 Round Trip Entity",
+            entity_metadata={},
+        )
+        source = Source(
+            name="Step 25 Round Trip Source",
+            country="South Korea",
+            primary_language=language_tags[0],
+            source_type=source_types[0],
+            status="active",
+            website_url="https://step-25-round-trip.example",
+            source_metadata={},
+        )
+        session.add_all([entity, source])
+        await session.flush()
+
+    criteria = DocumentMatchCriteria(
+        geographies=HierarchyIdMatch(
+            ids=geography_ids,
+            include_descendants=True,
+        ),
+        topics=HierarchyIdMatch(
+            ids=topic_ids,
+            include_descendants=True,
+        ),
+        entity_ids=(entity.id,),
+        entity_roles=("subject", "location"),
+        document_types=HierarchyIdMatch(
+            ids=document_type_ids,
+            include_descendants=True,
+        ),
+        content_format_slugs=content_formats,
+        source_ids=(source.id,),
+        source_types=HierarchySlugMatch(
+            slugs=source_types,
+            include_descendants=True,
+        ),
+        language_tags=language_tags,
+        minimum_confidence=0.7654,
+        effective_from=effective_from,
+        text_query="literal round trip",
+    )
+    async with database_session_factory() as session:
+        detail = await create_monitor(
+            session,
+            MonitorCreate(
+                slug="criteria_round_trip",
+                name="Criteria Round Trip",
+                revision=MonitorRevisionInput(
+                    criteria=criteria,
+                ),
+            ),
+        )
+    async with database_session_factory() as session:
+        loaded = await get_monitor_detail(
+            session,
+            detail.monitor.id,
+        )
+
+    assert set(loaded.criteria.geographies.ids) == set(geography_ids)
+    assert loaded.criteria.geographies.include_descendants is True
+    assert set(loaded.criteria.topics.ids) == set(topic_ids)
+    assert loaded.criteria.topics.include_descendants is True
+    assert loaded.criteria.entity_ids == (entity.id,)
+    assert set(loaded.criteria.entity_roles) == {"subject", "location"}
+    assert set(loaded.criteria.document_types.ids) == set(document_type_ids)
+    assert loaded.criteria.document_types.include_descendants is True
+    assert set(loaded.criteria.content_format_slugs) == set(content_formats)
+    assert loaded.criteria.source_ids == (source.id,)
+    assert set(loaded.criteria.source_types.slugs) == set(source_types)
+    assert loaded.criteria.source_types.include_descendants is True
+    assert set(loaded.criteria.language_tags) == set(language_tags)
+    assert loaded.criteria.minimum_confidence == criteria.minimum_confidence
+    assert loaded.criteria.effective_from == effective_from
+    assert loaded.criteria.text_query == "literal round trip"
+
+
+async def test_sealed_revision_and_selectors_are_database_immutable(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session:
+        detail = await create_monitor(
+            session,
+            _monitor_create(
+                slug="immutable_revision",
+                query="original phrase",
+            ),
+        )
+
+    with pytest.raises(DBAPIError, match="sealed Monitor revisions cannot be updated"):
+        async with database_session_factory() as session, session.begin():
+            await session.execute(
+                update(MonitorRevision)
+                .where(MonitorRevision.id == detail.revision.id)
+                .values(text_query="rewritten phrase")
+            )
+
+    with pytest.raises(
+        DBAPIError,
+        match="selectors cannot be added to a sealed Monitor revision",
+    ):
+        async with database_session_factory() as session, session.begin():
+            session.add(
+                MonitorRevisionEntityRole(
+                    revision_id=detail.revision.id,
+                    entity_role="subject",
+                )
+            )
+
+
+async def test_revision_seal_rejects_mixed_descendant_policy(
+    database_session_factory,
+) -> None:
+    with pytest.raises(
+        DBAPIError,
+        match="cannot mix descendant policies",
+    ):
+        async with database_session_factory() as session, session.begin():
+            profile_id = await session.scalar(
+                select(CoverageProfile.id)
+                .where(CoverageProfile.is_default.is_(True))
+                .limit(1)
+            )
+            geography_ids = tuple(
+                (
+                    await session.scalars(
+                        select(Geography.id).order_by(Geography.id).limit(2)
+                    )
+                ).all()
+            )
+            monitor_id = await session.scalar(
+                text(
+                    """
+                    INSERT INTO monitors (
+                        slug,
+                        name,
+                        coverage_profile_id,
+                        current_revision_number
+                    )
+                    VALUES (
+                        'mixed_descendant_policy',
+                        'Mixed Descendant Policy',
+                        :profile_id,
+                        1
+                    )
+                    RETURNING id
+                    """
+                ),
+                {"profile_id": profile_id},
+            )
+            revision_id = await session.scalar(
+                text(
+                    """
+                    INSERT INTO monitor_revisions (
+                        monitor_id,
+                        revision_number
+                    )
+                    VALUES (:monitor_id, 1)
+                    RETURNING id
+                    """
+                ),
+                {"monitor_id": monitor_id},
+            )
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO monitor_revision_geographies (
+                        revision_id,
+                        geography_id,
+                        include_descendants
+                    )
+                    VALUES
+                        (:revision_id, :first_id, false),
+                        (:revision_id, :second_id, true)
+                    """
+                ),
+                {
+                    "revision_id": revision_id,
+                    "first_id": geography_ids[0],
+                    "second_id": geography_ids[1],
+                },
+            )
+            await session.execute(
+                text(
+                    """
+                    UPDATE monitor_revisions
+                    SET sealed_at = now()
+                    WHERE id = :revision_id
+                    """
+                ),
+                {"revision_id": revision_id},
+            )
 
 
 async def test_profile_wide_activation_requires_acknowledgement(
@@ -353,6 +608,52 @@ async def test_failed_evaluation_is_preserved_as_history(
     assert run.candidate_count == 0
     assert run.matched_count == 0
     assert run.new_match_count == 0
+
+
+async def test_match_evaluation_provenance_cannot_cross_monitors(
+    database_session_factory,
+) -> None:
+    document_id = await _create_document(
+        database_session_factory,
+        title="Provenance Monitor Target",
+    )
+    monitor_ids: list[int] = []
+    for slug in ("provenance_monitor_one", "provenance_monitor_two"):
+        async with database_session_factory() as session:
+            detail = await create_monitor(
+                session,
+                _monitor_create(
+                    slug=slug,
+                    query="Provenance",
+                ),
+            )
+        monitor_ids.append(detail.monitor.id)
+        async with database_session_factory() as session:
+            await activate_monitor(session, detail.monitor.id)
+        async with database_session_factory() as session:
+            await evaluate_monitor(
+                session,
+                detail.monitor.id,
+                document_id=document_id,
+            )
+
+    async with database_session_factory() as session:
+        first_match = await session.scalar(
+            select(MonitorMatch).where(MonitorMatch.monitor_id == monitor_ids[0])
+        )
+        other_run_id = await session.scalar(
+            select(MonitorEvaluationRun.id).where(
+                MonitorEvaluationRun.monitor_id == monitor_ids[1]
+            )
+        )
+
+    with pytest.raises(DBAPIError):
+        async with database_session_factory() as session, session.begin():
+            await session.execute(
+                update(MonitorMatch)
+                .where(MonitorMatch.id == first_match.id)
+                .values(first_evaluation_run_id=other_run_id)
+            )
 
 
 async def test_document_evaluation_uses_only_active_unexpired_monitors(

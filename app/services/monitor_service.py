@@ -323,6 +323,8 @@ async def _create_revision(
         session,
         _revision_selector_rows(revision.id, criteria),
     )
+    revision.sealed_at = _utcnow()
+    await session.flush()
     return revision, criteria
 
 
