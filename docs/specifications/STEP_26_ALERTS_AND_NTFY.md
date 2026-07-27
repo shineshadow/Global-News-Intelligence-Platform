@@ -1,6 +1,6 @@
 # Step 26 — Alerts and ntfy Delivery
 
-**Status:** FREEZE CANDIDATE
+**Status:** FROZEN
 **Depends on:** Step 25 — FROZEN
 **Date:** 2026-07-27
 
@@ -198,9 +198,9 @@ or attempts and no alerts beyond the deterministic migration backfill.
 Meaningful operator configuration or delivery history blocks destructive
 downgrade.
 
-## 10. Freeze-Candidate Proofs
+## 10. Formal Freeze Review
 
-The freeze candidate must directly prove:
+The formal freeze review directly proved:
 
 ```text
 one alert for a newly inserted Monitor match
@@ -223,3 +223,29 @@ clean downgrade/re-upgrade
 destructive-downgrade refusal
 complete regression and zero Alembic drift
 ```
+
+Formal validation on PostgreSQL 17.10:
+
+```text
+Step 26 focused model, service, API, and web tests             10 passed
+complete repository regression                               190 passed
+Ruff and Python compilation                                      passed
+Celery alerts and dispatch tasks                           registered
+alerts worker systemd unit                                      valid
+installed unit matches repository                              passed
+alerts worker, scheduler, and Beat                              active
+Alembic migration heads                                             1
+current Alembic revision                               d26e5b8c1a40
+Alembic drift operations                                             0
+clean downgrade and re-upgrade                                 passed
+existing Step 25 match backfill                                passed
+backfill-created deliveries                                         0
+destructive-downgrade refusal                                  passed
+post-test alerts, deliveries, and attempts                           0
+```
+
+No unresolved freeze blocker was found. Step 26 is frozen at Alembic revision
+`d26e5b8c1a40`. Future Calendar notification work may introduce a separate
+alert class, but must not reinterpret or mutate the frozen
+`content_monitor_match` event, routing snapshot, delivery, or attempt-history
+contracts.
