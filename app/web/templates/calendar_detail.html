@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}{{ detail.title }} — Intelligence Calendar{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Calendar Event {{ detail.public_id }}</div>
+        <h2 class="page-title">{{ detail.title }}</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Occurrences</h3></div>
+            <div class="table-responsive">
+                <table class="table table-vcenter">
+                    <thead><tr><th>Identity</th><th>Schedule</th><th>Validation</th></tr></thead>
+                    <tbody>
+                        {% for occurrence in detail.occurrences %}
+                        <tr>
+                            <td>{{ occurrence.recurrence_key }}</td>
+                            <td>{{ occurrence.schedule_state }}</td>
+                            <td>{{ occurrence.validation_state or "inherits Event" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Coverage</h3></div>
+            <div class="card-body">
+                <p>Policies: {{ detail.coverage_policy_ids|join(", ") or "none" }}</p>
+                <p>Linked Monitors: {{ detail.monitor_ids|join(", ") or "none" }}</p>
+            </div>
+        </div>
+        {% if detail.coverage_policy_ids %}
+        <form class="card" method="post"
+            action="{{ url_for('web_calendar_monitor_link', event_id=detail.id) }}">
+            <div class="card-header"><h3 class="card-title">Link existing Monitor</h3></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Policy ID</label>
+                    <input class="form-control" type="number" name="policy_id"
+                        value="{{ detail.coverage_policy_ids[0] }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Monitor ID</label>
+                    <input class="form-control" type="number" name="monitor_id" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Purpose</label>
+                    <select class="form-select" name="purpose">
+                        <option value="pre_event">Pre-event</option>
+                        <option value="live">Live</option>
+                        <option value="post_event">Post-event</option>
+                        <option value="standing_series">Standing series</option>
+                    </select>
+                </div>
+                <label class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                        name="calendar_managed" value="true">
+                    <span class="form-check-label">Calendar-managed lifecycle</span>
+                </label>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-primary" type="submit">Link Monitor</button>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

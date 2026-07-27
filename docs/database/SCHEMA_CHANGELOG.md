@@ -6,6 +6,31 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-27 — Intelligence Calendar Phase 1 Freeze Candidate
+
+**Candidate revision:** `e27a6c9d4f10`
+**Revises:** `d26e5b8c1a40`
+
+Added the 22 normalized Calendar tables frozen by the Calendar Foundation
+Audit: stable Events, materialized Occurrences, immutable descriptive and
+schedule revisions, bounded recurrence, evidence, canonical relationships,
+Coverage Profile policy, explicit Step 25 Monitor links, and merge history.
+
+Deferred database triggers enforce one one-time Occurrence, one active rule
+for recurring Events, owned current revisions, valid IANA zones,
+append-only history, retraction-only assertions, same-profile Monitor links,
+and identity-preserving merges. Downgrade is empty-only.
+
+Calendar creation has no implicit Monitor or alert side effect. Explicit
+linked Monitors remain governed by Step 25, and their new document matches
+create the ordinary Step 26 `content_monitor_match` alert.
+
+The candidate passed 19 focused Calendar tests, all 209 repository tests, a
+clean downgrade/re-upgrade, destructive-downgrade refusal, and zero-drift
+Alembic comparison. Formal freeze review remains pending.
+
+---
+
 ## 2026-07-27 — Step 25 Monitor Rule Engine Frozen
 
 **Freeze revision:** `c25f4a7b9d02`

@@ -71,6 +71,35 @@ classification_confidence
 
 ---
 
+## Intelligence Calendar Phase 1
+
+Calendar Event creation is separate from Monitor creation. A request may
+create a Coverage Profile policy, but only the explicit Monitor endpoints
+create or link a Step 25 Monitor.
+
+```text
+POST /api/v1/calendar/events
+GET  /api/v1/calendar/events
+GET  /api/v1/calendar/events/{event_id}
+POST /api/v1/calendar/events/{event_id}/aliases
+POST /api/v1/calendar/events/{event_id}/revisions
+POST /api/v1/calendar/events/{event_id}/materialize
+POST /api/v1/calendar/events/{event_id}/evidence
+POST /api/v1/calendar/events/{event_id}/state-transitions
+POST /api/v1/calendar/events/{event_id}/merge
+POST /api/v1/calendar/events/{event_id}/occurrences/{occurrence_id}/schedule-revisions
+POST /api/v1/calendar/events/{event_id}/monitors
+POST /api/v1/calendar/events/{event_id}/monitors/link
+```
+
+The Monitor endpoints reject profile mismatches. Calendar stores only the
+normalized link; the Step 25 Monitor revision remains the criteria authority.
+Calendar creation, rescheduling, and linking do not create Calendar reminder
+or change alerts. Only a new linked Monitor/document match enters the frozen
+Step 26 content-alert path.
+
+---
+
 ## Endpoint Documentation Template
 
 ```text

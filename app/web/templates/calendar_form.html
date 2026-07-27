@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}New Calendar Event — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Calendar Phase 1</div>
+        <h2 class="page-title">Create canonical Event</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<form class="card" method="post" action="{{ url_for('web_calendar_create') }}">
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input class="form-control" name="title" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" name="description"></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Temporal mode</label>
+            <select class="form-select" name="temporal_mode">
+                <option value="timed">Timed</option>
+                <option value="date">All day / date</option>
+                <option value="unknown">Unknown</option>
+            </select>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label class="form-label">Local start</label>
+                <input class="form-control" type="datetime-local" name="timed_start_local">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label class="form-label">Local end</label>
+                <input class="form-control" type="datetime-local" name="timed_end_local">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label class="form-label">IANA timezone</label>
+                <input class="form-control" name="timezone_name"
+                    placeholder="America/New_York">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Start date</label>
+                <input class="form-control" type="date" name="start_date">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">End date (exclusive)</label>
+                <input class="form-control" type="date" name="end_date_exclusive">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Original schedule expression</label>
+            <input class="form-control" name="original_text">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Coverage Profile (optional)</label>
+            <select class="form-select" name="profile_id">
+                <option value="">No policy or Monitor</option>
+                {% for profile in profiles %}
+                <option value="{{ profile.id }}">{{ profile.name }}</option>
+                {% endfor %}
+            </select>
+            <div class="form-hint">
+                A policy does not create or activate a Monitor automatically.
+            </div>
+        </div>
+    </div>
+    <div class="card-footer text-end">
+        <button class="btn btn-primary" type="submit">Create Event</button>
+    </div>
+</form>
+{% endblock %}

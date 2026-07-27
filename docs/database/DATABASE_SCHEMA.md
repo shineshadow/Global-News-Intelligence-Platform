@@ -2,8 +2,8 @@
 
 **Document type:** Living implementation reference  
 **Snapshot date:** 2026-07-27
-**Platform phase:** Step 25 — Monitor Rule Engine frozen
-**Alembic revision:** `c25f4a7b9d02`
+**Platform phase:** Intelligence Calendar Phase 1 freeze candidate
+**Alembic revision:** `e27a6c9d4f10`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -2027,3 +2027,43 @@ evaluation-run references on a match to belong to that same Monitor.
 
 The downgrade is deliberately guarded. It succeeds only when Monitor
 configuration and history are empty and otherwise refuses destructive loss.
+
+# 35. Step 26 Alerts and ntfy Delivery — Frozen
+
+Revision `d26e5b8c1a40` adds immutable
+`content_monitor_match` alerts, installation-level ntfy destinations,
+Monitor/destination bindings, snapshotted deliveries, and append-only delivery
+attempts. One alert is permitted per Monitor match. Delivery retries preserve
+the destination configuration effective when the alert was created.
+
+# 36. Intelligence Calendar Phase 1 — Freeze Candidate
+
+Revision `e27a6c9d4f10` adds 22 normalized Calendar tables. Stable Events point
+to immutable descriptive revisions. Every expected instance is an
+Occurrence, including the sole instance of a one-time Event, and points to an
+immutable schedule revision.
+
+Calendar time stores timed values as normalized `timestamptz` plus the source
+IANA timezone and original expression. All-day and coarse date precision use
+local date bounds without fabricated UTC midnight values. Recurrence rules
+retain local DTSTART, bounded materialization horizons, immutable versions,
+explicit exceptions, and stable recurrence keys.
+
+Evidence, transitions, canonical relationship assertions, aliases, and merge
+history preserve actor and provenance. Geography, Topic, Entity, Source,
+Document, semantic document type, and content format reuse the existing
+canonical tables.
+
+Coverage policy is unique by Event and Coverage Profile. Watch sources, search
+terms, semantic document types, and content formats use normalized policy
+tables. Calendar Monitor links contain no criteria JSON and must reference a
+Monitor in the policy's Coverage Profile. Event creation does not create a
+Monitor or alert; a new match from an explicitly linked Monitor follows the
+ordinary Step 26 alert path.
+
+Deferred and immediate triggers enforce current-revision ownership, one-time
+and recurring Event shape, valid timezones, append-only history,
+retraction-only assertions, evidence/document source consistency,
+same-Event policy overrides, endpoint/source ownership, same-profile Monitor
+links, and acyclic identity-preserving merges. Downgrade refuses to remove any
+Calendar-owned state.

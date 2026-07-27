@@ -29,6 +29,9 @@ from app.services.web_ui_service import (
 from app.web.alert_routes import (
     router as alert_router,
 )
+from app.web.calendar_routes import (
+    router as calendar_router,
+)
 from app.web.document_routes import (
     router as document_router,
 )
@@ -60,6 +63,10 @@ router.include_router(
 
 router.include_router(
     monitor_router
+)
+
+router.include_router(
+    calendar_router
 )
 
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     alerts,
+    calendar,
     ingestion,
     monitors,
     observability,
@@ -34,4 +35,8 @@ api_router.include_router(
 
 api_router.include_router(
     monitors.router
+)
+
+api_router.include_router(
+    calendar.router
 )
