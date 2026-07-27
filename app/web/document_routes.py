@@ -1,5 +1,5 @@
-from decimal import Decimal
-from typing import Annotated, Literal
+from decimal import Decimal, InvalidOperation
+from typing import Literal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -79,6 +79,28 @@ def optional_positive_int(
     return parsed
 
 
+def optional_confidence(
+    value: str | None,
+) -> Decimal | None:
+    """Normalize the News Feed's zero-valued “Any Confidence” option."""
+
+    if value in (None, ""):
+        return None
+    try:
+        parsed = Decimal(value)
+    except InvalidOperation as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="minimum_confidence must be a decimal between 0 and 1.",
+        ) from exc
+    if not parsed.is_finite() or parsed < 0 or parsed > 1:
+        raise HTTPException(
+            status_code=422,
+            detail="minimum_confidence must be a decimal between 0 and 1.",
+        )
+    return None if parsed == 0 else parsed
+
+
 @router.get(
     "/web/documents",
     response_class=HTMLResponse,
@@ -102,10 +124,7 @@ async def documents_page(
     source_type: str | None = None,
     source_type_descendants: bool = False,
     language: str | None = None,
-    minimum_confidence: Annotated[
-        Decimal | None,
-        Query(ge=0, le=1),
-    ] = None,
+    minimum_confidence: str | None = None,
 
     time_window: Literal[
         "24h",
@@ -154,6 +173,9 @@ async def documents_page(
         document_type_id,
         field_name="document_type_id",
     )
+    parsed_minimum_confidence = optional_confidence(
+        minimum_confidence,
+    )
 
     try:
         criteria = DocumentMatchCriteria(
@@ -201,7 +223,7 @@ async def documents_page(
                 include_descendants=source_type_descendants,
             ),
             language_tags=(language,) if language else (),
-            minimum_confidence=minimum_confidence,
+            minimum_confidence=parsed_minimum_confidence,
             effective_from=effective_time_cutoff(time_window),
             text_query=q,
         )
@@ -232,7 +254,7 @@ async def documents_page(
         "source_type": source_type,
         "source_type_descendants": source_type_descendants,
         "language": language,
-        "minimum_confidence": minimum_confidence,
+        "minimum_confidence": parsed_minimum_confidence,
         "time": time_window,
         "q": q,
     }
@@ -274,7 +296,7 @@ async def documents_page(
         "source_type": source_type or "",
         "source_type_descendants": source_type_descendants,
         "language": language or "",
-        "minimum_confidence": minimum_confidence,
+        "minimum_confidence": parsed_minimum_confidence,
         "time_window": time_window,
         "q": q or "",
 

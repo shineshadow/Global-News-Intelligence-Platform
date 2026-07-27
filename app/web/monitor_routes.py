@@ -1,5 +1,4 @@
-from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -17,7 +16,10 @@ from app.schemas.monitor import (
 )
 from app.services import monitor_service
 from app.services.document_browser_service import effective_time_cutoff
-from app.web.document_routes import optional_positive_int
+from app.web.document_routes import (
+    optional_confidence,
+    optional_positive_int,
+)
 from app.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
@@ -74,10 +76,7 @@ async def new_monitor_page(
     source_type: str | None = None,
     source_type_descendants: bool = False,
     language: str | None = None,
-    minimum_confidence: Annotated[
-        Decimal | None,
-        Query(ge=0, le=1),
-    ] = None,
+    minimum_confidence: str | None = None,
     time_window: Literal["24h", "7d", "30d", "all"] = Query(
         default="all",
         alias="time",
@@ -108,6 +107,9 @@ async def new_monitor_page(
         document_type_id,
         field_name="document_type_id",
     )
+    parsed_minimum_confidence = optional_confidence(
+        minimum_confidence,
+    )
     criteria = DocumentMatchCriteria(
         coverage_profile_id=parsed_profile_id,
         geographies=HierarchyIdMatch(
@@ -131,7 +133,7 @@ async def new_monitor_page(
             include_descendants=source_type_descendants,
         ),
         language_tags=(language,) if language else (),
-        minimum_confidence=minimum_confidence,
+        minimum_confidence=parsed_minimum_confidence,
         effective_from=effective_time_cutoff(time_window),
         text_query=q,
     )

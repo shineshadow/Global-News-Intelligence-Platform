@@ -828,6 +828,7 @@ async def test_document_browser_accepts_blank_source_filter(
             "source_id": "",
             "geography_id": "",
             "language": "",
+            "minimum_confidence": "",
             "time": "all",
             "q": "",
         },
@@ -839,6 +840,43 @@ async def test_document_browser_accepts_blank_source_filter(
         "Blank Source Filter Test"
         in response.text
     )
+
+
+async def test_document_browser_accepts_zero_as_any_confidence(
+    client,
+    database_session_factory,
+) -> None:
+    source_id, endpoint_id = await create_source_endpoint(
+        client,
+        country="Japan",
+        language="ja",
+    )
+    await create_document(
+        database_session_factory,
+        source_id=source_id,
+        endpoint_id=endpoint_id,
+        title="Any Confidence Test",
+        country="Japan",
+        language="ja",
+        published_at=datetime.now(UTC),
+    )
+
+    response = await client.get(
+        "/web/documents",
+        params={
+            "language": "ja",
+            "minimum_confidence": "0.0",
+            "time": "all",
+        },
+        headers={"HX-Request": "true"},
+    )
+    page_response = await client.get("/web/documents")
+
+    assert response.status_code == 200
+    assert "Any Confidence Test" in response.text
+    assert page_response.status_code == 200
+    assert 'value="0.0"' in page_response.text
+    assert "Any confidence" in page_response.text
 
 
 async def test_document_detail_page(
