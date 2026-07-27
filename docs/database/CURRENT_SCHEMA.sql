@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict AXDyd9iyuHSS8Vp1PoCQF3Ek4J5SJk4W9QiqFmNFps23SpCGRsYgvnFPboHr5HY
+\restrict GzRdRcgjH8p7BMLxNsny3jGPF10gQy898X9Mq1vtMmvJgdVsS74idQEUajWG2RT
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -70,6 +70,33 @@ CREATE FUNCTION public.require_default_coverage_profile() RETURNS trigger
             ) <> 1 THEN
                 RAISE EXCEPTION
                     'exactly one active default coverage profile is required';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+
+
+--
+-- Name: require_monitor_current_revision(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.require_monitor_current_revision() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM monitors AS monitor
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM monitor_revisions AS revision
+                    WHERE revision.monitor_id = monitor.id
+                      AND revision.revision_number =
+                          monitor.current_revision_number
+                )
+            ) THEN
+                RAISE EXCEPTION
+                    'every monitor must reference an existing current revision';
             END IF;
             RETURN NULL;
         END;
@@ -1313,6 +1340,278 @@ CREATE TABLE public.language_tags (
 
 
 --
+-- Name: monitor_evaluation_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_evaluation_runs (
+    id bigint NOT NULL,
+    monitor_id bigint NOT NULL,
+    monitor_revision_id bigint NOT NULL,
+    document_id bigint,
+    trigger_type character varying(30) NOT NULL,
+    status character varying(20) DEFAULT 'running'::character varying NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    candidate_count integer DEFAULT 0 NOT NULL,
+    matched_count integer DEFAULT 0 NOT NULL,
+    new_match_count integer DEFAULT 0 NOT NULL,
+    error text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT ck_monitor_evaluation_runs_completed_after_started CHECK (((completed_at IS NULL) OR (completed_at >= started_at))),
+    CONSTRAINT ck_monitor_evaluation_runs_completion_state CHECK (((((status)::text = 'running'::text) AND (completed_at IS NULL)) OR (((status)::text <> 'running'::text) AND (completed_at IS NOT NULL)))),
+    CONSTRAINT ck_monitor_evaluation_runs_count_order CHECK (((matched_count <= candidate_count) AND (new_match_count <= matched_count))),
+    CONSTRAINT ck_monitor_evaluation_runs_counts_nonnegative CHECK (((candidate_count >= 0) AND (matched_count >= 0) AND (new_match_count >= 0))),
+    CONSTRAINT ck_monitor_evaluation_runs_status CHECK (((status)::text = ANY ((ARRAY['running'::character varying, 'succeeded'::character varying, 'failed'::character varying])::text[]))),
+    CONSTRAINT ck_monitor_evaluation_runs_trigger_type CHECK (((trigger_type)::text = ANY ((ARRAY['activation_backfill'::character varying, 'manual_backfill'::character varying, 'manual_document'::character varying, 'ingestion'::character varying, 'enrichment'::character varying])::text[])))
+);
+
+
+--
+-- Name: monitor_evaluation_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.monitor_evaluation_runs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monitor_evaluation_runs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.monitor_evaluation_runs_id_seq OWNED BY public.monitor_evaluation_runs.id;
+
+
+--
+-- Name: monitor_matches; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_matches (
+    id bigint NOT NULL,
+    monitor_id bigint NOT NULL,
+    document_id bigint NOT NULL,
+    first_monitor_revision_id bigint NOT NULL,
+    last_monitor_revision_id bigint NOT NULL,
+    first_evaluation_run_id bigint,
+    last_evaluation_run_id bigint,
+    first_matched_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_matched_at timestamp with time zone DEFAULT now() NOT NULL,
+    observation_count integer DEFAULT 1 NOT NULL,
+    CONSTRAINT ck_monitor_matches_last_after_first CHECK ((last_matched_at >= first_matched_at)),
+    CONSTRAINT ck_monitor_matches_observation_count_positive CHECK ((observation_count > 0))
+);
+
+
+--
+-- Name: monitor_matches_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.monitor_matches_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monitor_matches_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.monitor_matches_id_seq OWNED BY public.monitor_matches.id;
+
+
+--
+-- Name: monitor_revision_content_formats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_content_formats (
+    revision_id bigint NOT NULL,
+    content_format_slug character varying(50) NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_document_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_document_types (
+    revision_id bigint NOT NULL,
+    document_type_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_entities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_entities (
+    revision_id bigint NOT NULL,
+    entity_id bigint NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_entity_roles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_entity_roles (
+    revision_id bigint NOT NULL,
+    entity_role character varying(50) NOT NULL,
+    CONSTRAINT ck_monitor_revision_entity_roles_entity_role_nonempty CHECK ((btrim((entity_role)::text) <> ''::text))
+);
+
+
+--
+-- Name: monitor_revision_geographies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_geographies (
+    revision_id bigint NOT NULL,
+    geography_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_languages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_languages (
+    revision_id bigint NOT NULL,
+    language_tag character varying(255) NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_source_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_source_types (
+    revision_id bigint NOT NULL,
+    source_type_slug character varying(50) NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_sources (
+    revision_id bigint NOT NULL,
+    source_id bigint NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_topics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_topics (
+    revision_id bigint NOT NULL,
+    topic_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: monitor_revisions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revisions (
+    id bigint NOT NULL,
+    monitor_id bigint NOT NULL,
+    revision_number integer NOT NULL,
+    criteria_version integer DEFAULT 1 NOT NULL,
+    minimum_confidence numeric(5,4),
+    effective_from timestamp with time zone,
+    text_query text,
+    match_all_in_profile boolean DEFAULT false NOT NULL,
+    change_reason text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_monitor_revisions_criteria_version CHECK ((criteria_version = 1)),
+    CONSTRAINT ck_monitor_revisions_minimum_confidence_range CHECK (((minimum_confidence IS NULL) OR ((minimum_confidence >= (0)::numeric) AND (minimum_confidence <= (1)::numeric)))),
+    CONSTRAINT ck_monitor_revisions_revision_positive CHECK ((revision_number > 0)),
+    CONSTRAINT ck_monitor_revisions_text_query CHECK (((text_query IS NULL) OR ((btrim(text_query) <> ''::text) AND (length(text_query) <= 500))))
+);
+
+
+--
+-- Name: monitor_revisions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.monitor_revisions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monitor_revisions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.monitor_revisions_id_seq OWNED BY public.monitor_revisions.id;
+
+
+--
+-- Name: monitors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitors (
+    id bigint NOT NULL,
+    slug character varying(255) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    coverage_profile_id bigint NOT NULL,
+    status character varying(20) DEFAULT 'draft'::character varying NOT NULL,
+    current_revision_number integer DEFAULT 1 NOT NULL,
+    match_existing_on_activation boolean DEFAULT false NOT NULL,
+    expires_at timestamp with time zone,
+    activated_at timestamp with time zone,
+    paused_at timestamp with time zone,
+    expired_at timestamp with time zone,
+    archived_at timestamp with time zone,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_monitors_active_timestamp CHECK ((((status)::text <> 'active'::text) OR (activated_at IS NOT NULL))),
+    CONSTRAINT ck_monitors_archived_timestamp CHECK ((((status)::text <> 'archived'::text) OR (archived_at IS NOT NULL))),
+    CONSTRAINT ck_monitors_current_revision_positive CHECK ((current_revision_number > 0)),
+    CONSTRAINT ck_monitors_expired_timestamp CHECK ((((status)::text <> 'expired'::text) OR (expired_at IS NOT NULL))),
+    CONSTRAINT ck_monitors_name_nonempty CHECK ((btrim((name)::text) <> ''::text)),
+    CONSTRAINT ck_monitors_paused_timestamp CHECK ((((status)::text <> 'paused'::text) OR (paused_at IS NOT NULL))),
+    CONSTRAINT ck_monitors_slug_format CHECK (((slug)::text ~ '^[a-z0-9]+(_[a-z0-9]+)*$'::text)),
+    CONSTRAINT ck_monitors_status CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'paused'::character varying, 'expired'::character varying, 'archived'::character varying])::text[])))
+);
+
+
+--
+-- Name: monitors_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.monitors_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monitors_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.monitors_id_seq OWNED BY public.monitors.id;
+
+
+--
 -- Name: platforms; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1724,6 +2023,34 @@ ALTER TABLE ONLY public.ingestion_runs ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: monitor_evaluation_runs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs ALTER COLUMN id SET DEFAULT nextval('public.monitor_evaluation_runs_id_seq'::regclass);
+
+
+--
+-- Name: monitor_matches id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches ALTER COLUMN id SET DEFAULT nextval('public.monitor_matches_id_seq'::regclass);
+
+
+--
+-- Name: monitor_revisions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions ALTER COLUMN id SET DEFAULT nextval('public.monitor_revisions_id_seq'::regclass);
+
+
+--
+-- Name: monitors id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitors ALTER COLUMN id SET DEFAULT nextval('public.monitors_id_seq'::regclass);
+
+
+--
 -- Name: platforms id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2079,6 +2406,110 @@ ALTER TABLE ONLY public.language_tags
 
 
 --
+-- Name: monitor_evaluation_runs pk_monitor_evaluation_runs; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs
+    ADD CONSTRAINT pk_monitor_evaluation_runs PRIMARY KEY (id);
+
+
+--
+-- Name: monitor_matches pk_monitor_matches; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT pk_monitor_matches PRIMARY KEY (id);
+
+
+--
+-- Name: monitor_revision_content_formats pk_monitor_revision_content_formats; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_content_formats
+    ADD CONSTRAINT pk_monitor_revision_content_formats PRIMARY KEY (revision_id, content_format_slug);
+
+
+--
+-- Name: monitor_revision_document_types pk_monitor_revision_document_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_document_types
+    ADD CONSTRAINT pk_monitor_revision_document_types PRIMARY KEY (revision_id, document_type_id);
+
+
+--
+-- Name: monitor_revision_entities pk_monitor_revision_entities; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entities
+    ADD CONSTRAINT pk_monitor_revision_entities PRIMARY KEY (revision_id, entity_id);
+
+
+--
+-- Name: monitor_revision_entity_roles pk_monitor_revision_entity_roles; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entity_roles
+    ADD CONSTRAINT pk_monitor_revision_entity_roles PRIMARY KEY (revision_id, entity_role);
+
+
+--
+-- Name: monitor_revision_geographies pk_monitor_revision_geographies; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_geographies
+    ADD CONSTRAINT pk_monitor_revision_geographies PRIMARY KEY (revision_id, geography_id);
+
+
+--
+-- Name: monitor_revision_languages pk_monitor_revision_languages; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_languages
+    ADD CONSTRAINT pk_monitor_revision_languages PRIMARY KEY (revision_id, language_tag);
+
+
+--
+-- Name: monitor_revision_source_types pk_monitor_revision_source_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_source_types
+    ADD CONSTRAINT pk_monitor_revision_source_types PRIMARY KEY (revision_id, source_type_slug);
+
+
+--
+-- Name: monitor_revision_sources pk_monitor_revision_sources; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_sources
+    ADD CONSTRAINT pk_monitor_revision_sources PRIMARY KEY (revision_id, source_id);
+
+
+--
+-- Name: monitor_revision_topics pk_monitor_revision_topics; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_topics
+    ADD CONSTRAINT pk_monitor_revision_topics PRIMARY KEY (revision_id, topic_id);
+
+
+--
+-- Name: monitor_revisions pk_monitor_revisions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions
+    ADD CONSTRAINT pk_monitor_revisions PRIMARY KEY (id);
+
+
+--
+-- Name: monitors pk_monitors; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitors
+    ADD CONSTRAINT pk_monitors PRIMARY KEY (id);
+
+
+--
 -- Name: platforms pk_platforms; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2276,6 +2707,38 @@ ALTER TABLE ONLY public.external_semantic_schemes
 
 ALTER TABLE ONLY public.geographies
     ADD CONSTRAINT uq_geographies_slug UNIQUE (slug);
+
+
+--
+-- Name: monitor_matches uq_monitor_matches_monitor_document; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT uq_monitor_matches_monitor_document UNIQUE (monitor_id, document_id);
+
+
+--
+-- Name: monitor_revisions uq_monitor_revisions_monitor_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions
+    ADD CONSTRAINT uq_monitor_revisions_monitor_id UNIQUE (monitor_id, id);
+
+
+--
+-- Name: monitor_revisions uq_monitor_revisions_monitor_number; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions
+    ADD CONSTRAINT uq_monitor_revisions_monitor_number UNIQUE (monitor_id, revision_number);
+
+
+--
+-- Name: monitors uq_monitors_slug; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitors
+    ADD CONSTRAINT uq_monitors_slug UNIQUE (slug);
 
 
 --
@@ -2803,6 +3266,55 @@ CREATE INDEX ix_language_tags_script_subtag ON public.language_tags USING btree 
 
 
 --
+-- Name: ix_monitor_evaluation_runs_monitor_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_evaluation_runs_monitor_started ON public.monitor_evaluation_runs USING btree (monitor_id, started_at);
+
+
+--
+-- Name: ix_monitor_evaluation_runs_status_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_evaluation_runs_status_started ON public.monitor_evaluation_runs USING btree (status, started_at);
+
+
+--
+-- Name: ix_monitor_matches_document; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_matches_document ON public.monitor_matches USING btree (document_id);
+
+
+--
+-- Name: ix_monitor_matches_monitor_last; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_matches_monitor_last ON public.monitor_matches USING btree (monitor_id, last_matched_at);
+
+
+--
+-- Name: ix_monitor_revisions_monitor_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_revisions_monitor_created ON public.monitor_revisions USING btree (monitor_id, created_at);
+
+
+--
+-- Name: ix_monitors_profile_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitors_profile_status ON public.monitors USING btree (coverage_profile_id, status);
+
+
+--
+-- Name: ix_monitors_status_expires; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitors_status_expires ON public.monitors USING btree (status, expires_at);
+
+
+--
 -- Name: ix_platforms_active; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3038,6 +3550,20 @@ CREATE CONSTRAINT TRIGGER ck_entity_type_hierarchy_edges_acyclic AFTER INSERT OR
 --
 
 CREATE CONSTRAINT TRIGGER coverage_profiles_require_default AFTER INSERT OR DELETE OR UPDATE ON public.coverage_profiles DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_default_coverage_profile();
+
+
+--
+-- Name: monitors monitors_require_current_revision; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER monitors_require_current_revision AFTER INSERT OR UPDATE OF id, current_revision_number ON public.monitors DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_monitor_current_revision();
+
+
+--
+-- Name: monitor_revisions revisions_preserve_monitor_current; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER revisions_preserve_monitor_current AFTER DELETE OR UPDATE OF monitor_id, revision_number ON public.monitor_revisions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_monitor_current_revision();
 
 
 --
@@ -3561,6 +4087,222 @@ ALTER TABLE ONLY public.language_tag_aliases
 
 
 --
+-- Name: monitor_evaluation_runs fk_monitor_evaluation_runs_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs
+    ADD CONSTRAINT fk_monitor_evaluation_runs_document_id_documents FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: monitor_evaluation_runs fk_monitor_evaluation_runs_revision; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs
+    ADD CONSTRAINT fk_monitor_evaluation_runs_revision FOREIGN KEY (monitor_id, monitor_revision_id) REFERENCES public.monitor_revisions(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_document_id_documents FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_first_evaluation_run_id_monitor_eval_1c46; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_first_evaluation_run_id_monitor_eval_1c46 FOREIGN KEY (first_evaluation_run_id) REFERENCES public.monitor_evaluation_runs(id) ON DELETE SET NULL;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_first_revision; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_first_revision FOREIGN KEY (monitor_id, first_monitor_revision_id) REFERENCES public.monitor_revisions(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_last_evaluation_run_id_monitor_evalu_fb3b; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_last_evaluation_run_id_monitor_evalu_fb3b FOREIGN KEY (last_evaluation_run_id) REFERENCES public.monitor_evaluation_runs(id) ON DELETE SET NULL;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_last_revision; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_last_revision FOREIGN KEY (monitor_id, last_monitor_revision_id) REFERENCES public.monitor_revisions(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_monitor_id_monitors; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_monitor_id_monitors FOREIGN KEY (monitor_id) REFERENCES public.monitors(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_content_formats fk_monitor_revision_content_formats_content_format_slug_43bc; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_content_formats
+    ADD CONSTRAINT fk_monitor_revision_content_formats_content_format_slug_43bc FOREIGN KEY (content_format_slug) REFERENCES public.content_formats(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_content_formats fk_monitor_revision_content_formats_revision_id_monitor_75cb; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_content_formats
+    ADD CONSTRAINT fk_monitor_revision_content_formats_revision_id_monitor_75cb FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_document_types fk_monitor_revision_document_types_document_type_id_doc_62ae; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_document_types
+    ADD CONSTRAINT fk_monitor_revision_document_types_document_type_id_doc_62ae FOREIGN KEY (document_type_id) REFERENCES public.document_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_document_types fk_monitor_revision_document_types_revision_id_monitor__1e9e; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_document_types
+    ADD CONSTRAINT fk_monitor_revision_document_types_revision_id_monitor__1e9e FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_entities fk_monitor_revision_entities_entity_id_entities; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entities
+    ADD CONSTRAINT fk_monitor_revision_entities_entity_id_entities FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_entities fk_monitor_revision_entities_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entities
+    ADD CONSTRAINT fk_monitor_revision_entities_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_entity_roles fk_monitor_revision_entity_roles_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entity_roles
+    ADD CONSTRAINT fk_monitor_revision_entity_roles_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_geographies fk_monitor_revision_geographies_geography_id_geographies; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_geographies
+    ADD CONSTRAINT fk_monitor_revision_geographies_geography_id_geographies FOREIGN KEY (geography_id) REFERENCES public.geographies(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_geographies fk_monitor_revision_geographies_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_geographies
+    ADD CONSTRAINT fk_monitor_revision_geographies_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_languages fk_monitor_revision_languages_language_tag_language_tags; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_languages
+    ADD CONSTRAINT fk_monitor_revision_languages_language_tag_language_tags FOREIGN KEY (language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_languages fk_monitor_revision_languages_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_languages
+    ADD CONSTRAINT fk_monitor_revision_languages_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_source_types fk_monitor_revision_source_types_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_source_types
+    ADD CONSTRAINT fk_monitor_revision_source_types_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_source_types fk_monitor_revision_source_types_source_type_slug_source_types; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_source_types
+    ADD CONSTRAINT fk_monitor_revision_source_types_source_type_slug_source_types FOREIGN KEY (source_type_slug) REFERENCES public.source_types(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_sources fk_monitor_revision_sources_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_sources
+    ADD CONSTRAINT fk_monitor_revision_sources_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_sources fk_monitor_revision_sources_source_id_sources; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_sources
+    ADD CONSTRAINT fk_monitor_revision_sources_source_id_sources FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_topics fk_monitor_revision_topics_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_topics
+    ADD CONSTRAINT fk_monitor_revision_topics_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_topics fk_monitor_revision_topics_topic_id_topics; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_topics
+    ADD CONSTRAINT fk_monitor_revision_topics_topic_id_topics FOREIGN KEY (topic_id) REFERENCES public.topics(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revisions fk_monitor_revisions_monitor_id_monitors; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions
+    ADD CONSTRAINT fk_monitor_revisions_monitor_id_monitors FOREIGN KEY (monitor_id) REFERENCES public.monitors(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitors fk_monitors_coverage_profile_id_coverage_profiles; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitors
+    ADD CONSTRAINT fk_monitors_coverage_profile_id_coverage_profiles FOREIGN KEY (coverage_profile_id) REFERENCES public.coverage_profiles(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: semantic_mapping_relations fk_semantic_mapping_relations_applicable_resource_kind__5a60; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3652,5 +4394,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict AXDyd9iyuHSS8Vp1PoCQF3Ek4J5SJk4W9QiqFmNFps23SpCGRsYgvnFPboHr5HY
+\unrestrict GzRdRcgjH8p7BMLxNsny3jGPF10gQy898X9Mq1vtMmvJgdVsS74idQEUajWG2RT
 

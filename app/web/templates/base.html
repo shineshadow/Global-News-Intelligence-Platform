@@ -88,6 +88,16 @@
                             </li>
 
                             <li class="nav-item
+                                {% if active_page == 'monitors' %}
+                                active
+                                {% endif %}
+                            ">
+                                <a class="nav-link" href="{{ url_for('web_monitors') }}">
+                                    Monitors
+                                </a>
+                            </li>
+
+                            <li class="nav-item
                             {% if active_page == 'runs' %}
                             active
                             {% endif %}

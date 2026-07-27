@@ -109,6 +109,19 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            monitor_matches,
+            monitor_evaluation_runs,
+            monitor_revision_entity_roles,
+            monitor_revision_languages,
+            monitor_revision_source_types,
+            monitor_revision_sources,
+            monitor_revision_content_formats,
+            monitor_revision_document_types,
+            monitor_revision_entities,
+            monitor_revision_topics,
+            monitor_revision_geographies,
+            monitor_revisions,
+            monitors,
             coverage_profile_source_polling_overrides,
             coverage_profile_content_formats,
             coverage_profile_document_types,

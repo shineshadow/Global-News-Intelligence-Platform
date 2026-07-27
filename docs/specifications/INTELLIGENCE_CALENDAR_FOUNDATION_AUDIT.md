@@ -1,7 +1,7 @@
 # Intelligence Calendar Foundation Audit
 
-**Status:** IN PROGRESS  
-**Track:** Parallel to main-track Step 24  
+**Status:** PAUSED
+**Track:** Resumes after Steps 25 and 26 freeze
 **Date:** 2026-07-27
 
 ## 1. Purpose
@@ -74,17 +74,21 @@ monitors, polling escalation, story correlation, or observed-event creation.
 
 ## 5. Monitor Dependency
 
-Calendar Phase 1 may overlap Step 25. Calendar Phase 5 may not.
+Calendar development is intentionally paused while Steps 25 and 26 establish
+the Monitor and delivery contracts.
 
 ```text
-Calendar Phase 1
-    manual canonical event and recurrence
-
 Step 25
     persistent Monitor Rule Engine
 
-Calendar Phase 5
-    profile-specific temporary monitors and escalation
+Step 26
+    alert and delivery contract
+
+Calendar Foundation Audit
+    resume and freeze against those implemented contracts
+
+Calendar Phase 1
+    canonical events plus normalized Monitor integration
 ```
 
 Calendar Phase 5 must reference normalized Step 25 monitor records. It must not

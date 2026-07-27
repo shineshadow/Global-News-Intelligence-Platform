@@ -19,6 +19,7 @@ Generated files:
 - `SPECIFICATION_INTEGRATION_CHANGE_REPORT.md`
 - `STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md`
 - `STEP_24_CLASSIFICATION_AWARE_NEWS_FEED_FILTERS.md` — shared transient filter and future monitor-matching contract
+- `STEP_25_MONITOR_RULE_ENGINE.md` — active persistent Monitor lifecycle, revision, evaluation, and match contract
 - `UI_IMPLEMENTATION_NOTES.md`
 - `WORKER_DESIGN_SPECIFICATION.md`
 - `WEB_UI_IMPLEMENTATION_STRATEGY.md` — Web UI architecture, component boundaries, and rationale

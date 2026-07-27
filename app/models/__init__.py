@@ -43,6 +43,21 @@ from app.models.entity_semantics import (
 )
 from app.models.ingestion_run import IngestionRun
 from app.models.language import LanguageTag, LanguageTagAlias
+from app.models.monitor import (
+    Monitor,
+    MonitorEvaluationRun,
+    MonitorMatch,
+    MonitorRevision,
+    MonitorRevisionContentFormat,
+    MonitorRevisionDocumentType,
+    MonitorRevisionEntity,
+    MonitorRevisionEntityRole,
+    MonitorRevisionGeography,
+    MonitorRevisionLanguage,
+    MonitorRevisionSource,
+    MonitorRevisionSourceType,
+    MonitorRevisionTopic,
+)
 from app.models.source import Source
 from app.models.source_endpoint import SourceEndpoint
 from app.models.source_reference import (
@@ -94,6 +109,19 @@ __all__ = [
     "IngestionRun",
     "LanguageTag",
     "LanguageTagAlias",
+    "Monitor",
+    "MonitorEvaluationRun",
+    "MonitorMatch",
+    "MonitorRevision",
+    "MonitorRevisionContentFormat",
+    "MonitorRevisionDocumentType",
+    "MonitorRevisionEntity",
+    "MonitorRevisionEntityRole",
+    "MonitorRevisionGeography",
+    "MonitorRevisionLanguage",
+    "MonitorRevisionSource",
+    "MonitorRevisionSourceType",
+    "MonitorRevisionTopic",
     "Platform",
     "SemanticAssignmentMethod",
     "SemanticMappingRelation",

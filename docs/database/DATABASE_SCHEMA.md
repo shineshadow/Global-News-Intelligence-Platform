@@ -1,9 +1,9 @@
 # Global News Intelligence Platform — Current Database Schema
 
 **Document type:** Living implementation reference  
-**Snapshot date:** 2026-07-26
-**Platform phase:** Global Foundation Audit — GFA-E frozen
-**Alembic revision:** `f8a1c2d3e4b5`
+**Snapshot date:** 2026-07-27
+**Platform phase:** Step 25 — Monitor Rule Engine freeze candidate
+**Alembic revision:** `b25c7d9e1f30`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -28,7 +28,7 @@ Future database design work should consult this document before adding or changi
 
 ## 2. Current Schema Summary
 
-The current schema contains **47 tables**:
+The current schema contains **60 tables**:
 
 1 Alembic infrastructure table
 15 pre-GFA application/classification tables
@@ -37,6 +37,7 @@ The current schema contains **47 tables**:
 13 GFA-C semantic-entity foundation tables
 1 GFA-D content-format catalog table
 10 GFA-E coverage-profile tables
+13 Step 25 Monitor Rule Engine tables
 
 | Table | Purpose |
 |---|---|
@@ -87,16 +88,30 @@ The current schema contains **47 tables**:
 | `coverage_profile_document_types` | Semantic document-type selectors with descendant policy. |
 | `coverage_profile_content_formats` | Content-format selectors. |
 | `coverage_profile_source_polling_overrides` | Per-profile source polling-priority overrides. |
+| `monitors` | Profile-owned Monitor identity, lifecycle, activation, and expiration policy. |
+| `monitor_revisions` | Immutable scalar criteria for each versioned Monitor definition. |
+| `monitor_revision_geographies` | Geography selectors with explicit descendant policy. |
+| `monitor_revision_topics` | Topic selectors with explicit descendant policy. |
+| `monitor_revision_entities` | Canonical entity selectors. |
+| `monitor_revision_entity_roles` | Entity-role selectors. |
+| `monitor_revision_document_types` | Semantic document-type selectors with descendant policy. |
+| `monitor_revision_content_formats` | Content-format selectors. |
+| `monitor_revision_sources` | Explicit source selectors. |
+| `monitor_revision_source_types` | Source-type selectors with descendant policy. |
+| `monitor_revision_languages` | Effective-language selectors. |
+| `monitor_evaluation_runs` | Auditable Monitor evaluation attempts and outcomes. |
+| `monitor_matches` | Idempotent Monitor-to-document match history. |
 
 Current Alembic revision:
 
 ```text
-f8a1c2d3e4b5
+b25c7d9e1f30
 ```
 
-No custom PostgreSQL enum types or extensions are present. Two PostgreSQL
-functions and two deferred constraint triggers enforce the acyclic entity-type
-hierarchy and the exactly-one-active-default coverage-profile invariant.
+No custom PostgreSQL enum types or extensions are present. Three PostgreSQL
+functions and four deferred constraint triggers enforce the acyclic entity-type
+hierarchy, the exactly-one-active-default coverage-profile invariant, and valid
+Monitor current-revision references.
 
 Step 22 is an additive schema expansion. No Phase 1 table was repurposed or renamed.
 
@@ -1969,3 +1984,40 @@ the lower bound while allowing an atomic default switch. Complete scope
 replacements and polling-policy writes lock the profile row so same-profile
 writes cannot silently interleave. Existing API, web, and CSV-inventory
 priority inputs persist through the default profile.
+
+# 34. Step 25 Monitor Rule Engine — Freeze Candidate
+
+Alembic revision `b25c7d9e1f30` adds thirteen normalized tables for
+profile-owned Monitors, immutable criteria revisions, evaluation history, and
+idempotent document matches.
+
+The current revision contains scalar criteria only:
+
+```text
+criteria_version
+minimum_confidence
+effective_from
+text_query
+match_all_in_profile
+```
+
+Canonical selectors are stored in the nine `monitor_revision_*` relationship
+tables. They are not hidden in Monitor metadata. Hierarchical geography,
+topic, document-type, and source-type selectors retain their explicit
+descendant policy.
+
+Each Monitor identifies one current revision by `(monitor_id,
+current_revision_number)`. Deferred constraint triggers permit atomic Monitor
+creation and revision changes while rejecting a committed Monitor that points
+to a nonexistent revision. Application services serialize lifecycle,
+revision, and evaluation operations on the Monitor row.
+
+`monitor_matches` permits one row per Monitor/document pair. A repeated match
+preserves the first revision and timestamp, updates the last revision and
+timestamp, and increments `observation_count`. `monitor_evaluation_runs`
+records activation, ingestion, enrichment, and manual evaluations. Step 25
+creates no alert, delivery, destination, or notification table; those remain
+Step 26 responsibilities.
+
+The downgrade is deliberately guarded. It succeeds only when Monitor
+configuration and history are empty and otherwise refuses destructive loss.

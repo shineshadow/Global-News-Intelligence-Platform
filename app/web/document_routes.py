@@ -57,7 +57,7 @@ def build_browser_url(
     )
 
 
-def _optional_positive_int(
+def optional_positive_int(
     value: str | None,
     *,
     field_name: str,
@@ -130,27 +130,27 @@ async def documents_page(
         le=100,
     ),
 ):
-    parsed_profile_id = _optional_positive_int(
+    parsed_profile_id = optional_positive_int(
         profile_id,
         field_name="profile_id",
     )
-    parsed_source_id = _optional_positive_int(
+    parsed_source_id = optional_positive_int(
         source_id,
         field_name="source_id",
     )
-    parsed_geography_id = _optional_positive_int(
+    parsed_geography_id = optional_positive_int(
         geography_id,
         field_name="geography_id",
     )
-    parsed_topic_id = _optional_positive_int(
+    parsed_topic_id = optional_positive_int(
         topic_id,
         field_name="topic_id",
     )
-    parsed_entity_id = _optional_positive_int(
+    parsed_entity_id = optional_positive_int(
         entity_id,
         field_name="entity_id",
     )
-    parsed_document_type_id = _optional_positive_int(
+    parsed_document_type_id = optional_positive_int(
         document_type_id,
         field_name="document_type_id",
     )

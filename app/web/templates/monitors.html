@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Monitors — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Persistent matching</div>
+        <h2 class="page-title">Monitors</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Saved Monitors</h3>
+        <div class="card-actions">
+            <a class="btn btn-primary" href="{{ url_for('web_monitor_new') }}">
+                New Monitor
+            </a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-vcenter">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Profile</th>
+                    <th>Revision</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for monitor in monitors %}
+                <tr>
+                    <td>{{ monitor.name }}</td>
+                    <td>{{ monitor.coverage_profile_id }}</td>
+                    <td>{{ monitor.current_revision_number }}</td>
+                    <td><span class="badge">{{ monitor.status }}</span></td>
+                    <td>
+                        <a class="btn btn-sm"
+                            href="{{ url_for('web_monitor_detail', monitor_id=monitor.id) }}">
+                            View
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-secondary py-5">
+                        No Monitors have been created.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

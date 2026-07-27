@@ -6,6 +6,7 @@ from app.database import async_session_factory
 from app.repositories import (
     source_endpoint_repository,
 )
+from app.services.monitor_service import expire_due_monitors
 from workers.async_runner import run_async
 from workers.celery_app import celery_app
 from workers.ingestion.tasks import (
@@ -17,7 +18,6 @@ from workers.locks import (
     release_endpoint_claim,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -25,13 +25,23 @@ async def _get_due_endpoint_ids() -> list[int]:
     """Read due endpoint IDs from PostgreSQL."""
 
     async with async_session_factory() as session:
-        return await (
-            source_endpoint_repository
-            .list_due_source_endpoint_ids(
-                session,
-                limit=settings.celery_dispatch_limit,
-            )
+        return await source_endpoint_repository.list_due_source_endpoint_ids(
+            session,
+            limit=settings.celery_dispatch_limit,
         )
+
+
+async def _expire_due_monitor_ids() -> list[int]:
+    async with async_session_factory() as session:
+        return await expire_due_monitors(session)
+
+
+@celery_app.task(
+    name="scheduler.expire_due_monitors",
+)
+def expire_due_monitors_task() -> dict[str, int]:
+    expired_ids = run_async(_expire_due_monitor_ids)
+    return {"expired": len(expired_ids)}
 
 
 @celery_app.task(
@@ -45,9 +55,7 @@ def dispatch_due_source_endpoints() -> dict[str, int]:
     the same endpoint again while it is queued or running.
     """
 
-    endpoint_ids = run_async(
-        _get_due_endpoint_ids
-    )
+    endpoint_ids = run_async(_get_due_endpoint_ids)
 
     lock_client = create_lock_client()
 

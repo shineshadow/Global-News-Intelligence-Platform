@@ -4,14 +4,15 @@ import httpx
 import pytest
 from sqlalchemy import select
 
-from app.repositories import source_endpoint_repository
-
 from app.models import (
     Document,
     DocumentVersion,
     IngestionRun,
+    MonitorEvaluationRun,
+    MonitorMatch,
     SourceEndpoint,
 )
+from app.repositories import source_endpoint_repository
 from app.services.ingestion_service import (
     poll_source_endpoint,
 )
@@ -199,6 +200,119 @@ async def test_poll_creates_document_and_run(
     assert endpoint.etag == '"version-1"'
     assert endpoint.consecutive_failures == 0
     assert endpoint.last_success_at is not None
+
+
+async def test_poll_evaluates_active_monitors_after_enrichment(
+    client,
+    database_session_factory,
+) -> None:
+    _, endpoint_id = await create_source_and_endpoint(
+        client
+    )
+    monitor_response = await client.post(
+        "/api/v1/monitors",
+        json={
+            "slug": "ingestion_monitor",
+            "name": "Ingestion Monitor",
+            "revision": {
+                "criteria": {
+                    "text_query": "Election Monitor Target",
+                }
+            },
+        },
+    )
+    monitor_id = monitor_response.json()["id"]
+    await client.post(
+        f"/api/v1/monitors/{monitor_id}/activate"
+    )
+    feed = build_feed(
+        title="Election Monitor Target",
+        description="A monitored ingestion item.",
+    )
+
+    def handler(
+        _request: httpx.Request,
+    ) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "application/rss+xml"},
+            content=feed,
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+    ) as http_client:
+        summary = await poll_source_endpoint(
+            endpoint_id,
+            client=http_client,
+            session_factory=database_session_factory,
+        )
+
+    async with database_session_factory() as session:
+        match = await session.scalar(
+            select(MonitorMatch).where(
+                MonitorMatch.monitor_id == monitor_id
+            )
+        )
+        evaluation = await session.scalar(
+            select(MonitorEvaluationRun).where(
+                MonitorEvaluationRun.monitor_id == monitor_id
+            )
+        )
+
+    assert summary.items_created == 1
+    assert match is not None
+    assert evaluation.status == "succeeded"
+    assert evaluation.trigger_type == "enrichment"
+    assert evaluation.new_match_count == 1
+
+
+async def test_monitor_failure_does_not_rollback_ingestion(
+    client,
+    database_session_factory,
+    monkeypatch,
+) -> None:
+    _, endpoint_id = await create_source_and_endpoint(
+        client
+    )
+    feed = build_feed(
+        title="Durable Despite Monitor Failure",
+        description="The raw document must survive.",
+    )
+
+    async def fail_monitor_evaluation(*_args, **_kwargs):
+        raise RuntimeError("monitor unavailable")
+
+    monkeypatch.setattr(
+        "app.services.ingestion_service."
+        "evaluate_document_against_active_monitors",
+        fail_monitor_evaluation,
+    )
+
+    def handler(
+        _request: httpx.Request,
+    ) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "application/rss+xml"},
+            content=feed,
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+    ) as http_client:
+        summary = await poll_source_endpoint(
+            endpoint_id,
+            client=http_client,
+            session_factory=database_session_factory,
+        )
+
+    async with database_session_factory() as session:
+        document = await session.scalar(select(Document))
+
+    assert summary.items_created == 1
+    assert summary.items_failed == 0
+    assert document.title_original == "Durable Despite Monitor Failure"
 
 
 async def test_exact_duplicate_is_unchanged(

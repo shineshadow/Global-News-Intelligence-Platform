@@ -248,6 +248,11 @@
 
             <div class="d-flex gap-2 mt-3">
                 <button type="submit" class="btn btn-primary">Apply filters</button>
+                <button type="submit" class="btn"
+                    formaction="{{ url_for('web_monitor_new') }}"
+                    formmethod="get">
+                    Save as Monitor
+                </button>
                 <a class="btn" href="{{ url_for('web_documents') }}">Clear</a>
             </div>
         </form>

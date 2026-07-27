@@ -4,6 +4,16 @@ from app.schemas.document_match import (
     HierarchySlugMatch,
 )
 from app.schemas.error import ErrorBody, ErrorResponse
+from app.schemas.monitor import (
+    MonitorCreate,
+    MonitorDetailRead,
+    MonitorEvaluationRead,
+    MonitorMatchRead,
+    MonitorRead,
+    MonitorRevisionInput,
+    MonitorStatus,
+    MonitorUpdate,
+)
 from app.schemas.source import (
     SourceCreate,
     SourcePriority,
@@ -25,6 +35,14 @@ __all__ = [
     "ErrorResponse",
     "HierarchyIdMatch",
     "HierarchySlugMatch",
+    "MonitorCreate",
+    "MonitorDetailRead",
+    "MonitorEvaluationRead",
+    "MonitorMatchRead",
+    "MonitorRead",
+    "MonitorRevisionInput",
+    "MonitorStatus",
+    "MonitorUpdate",
     "SourceCreate",
     "SourceEndpointCreate",
     "SourceEndpointRead",

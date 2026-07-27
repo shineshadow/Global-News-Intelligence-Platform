@@ -6,6 +6,34 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-27 — Step 25 Monitor Rule Engine Freeze Candidate
+
+**Alembic revision:** `b25c7d9e1f30`
+**Revises:** `f8a1c2d3e4b5`
+
+Added normalized, Coverage-Profile-owned Monitors with immutable criteria
+revisions, explicit lifecycle and expiration policy, auditable evaluation
+runs, and one logical match per Monitor/document pair.
+
+Criteria version 1 persists the frozen Step 24 matching contract. Canonical
+references live in nine normalized selector tables; Boolean expressions and
+regular expressions remain outside this versioned contract. Empty criteria
+require explicit `match_all_in_profile` acknowledgement.
+
+Deferred database triggers require every Monitor to identify a real current
+revision. Application row locks serialize evaluation with pause, archive, and
+revision changes. Repeated and concurrent matches accumulate first/last
+revision, first/last timestamp, and observation count without duplicate
+logical matches.
+
+The migration creates no Monitor or Step 26 alert state. Downgrade succeeds
+when Step 25 tables are empty and refuses to discard configuration or history.
+
+Formal freeze review is still required before this candidate is declared
+frozen.
+
+---
+
 ## 2026-07-26 — GFA-E Coverage Profiles Frozen
 
 **Alembic revision:** `f8a1c2d3e4b5`
@@ -633,11 +661,11 @@ defaults, structured metadata mappings, deterministic keyword/rule
 classification, ingestion integration, and persistence of confidence,
 provenance, and history.
 
-The next work is:
+The current work sequence is:
 
 ```text
 Step 24   — Classification-aware document filters (frozen; no schema change)
-Step 25   — Monitor Rule Engine
+Step 25   — Monitor Rule Engine (freeze candidate)
 Step 26   — Alerts / ntfy
 ```
 

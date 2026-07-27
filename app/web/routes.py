@@ -26,16 +26,16 @@ from app.services.web_ui_service import (
     list_run_overviews,
     list_source_overviews,
 )
-from app.web.lifecycle_routes import (
-    router as lifecycle_router,
-)
-
 from app.web.document_routes import (
     router as document_router,
 )
-
+from app.web.lifecycle_routes import (
+    router as lifecycle_router,
+)
+from app.web.monitor_routes import (
+    router as monitor_router,
+)
 from app.web.templating import templates
-
 
 router = APIRouter(
     include_in_schema=False,
@@ -50,6 +50,10 @@ router.include_router(
 
 router.include_router(
     document_router
+)
+
+router.include_router(
+    monitor_router
 )
 
 

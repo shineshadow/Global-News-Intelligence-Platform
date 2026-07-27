@@ -27,7 +27,9 @@ from app.classification.types import (
 from app.database import async_session_factory
 from app.repositories import classification_repository
 from app.services.exceptions import ResourceNotFoundError
-
+from app.services.monitor_service import (
+    evaluate_document_against_active_monitors,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,9 +118,7 @@ def _classification_defaults(
         return {}
 
     if not isinstance(value, dict):
-        raise ClassificationConfigurationError(
-            "classification_defaults must be a JSON object."
-        )
+        raise ClassificationConfigurationError("classification_defaults must be a JSON object.")
 
     return value
 
@@ -132,9 +132,7 @@ def _list_of_objects(
         return []
 
     if not isinstance(value, list):
-        raise ClassificationConfigurationError(
-            f"classification_defaults.{key} must be a list."
-        )
+        raise ClassificationConfigurationError(f"classification_defaults.{key} must be a list.")
 
     rows: list[dict[str, Any]] = []
     for item in value:
@@ -154,9 +152,7 @@ def _required_slug(
 ) -> str:
     slug = item.get("slug")
     if not isinstance(slug, str) or not slug.strip():
-        raise ClassificationConfigurationError(
-            f"{dimension} default requires a nonempty slug."
-        )
+        raise ClassificationConfigurationError(f"{dimension} default requires a nonempty slug.")
     return slug.strip()
 
 
@@ -193,9 +189,7 @@ def _default_candidates(
                 item.get("confidence"),
                 default=confidence_defaults["topic"],
             ),
-            relationship_role=str(
-                item.get("role") or "primary"
-            ),
+            relationship_role=str(item.get("role") or "primary"),
             classification_method=method,  # type: ignore[arg-type]
             classifier_version=DEFAULTS_CLASSIFIER_VERSION,
             evidence={
@@ -216,9 +210,7 @@ def _default_candidates(
                 item.get("confidence"),
                 default=confidence_defaults["geography"],
             ),
-            relationship_role=str(
-                item.get("role") or "primary_subject"
-            ),
+            relationship_role=str(item.get("role") or "primary_subject"),
             classification_method=method,  # type: ignore[arg-type]
             classifier_version=DEFAULTS_CLASSIFIER_VERSION,
             evidence={
@@ -242,9 +234,7 @@ def _default_candidates(
                 item.get("confidence"),
                 default=confidence_defaults["document_type"],
             ),
-            is_primary=bool(
-                item.get("primary", True)
-            ),
+            is_primary=bool(item.get("primary", True)),
             classification_method=method,  # type: ignore[arg-type]
             classifier_version=DEFAULTS_CLASSIFIER_VERSION,
             evidence={
@@ -382,11 +372,7 @@ def _best_document_type_candidates(
             best[candidate.slug] = candidate
 
     values = list(best.values())
-    primary_candidates = [
-        item
-        for item in values
-        if item.is_primary
-    ]
+    primary_candidates = [item for item in values if item.is_primary]
 
     if primary_candidates:
         winner = max(
@@ -426,10 +412,7 @@ def _best_entity_candidates(
         )
         current = best.get(key)
 
-        if (
-            current is None
-            or candidate.confidence > current.confidence
-        ):
+        if current is None or candidate.confidence > current.confidence:
             best[key] = candidate
 
     return sorted(
@@ -448,11 +431,7 @@ def _entity_alias_is_matchable(
     if not normalized_alias:
         return False
 
-    if (
-        normalized_alias.isascii()
-        and len(normalized_alias) < 3
-        and alias_type != "short_exact"
-    ):
+    if normalized_alias.isascii() and len(normalized_alias) < 3 and alias_type != "short_exact":
         return False
 
     return True
@@ -463,22 +442,17 @@ def _contains_alias(
     normalized_alias: str,
 ) -> bool:
     escaped = re.escape(normalized_alias)
-    prefix = (
-        r"(?<!\w)"
-        if normalized_alias[0].isalnum()
-        else ""
-    )
-    suffix = (
-        r"(?!\w)"
-        if normalized_alias[-1].isalnum()
-        else ""
-    )
+    prefix = r"(?<!\w)" if normalized_alias[0].isalnum() else ""
+    suffix = r"(?!\w)" if normalized_alias[-1].isalnum() else ""
 
-    return re.search(
-        f"{prefix}{escaped}{suffix}",
-        normalized_text,
-        flags=re.UNICODE,
-    ) is not None
+    return (
+        re.search(
+            f"{prefix}{escaped}{suffix}",
+            normalized_text,
+            flags=re.UNICODE,
+        )
+        is not None
+    )
 
 
 def _entity_candidates_from_aliases(
@@ -504,9 +478,7 @@ def _entity_candidates_from_aliases(
     candidates: list[EntityCandidate] = []
 
     for alias, entity in aliases:
-        normalized_alias = normalize_match_text(
-            alias.normalized_alias or alias.alias
-        )
+        normalized_alias = normalize_match_text(alias.normalized_alias or alias.alias)
 
         if not _entity_alias_is_matchable(
             normalized_alias,
@@ -546,17 +518,12 @@ async def _publisher_context_geography(
     source_country: str,
     ruleset: DeterministicRuleSet,
 ) -> GeographyCandidate | None:
-    normalized_country = normalize_match_text(
-        source_country
-    )
+    normalized_country = normalize_match_text(source_country)
 
     if not normalized_country:
         return None
 
-    geographies = (
-        await classification_repository
-        .get_active_geographies(session)
-    )
+    geographies = await classification_repository.get_active_geographies(session)
 
     for geography in geographies:
         if geography.geography_type not in {
@@ -567,10 +534,7 @@ async def _publisher_context_geography(
         }:
             continue
 
-        if (
-            normalize_match_text(geography.name)
-            != normalized_country
-        ):
+        if normalize_match_text(geography.name) != normalized_country:
             continue
 
         return GeographyCandidate(
@@ -609,9 +573,7 @@ def _classification_input_hash(
                 "id": source.id,
                 "country": source.country,
                 "classification_defaults": (
-                    (source.source_metadata or {}).get(
-                        "classification_defaults"
-                    )
+                    (source.source_metadata or {}).get("classification_defaults")
                 ),
             },
             "endpoint": (
@@ -619,12 +581,7 @@ def _classification_input_hash(
                     "id": endpoint.id,
                     "url": endpoint.url,
                     "classification_defaults": (
-                        (
-                            endpoint.endpoint_metadata
-                            or {}
-                        ).get(
-                            "classification_defaults"
-                        )
+                        (endpoint.endpoint_metadata or {}).get("classification_defaults")
                     ),
                 }
                 if endpoint is not None
@@ -650,7 +607,8 @@ def _output_hash(
                 {
                     key: value
                     for key, value in row.items()
-                    if key not in {
+                    if key
+                    not in {
                         "classification_run_id",
                         "document_id",
                     }
@@ -671,9 +629,7 @@ def _output_hash(
             "topics": clean(topic_rows),
             "geographies": clean(geography_rows),
             "entities": clean(entity_rows),
-            "document_types": clean(
-                document_type_rows
-            ),
+            "document_types": clean(document_type_rows),
         }
     )
 
@@ -703,30 +659,21 @@ async def _build_candidates(
         summary=document.summary_original,
         content=document.content_original,
         canonical_url=document.canonical_url,
-        document_metadata=(
-            document.document_metadata or {}
-        ),
+        document_metadata=(document.document_metadata or {}),
     )
 
-    publisher_context = (
-        await _publisher_context_geography(
-            session,
-            source_country=source.country,
-            ruleset=ruleset,
-        )
+    publisher_context = await _publisher_context_geography(
+        session,
+        source_country=source.country,
+        ruleset=ruleset,
     )
 
-    aliases = (
-        await classification_repository
-        .get_active_entity_aliases(session)
-    )
-    entity_candidates = (
-        _entity_candidates_from_aliases(
-            title=document.title_original,
-            summary=document.summary_original,
-            content=document.content_original,
-            aliases=aliases,
-        )
+    aliases = await classification_repository.get_active_entity_aliases(session)
+    entity_candidates = _entity_candidates_from_aliases(
+        title=document.title_original,
+        summary=document.summary_original,
+        content=document.content_original,
+        aliases=aliases,
     )
 
     topics = _best_topic_candidates(
@@ -741,22 +688,16 @@ async def _build_candidates(
         [
             *source_defaults.geographies,
             *endpoint_defaults.geographies,
-            *(
-                [publisher_context]
-                if publisher_context is not None
-                else []
-            ),
+            *([publisher_context] if publisher_context is not None else []),
         ]
     )
 
-    document_types = (
-        _best_document_type_candidates(
-            [
-                *source_defaults.document_types,
-                *endpoint_defaults.document_types,
-                *rule_result.document_types,
-            ]
-        )
+    document_types = _best_document_type_candidates(
+        [
+            *source_defaults.document_types,
+            *endpoint_defaults.document_types,
+            *rule_result.document_types,
+        ]
     )
 
     return DeterministicClassificationResult(
@@ -781,119 +722,62 @@ async def _persist_candidates(
     list[dict[str, Any]],
     list[dict[str, Any]],
 ]:
-    topic_map = (
-        await classification_repository
-        .get_topics_by_slugs(
-            session,
-            {
-                candidate.slug
-                for candidate in candidates.topics
-            },
-        )
+    topic_map = await classification_repository.get_topics_by_slugs(
+        session,
+        {candidate.slug for candidate in candidates.topics},
     )
-    geography_map = (
-        await classification_repository
-        .get_geographies_by_slugs(
-            session,
-            {
-                candidate.slug
-                for candidate
-                in candidates.geographies
-            },
-        )
+    geography_map = await classification_repository.get_geographies_by_slugs(
+        session,
+        {candidate.slug for candidate in candidates.geographies},
     )
-    document_type_map = (
-        await classification_repository
-        .get_document_types_by_slugs(
-            session,
-            {
-                candidate.slug
-                for candidate
-                in candidates.document_types
-            },
-        )
+    document_type_map = await classification_repository.get_document_types_by_slugs(
+        session,
+        {candidate.slug for candidate in candidates.document_types},
     )
 
-    missing_topics = {
-        item.slug
-        for item in candidates.topics
-    } - set(topic_map)
-    missing_geographies = {
-        item.slug
-        for item in candidates.geographies
-    } - set(geography_map)
-    missing_document_types = {
-        item.slug
-        for item in candidates.document_types
-    } - set(document_type_map)
+    missing_topics = {item.slug for item in candidates.topics} - set(topic_map)
+    missing_geographies = {item.slug for item in candidates.geographies} - set(geography_map)
+    missing_document_types = {item.slug for item in candidates.document_types} - set(
+        document_type_map
+    )
 
     missing = {
         "topics": sorted(missing_topics),
-        "geographies": sorted(
-            missing_geographies
-        ),
-        "document_types": sorted(
-            missing_document_types
-        ),
+        "geographies": sorted(missing_geographies),
+        "document_types": sorted(missing_document_types),
     }
-    missing = {
-        key: value
-        for key, value in missing.items()
-        if value
-    }
+    missing = {key: value for key, value in missing.items() if value}
 
     if missing:
         raise ClassificationConfigurationError(
-            "Classification configuration references "
-            f"unknown/inactive canonical slugs: {missing}"
+            f"Classification configuration references unknown/inactive canonical slugs: {missing}"
         )
 
-    await (
-        classification_repository
-        .deactivate_current_deterministic_assertions(
-            session,
-            document_id=document_id,
-            superseded_at=now,
-        )
+    await classification_repository.deactivate_current_deterministic_assertions(
+        session,
+        document_id=document_id,
+        superseded_at=now,
     )
 
-    manual_topic_keys = (
-        await classification_repository
-        .get_active_manual_topic_keys(
-            session,
-            document_id,
-        )
+    manual_topic_keys = await classification_repository.get_active_manual_topic_keys(
+        session,
+        document_id,
     )
-    manual_geography_keys = (
-        await classification_repository
-        .get_active_manual_geography_keys(
-            session,
-            document_id,
-        )
+    manual_geography_keys = await classification_repository.get_active_manual_geography_keys(
+        session,
+        document_id,
     )
-    manual_entity_keys = (
-        await classification_repository
-        .get_active_manual_entity_keys(
-            session,
-            document_id,
-        )
+    manual_entity_keys = await classification_repository.get_active_manual_entity_keys(
+        session,
+        document_id,
     )
-    manual_document_types = (
-        await classification_repository
-        .get_active_manual_document_type_rows(
-            session,
-            document_id,
-        )
+    manual_document_types = await classification_repository.get_active_manual_document_type_rows(
+        session,
+        document_id,
     )
 
-    manual_document_type_ids = {
-        row[0]
-        for row in manual_document_types
-    }
-    has_manual_primary = any(
-        row[1]
-        for row in manual_document_types
-    )
+    manual_document_type_ids = {row[0] for row in manual_document_types}
+    has_manual_primary = any(row[1] for row in manual_document_types)
 
     topic_rows: list[dict[str, Any]] = []
     for candidate in candidates.topics:
@@ -909,21 +793,11 @@ async def _persist_candidates(
             {
                 "document_id": document_id,
                 "topic_id": topic.id,
-                "confidence": Decimal(
-                    str(candidate.confidence)
-                ),
-                "relationship_role": (
-                    candidate.relationship_role
-                ),
-                "classification_method": (
-                    candidate.classification_method
-                ),
-                "classifier_version": (
-                    candidate.classifier_version
-                ),
-                "taxonomy_version": (
-                    ruleset.taxonomy_version
-                ),
+                "confidence": Decimal(str(candidate.confidence)),
+                "relationship_role": (candidate.relationship_role),
+                "classification_method": (candidate.classification_method),
+                "classifier_version": (candidate.classifier_version),
+                "taxonomy_version": (ruleset.taxonomy_version),
                 "classification_run_id": run_id,
                 "is_manual_override": False,
                 "evidence": candidate.evidence,
@@ -945,21 +819,11 @@ async def _persist_candidates(
             {
                 "document_id": document_id,
                 "geography_id": geography.id,
-                "confidence": Decimal(
-                    str(candidate.confidence)
-                ),
-                "relationship_role": (
-                    candidate.relationship_role
-                ),
-                "classification_method": (
-                    candidate.classification_method
-                ),
-                "classifier_version": (
-                    candidate.classifier_version
-                ),
-                "taxonomy_version": (
-                    candidate.taxonomy_version
-                ),
+                "confidence": Decimal(str(candidate.confidence)),
+                "relationship_role": (candidate.relationship_role),
+                "classification_method": (candidate.classification_method),
+                "classifier_version": (candidate.classifier_version),
+                "taxonomy_version": (candidate.taxonomy_version),
                 "classification_run_id": run_id,
                 "is_manual_override": False,
                 "evidence": candidate.evidence,
@@ -982,15 +846,9 @@ async def _persist_candidates(
                 "entity_id": candidate.entity_id,
                 "mention_text": candidate.mention_text,
                 "entity_role": candidate.entity_role,
-                "confidence": Decimal(
-                    str(candidate.confidence)
-                ),
-                "classification_method": (
-                    candidate.classification_method
-                ),
-                "classifier_version": (
-                    candidate.classifier_version
-                ),
+                "confidence": Decimal(str(candidate.confidence)),
+                "classification_method": (candidate.classification_method),
+                "classifier_version": (candidate.classifier_version),
                 "classification_run_id": run_id,
                 "is_manual_override": False,
                 "evidence": candidate.evidence,
@@ -998,24 +856,14 @@ async def _persist_candidates(
             }
         )
 
-    document_type_rows: list[
-        dict[str, Any]
-    ] = []
+    document_type_rows: list[dict[str, Any]] = []
     for candidate in candidates.document_types:
-        document_type = document_type_map[
-            candidate.slug
-        ]
+        document_type = document_type_map[candidate.slug]
 
-        if (
-            document_type.id
-            in manual_document_type_ids
-        ):
+        if document_type.id in manual_document_type_ids:
             continue
 
-        if (
-            candidate.is_primary
-            and has_manual_primary
-        ):
+        if candidate.is_primary and has_manual_primary:
             continue
 
         document_type_rows.append(
@@ -1023,15 +871,9 @@ async def _persist_candidates(
                 "document_id": document_id,
                 "document_type_id": document_type.id,
                 "is_primary": candidate.is_primary,
-                "confidence": Decimal(
-                    str(candidate.confidence)
-                ),
-                "classification_method": (
-                    candidate.classification_method
-                ),
-                "classifier_version": (
-                    candidate.classifier_version
-                ),
+                "confidence": Decimal(str(candidate.confidence)),
+                "classification_method": (candidate.classification_method),
+                "classifier_version": (candidate.classifier_version),
                 "classification_run_id": run_id,
                 "is_manual_override": False,
                 "evidence": candidate.evidence,
@@ -1043,26 +885,17 @@ async def _persist_candidates(
         session,
         topic_rows,
     )
-    await (
-        classification_repository
-        .create_document_geographies(
-            session,
-            geography_rows,
-        )
+    await classification_repository.create_document_geographies(
+        session,
+        geography_rows,
     )
-    await (
-        classification_repository
-        .create_document_entities(
-            session,
-            entity_rows,
-        )
+    await classification_repository.create_document_entities(
+        session,
+        entity_rows,
     )
-    await (
-        classification_repository
-        .create_document_type_assignments(
-            session,
-            document_type_rows,
-        )
+    await classification_repository.create_document_type_assignments(
+        session,
+        document_type_rows,
     )
 
     return (
@@ -1081,30 +914,18 @@ async def classify_document_deterministically(
     force: bool = False,
     ruleset_path: Path | str = DEFAULT_RULESET_PATH,
 ) -> DeterministicClassificationSummary:
-    context = (
-        await classification_repository
-        .get_document_context(
-            session,
-            document_id,
-        )
+    context = await classification_repository.get_document_context(
+        session,
+        document_id,
     )
 
     if context is None:
-        raise ResourceNotFoundError(
-            f"Document {document_id} was not found."
-        )
+        raise ResourceNotFoundError(f"Document {document_id} was not found.")
 
     document, source, endpoint = context
-    ruleset = load_deterministic_ruleset(
-        ruleset_path
-    )
-    entity_state = (
-        await classification_repository
-        .get_entity_resolution_state(session)
-    )
-    ruleset_fingerprint = _json_hash(
-        asdict(ruleset)
-    )
+    ruleset = load_deterministic_ruleset(ruleset_path)
+    entity_state = await classification_repository.get_entity_resolution_state(session)
+    ruleset_fingerprint = _json_hash(asdict(ruleset))
     input_hash = _classification_input_hash(
         document=document,
         source=source,
@@ -1114,76 +935,48 @@ async def classify_document_deterministically(
     )
 
     if not force:
-        prior_run = (
-            await classification_repository
-            .get_matching_successful_run(
-                session,
-                document_id=document.id,
-                pipeline_version=PIPELINE_VERSION,
-                taxonomy_version=(
-                    ruleset.taxonomy_version
-                ),
-                ruleset_version=(
-                    ruleset.ruleset_version
-                ),
-                input_hash=input_hash,
-            )
+        prior_run = await classification_repository.get_matching_successful_run(
+            session,
+            document_id=document.id,
+            pipeline_version=PIPELINE_VERSION,
+            taxonomy_version=(ruleset.taxonomy_version),
+            ruleset_version=(ruleset.ruleset_version),
+            input_hash=input_hash,
         )
         if prior_run is not None:
             return DeterministicClassificationSummary(
                 document_id=document.id,
                 run_id=prior_run.id,
                 status="skipped",
-                skipped_reason=(
-                    "matching_successful_run"
-                ),
+                skipped_reason=("matching_successful_run"),
             )
 
     started_at = _utcnow()
 
-    run = (
-        await classification_repository
-        .create_classification_run(
-            session,
-            {
-                "document_id": document.id,
-                "pipeline_version": PIPELINE_VERSION,
-                "taxonomy_version": (
-                    ruleset.taxonomy_version
-                ),
-                "started_at": started_at,
-                "status": "running",
-                "language": document.language,
-                "classifier_versions": {
-                    "defaults": (
-                        DEFAULTS_CLASSIFIER_VERSION
-                    ),
-                    "rules": (
-                        RULE_CLASSIFIER_VERSION
-                    ),
-                    "entity_alias_matcher": (
-                        ENTITY_CLASSIFIER_VERSION
-                    ),
-                },
-                "ruleset_version": (
-                    ruleset.ruleset_version
-                ),
-                "input_hash": input_hash,
-                "run_metadata": {
-                    "trigger": trigger,
-                    "force": force,
-                    "entity_resolution_state": (
-                        entity_state
-                    ),
-                    "ruleset_fingerprint": (
-                        ruleset_fingerprint
-                    ),
-                    "ruleset_path": str(
-                        Path(ruleset_path)
-                    ),
-                },
+    run = await classification_repository.create_classification_run(
+        session,
+        {
+            "document_id": document.id,
+            "pipeline_version": PIPELINE_VERSION,
+            "taxonomy_version": (ruleset.taxonomy_version),
+            "started_at": started_at,
+            "status": "running",
+            "language": document.language,
+            "classifier_versions": {
+                "defaults": (DEFAULTS_CLASSIFIER_VERSION),
+                "rules": (RULE_CLASSIFIER_VERSION),
+                "entity_alias_matcher": (ENTITY_CLASSIFIER_VERSION),
             },
-        )
+            "ruleset_version": (ruleset.ruleset_version),
+            "input_hash": input_hash,
+            "run_metadata": {
+                "trigger": trigger,
+                "force": force,
+                "entity_resolution_state": (entity_state),
+                "ruleset_fingerprint": (ruleset_fingerprint),
+                "ruleset_path": str(Path(ruleset_path)),
+            },
+        },
     )
 
     try:
@@ -1216,23 +1009,18 @@ async def classify_document_deterministically(
             topic_rows=topic_rows,
             geography_rows=geography_rows,
             entity_rows=entity_rows,
-            document_type_rows=(
-                document_type_rows
-            ),
+            document_type_rows=(document_type_rows),
         )
 
-        await (
-            classification_repository
-            .update_classification_run(
-                session,
-                run,
-                {
-                    "status": "succeeded",
-                    "completed_at": completed_at,
-                    "output_hash": output_hash,
-                    "error": None,
-                },
-            )
+        await classification_repository.update_classification_run(
+            session,
+            run,
+            {
+                "status": "succeeded",
+                "completed_at": completed_at,
+                "output_hash": output_hash,
+                "error": None,
+            },
         )
 
         return DeterministicClassificationSummary(
@@ -1242,33 +1030,25 @@ async def classify_document_deterministically(
             topics=len(topic_rows),
             geographies=len(geography_rows),
             entities=len(entity_rows),
-            document_types=len(
-                document_type_rows
-            ),
+            document_types=len(document_type_rows),
         )
 
     except Exception as exc:
         logger.warning(
-            "Deterministic classification failed "
-            "for document %s: %s",
+            "Deterministic classification failed for document %s: %s",
             document.id,
             exc,
             exc_info=True,
         )
 
-        await (
-            classification_repository
-            .update_classification_run(
-                session,
-                run,
-                {
-                    "status": "failed",
-                    "completed_at": _utcnow(),
-                    "error": (
-                        f"{type(exc).__name__}: {exc}"
-                    ),
-                },
-            )
+        await classification_repository.update_classification_run(
+            session,
+            run,
+            {
+                "status": "failed",
+                "completed_at": _utcnow(),
+                "error": (f"{type(exc).__name__}: {exc}"),
+            },
         )
 
         return DeterministicClassificationSummary(
@@ -1286,14 +1066,25 @@ async def classify_document_by_id(
     force: bool = False,
     ruleset_path: Path | str = DEFAULT_RULESET_PATH,
 ) -> DeterministicClassificationSummary:
-    async with async_session_factory() as session:
-        async with session.begin():
-            return (
-                await classify_document_deterministically(
-                    session,
-                    document_id,
-                    trigger=trigger,
-                    force=force,
-                    ruleset_path=ruleset_path,
-                )
+    async with async_session_factory() as session, session.begin():
+        summary = await classify_document_deterministically(
+            session,
+            document_id,
+            trigger=trigger,
+            force=force,
+            ruleset_path=ruleset_path,
+        )
+        try:
+            await evaluate_document_against_active_monitors(
+                session,
+                document_id,
+                trigger_type="enrichment",
             )
+        except Exception as exc:
+            logger.warning(
+                "Monitor reevaluation could not run after classifying document %s: %s",
+                document_id,
+                exc,
+                exc_info=True,
+            )
+        return summary
