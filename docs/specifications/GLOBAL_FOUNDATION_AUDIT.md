@@ -145,6 +145,8 @@ implementation and migration policy are defined by
 
 ## GFA-E — Coverage Profiles
 
+**Status: FROZEN**
+
 Coverage Profiles turn the global canonical universe into a user's configured
 news-intelligence deployment.
 
@@ -163,6 +165,17 @@ polling priorities
 alert thresholds
 saved monitoring rules
 ```
+
+The frozen GFA-E foundation covers normalized selectors, ordered
+translation targets, and profile-specific polling priority. Alert thresholds
+and saved monitoring rules remain deferred until their score and rule entities
+are specified; they must not be hidden in profile metadata. See
+`GFA_E_COVERAGE_PROFILES.md`.
+
+Exactly one active default is enforced at transaction commit. Concurrent
+complete scope replacements serialize per profile, and every legacy-compatible
+source-priority write, including inventory import, persists through the default
+profile.
 
 Example:
 

@@ -2,8 +2,8 @@
 
 **Document type:** Living implementation reference  
 **Snapshot date:** 2026-07-26
-**Platform phase:** Global Foundation Audit — GFA-D frozen
-**Alembic revision:** `e73f0a4b6c12`
+**Platform phase:** Global Foundation Audit — GFA-E frozen
+**Alembic revision:** `f8a1c2d3e4b5`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -28,7 +28,7 @@ Future database design work should consult this document before adding or changi
 
 ## 2. Current Schema Summary
 
-The current schema contains **37 tables**:
+The current schema contains **47 tables**:
 
 1 Alembic infrastructure table
 15 pre-GFA application/classification tables
@@ -36,6 +36,7 @@ The current schema contains **37 tables**:
 2 GFA-B language-foundation tables
 13 GFA-C semantic-entity foundation tables
 1 GFA-D content-format catalog table
+10 GFA-E coverage-profile tables
 
 | Table | Purpose |
 |---|---|
@@ -76,16 +77,26 @@ The current schema contains **37 tables**:
 | `entity_geography_relationship_types` | Canonical entity-geography semantic properties. |
 | `entity_geographies` | Historical/current typed entity-geography assertions. |
 | `entity_geography_relationship_type_external_mappings` | Strongly typed external property mappings for entity-geography relationship types. |
+| `coverage_profiles` | Named operator monitoring scopes and default polling policy. |
+| `coverage_profile_geographies` | Geography selectors with explicit descendant policy. |
+| `coverage_profile_topics` | Topic selectors with explicit descendant policy. |
+| `coverage_profile_source_types` | Source-type selectors with explicit descendant policy. |
+| `coverage_profile_sources` | Explicit source selectors. |
+| `coverage_profile_languages` | Enabled original/content language selectors. |
+| `coverage_profile_translation_targets` | Ordered translation-output languages. |
+| `coverage_profile_document_types` | Semantic document-type selectors with descendant policy. |
+| `coverage_profile_content_formats` | Content-format selectors. |
+| `coverage_profile_source_polling_overrides` | Per-profile source polling-priority overrides. |
 
 Current Alembic revision:
 
 ```text
-e73f0a4b6c12
+f8a1c2d3e4b5
 ```
 
-No custom PostgreSQL enum types or extensions are present. One
-PostgreSQL function and one deferred constraint trigger enforce the
-acyclic entity-type hierarchy.
+No custom PostgreSQL enum types or extensions are present. Two PostgreSQL
+functions and two deferred constraint triggers enforce the acyclic entity-type
+hierarchy and the exactly-one-active-default coverage-profile invariant.
 
 Step 22 is an additive schema expansion. No Phase 1 table was repurposed or renamed.
 
@@ -203,7 +214,7 @@ Stores the Alembic migration revision currently applied to the database.
 Current value at this snapshot:
 
 ```text
-e73f0a4b6c12
+f8a1c2d3e4b5
 ```
 
 ---
@@ -227,7 +238,6 @@ A Source is distinct from a Source Endpoint. One source may own multiple endpoin
 | `primary_language` | `varchar(255)` | No | — | Primary source language. |
 | `source_type` | `varchar(50)` | No | — | Source organization/type classification used by the application. |
 | `status` | `varchar(30)` | No | `'active'` | Lifecycle status. |
-| `priority` | `varchar(20)` | No | `'normal'` | Polling/operational priority. |
 | `website_url` | `text` | Yes | — | Canonical website URL where available. |
 | `metadata` | `jsonb` | No | `{}` | Extensible source metadata. |
 | `created_at` | `timestamptz` | No | `now()` | Creation timestamp. |
@@ -264,7 +274,6 @@ It must not be inferred from `sources.primary_language`; a source can publish do
 ```text
 ix_sources_country
 ix_sources_country_status
-ix_sources_priority
 ix_sources_source_type
 ix_sources_status
 ix_sources_type_status
@@ -1162,7 +1171,6 @@ Each sequence is owned by the corresponding `id` column.
 ```text
 ix_sources_country
 ix_sources_country_status
-ix_sources_priority
 ix_sources_source_type
 ix_sources_status
 ix_sources_type_status
@@ -1561,7 +1569,7 @@ A discrepancy between the implemented schema and a future specification may simp
 
 # 28. Snapshot Verification
 
-This document was updated from the frozen GFA-D
+This document was updated from the frozen GFA-E
 schema-only PostgreSQL dump generated on 2026-07-26.
 
 Observed/verified characteristics:
@@ -1569,10 +1577,10 @@ Observed/verified characteristics:
 ```text
 PostgreSQL server:    17.10
 pg_dump version:      17.10
-Alembic revision:     e73f0a4b6c12
+Alembic revision:     f8a1c2d3e4b5
 Schema:               public
-Total tables:         37
-Application tables:   36
+Total tables:         47
+Application tables:   46
 Infrastructure tables: 1
 ```
 
@@ -1931,3 +1939,33 @@ repository tests                                          127
 Alembic drift operations                                    0
 guarded downgrade and re-upgrade passed                   yes
 ```
+
+# 33. GFA-E Coverage Profiles — Frozen
+
+Alembic revision `f8a1c2d3e4b5` adds one profile table, eight normalized
+selector/target tables, and one polling-override table.
+
+No selector is stored in profile metadata. Empty selector tables mean that
+coverage dimension is unrestricted. Translation targets are independently
+ordered and empty means translation is disabled.
+
+Geography, topic, source-type, and document-type selectors carry an explicit
+`include_descendants` flag. Descendants resolve at read time and are not
+materialized as inferred configuration rows.
+
+Polling priority is now:
+
+```text
+coverage_profiles.default_polling_priority
+coverage_profile_source_polling_overrides.polling_priority
+```
+
+The legacy `sources.priority` column and index are absent. Existing effective
+values were migrated into the unrestricted seeded `global` profile.
+
+Exactly one active profile must be default at transaction commit. A partial
+unique index enforces the upper bound; a deferred constraint trigger enforces
+the lower bound while allowing an atomic default switch. Complete scope
+replacements and polling-policy writes lock the profile row so same-profile
+writes cannot silently interleave. Existing API, web, and CSV-inventory
+priority inputs persist through the default profile.

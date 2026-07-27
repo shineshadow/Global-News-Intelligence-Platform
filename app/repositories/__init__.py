@@ -1,5 +1,6 @@
 from app.repositories import (
     classification_repository,
+    coverage_profile_repository,
     document_repository,
     document_version_repository,
     entity_semantics_repository,
@@ -11,6 +12,7 @@ from app.repositories import (
 
 __all__ = [
     "classification_repository",
+    "coverage_profile_repository",
     "document_repository",
     "document_version_repository",
     "entity_semantics_repository",

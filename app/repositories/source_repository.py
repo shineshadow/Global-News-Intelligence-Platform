@@ -57,7 +57,6 @@ async def list_sources(
         )
 
     result = await session.scalars(statement)
-
     return list(result.all())
 
 

@@ -6,6 +6,37 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-26 — GFA-E Coverage Profiles Frozen
+
+**Alembic revision:** `f8a1c2d3e4b5`
+**Revises:** `e73f0a4b6c12`
+
+Added normalized coverage profiles over the global geography, topic,
+source-type, source, language, document-type, and content-format universes.
+Hierarchical selectors carry explicit descendant policy; ordered translation
+targets remain independent of coverage languages.
+
+Polling priority moved from `sources.priority` to a profile default plus
+per-source overrides. Existing non-normal priorities migrate to the seeded,
+unrestricted `global` profile and remain compatible through existing API and
+web fields.
+
+Scope replacement validates all active references before atomically replacing
+configuration. The downgrade reconstructs global polling priorities but
+refuses to discard custom profiles, selectors, or translation targets.
+
+Formal review found and corrected three blockers: the database now requires
+exactly one active default at transaction commit, complete scope replacements
+and polling-policy writes serialize on the profile row, and CSV inventory
+priority persists through the default profile instead of targeting the removed
+source column.
+
+The 31 focused and affected tests, all 143 repository tests, verification SQL,
+clean downgrade/re-upgrade, and Alembic drift check passed against isolated
+PostgreSQL 17.10. GFA-E is frozen at this revision.
+
+---
+
 ## 2026-07-26 — GFA-D Content-Format Separation Frozen
 
 **Alembic revision:** `e73f0a4b6c12`

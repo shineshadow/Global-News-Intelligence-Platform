@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict pjYFihODyZYtdkH2tDQ5BkwqjSRq6NiosjXZ9Jw7GwCdzbafsg6TTGF7nX1WUEa
+\restrict AXDyd9iyuHSS8Vp1PoCQF3Ek4J5SJk4W9QiqFmNFps23SpCGRsYgvnFPboHr5HY
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -50,6 +50,28 @@ CREATE FUNCTION public.prevent_entity_type_hierarchy_cycle() RETURNS trigger
             END IF;
 
             RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: require_default_coverage_profile(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.require_default_coverage_profile() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF (
+                SELECT count(*)
+                FROM coverage_profiles
+                WHERE is_default
+                  AND is_active
+            ) <> 1 THEN
+                RAISE EXCEPTION
+                    'exactly one active default coverage profile is required';
+            END IF;
+            RETURN NULL;
         END;
         $$;
 
@@ -181,6 +203,154 @@ CREATE SEQUENCE public.content_formats_id_seq
 --
 
 ALTER SEQUENCE public.content_formats_id_seq OWNED BY public.content_formats.id;
+
+
+--
+-- Name: coverage_profile_content_formats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_content_formats (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    content_format_slug character varying(50) NOT NULL
+);
+
+
+--
+-- Name: coverage_profile_document_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_document_types (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    document_type_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: coverage_profile_geographies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_geographies (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    geography_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: coverage_profile_languages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_languages (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    language_tag character varying(255) NOT NULL
+);
+
+
+--
+-- Name: coverage_profile_source_polling_overrides; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_source_polling_overrides (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    source_id bigint NOT NULL,
+    polling_priority character varying(20) NOT NULL,
+    CONSTRAINT ck_coverage_profile_source_polling_overrides_polling_priority CHECK (((polling_priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[])))
+);
+
+
+--
+-- Name: coverage_profile_source_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_source_types (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    source_type_slug character varying(50) NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: coverage_profile_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_sources (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    source_id bigint NOT NULL
+);
+
+
+--
+-- Name: coverage_profile_topics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_topics (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    topic_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: coverage_profile_translation_targets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profile_translation_targets (
+    profile_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    language_tag character varying(255) NOT NULL,
+    preference_order integer NOT NULL,
+    CONSTRAINT ck_coverage_profile_translation_targets_preference_orde_fda0 CHECK ((preference_order >= 0))
+);
+
+
+--
+-- Name: coverage_profiles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.coverage_profiles (
+    id bigint NOT NULL,
+    slug character varying(255) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    is_default boolean DEFAULT false NOT NULL,
+    default_polling_priority character varying(20) DEFAULT 'normal'::character varying NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_coverage_profiles_default_polling_priority CHECK (((default_polling_priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT ck_coverage_profiles_default_requires_active CHECK (((NOT is_default) OR is_active)),
+    CONSTRAINT ck_coverage_profiles_name_nonempty CHECK ((btrim((name)::text) <> ''::text)),
+    CONSTRAINT ck_coverage_profiles_slug_format CHECK (((slug)::text ~ '^[a-z0-9]+(_[a-z0-9]+)*$'::text))
+);
+
+
+--
+-- Name: coverage_profiles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.coverage_profiles_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: coverage_profiles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.coverage_profiles_id_seq OWNED BY public.coverage_profiles.id;
 
 
 --
@@ -1311,7 +1481,6 @@ CREATE TABLE public.sources (
     primary_language character varying(255) NOT NULL,
     source_type character varying(50) NOT NULL,
     status character varying(30) DEFAULT 'active'::character varying NOT NULL,
-    priority character varying(20) DEFAULT 'normal'::character varying NOT NULL,
     website_url text,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -1398,6 +1567,13 @@ ALTER TABLE ONLY public.classification_runs ALTER COLUMN id SET DEFAULT nextval(
 --
 
 ALTER TABLE ONLY public.content_formats ALTER COLUMN id SET DEFAULT nextval('public.content_formats_id_seq'::regclass);
+
+
+--
+-- Name: coverage_profiles id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profiles ALTER COLUMN id SET DEFAULT nextval('public.coverage_profiles_id_seq'::regclass);
 
 
 --
@@ -1612,6 +1788,86 @@ ALTER TABLE ONLY public.classification_runs
 
 ALTER TABLE ONLY public.content_formats
     ADD CONSTRAINT pk_content_formats PRIMARY KEY (id);
+
+
+--
+-- Name: coverage_profile_content_formats pk_coverage_profile_content_formats; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_content_formats
+    ADD CONSTRAINT pk_coverage_profile_content_formats PRIMARY KEY (profile_id, content_format_slug);
+
+
+--
+-- Name: coverage_profile_document_types pk_coverage_profile_document_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_document_types
+    ADD CONSTRAINT pk_coverage_profile_document_types PRIMARY KEY (profile_id, document_type_id);
+
+
+--
+-- Name: coverage_profile_geographies pk_coverage_profile_geographies; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_geographies
+    ADD CONSTRAINT pk_coverage_profile_geographies PRIMARY KEY (profile_id, geography_id);
+
+
+--
+-- Name: coverage_profile_languages pk_coverage_profile_languages; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_languages
+    ADD CONSTRAINT pk_coverage_profile_languages PRIMARY KEY (profile_id, language_tag);
+
+
+--
+-- Name: coverage_profile_source_polling_overrides pk_coverage_profile_source_polling_overrides; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_source_polling_overrides
+    ADD CONSTRAINT pk_coverage_profile_source_polling_overrides PRIMARY KEY (profile_id, source_id);
+
+
+--
+-- Name: coverage_profile_source_types pk_coverage_profile_source_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_source_types
+    ADD CONSTRAINT pk_coverage_profile_source_types PRIMARY KEY (profile_id, source_type_slug);
+
+
+--
+-- Name: coverage_profile_sources pk_coverage_profile_sources; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_sources
+    ADD CONSTRAINT pk_coverage_profile_sources PRIMARY KEY (profile_id, source_id);
+
+
+--
+-- Name: coverage_profile_topics pk_coverage_profile_topics; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_topics
+    ADD CONSTRAINT pk_coverage_profile_topics PRIMARY KEY (profile_id, topic_id);
+
+
+--
+-- Name: coverage_profile_translation_targets pk_coverage_profile_translation_targets; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_translation_targets
+    ADD CONSTRAINT pk_coverage_profile_translation_targets PRIMARY KEY (profile_id, language_tag);
+
+
+--
+-- Name: coverage_profiles pk_coverage_profiles; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profiles
+    ADD CONSTRAINT pk_coverage_profiles PRIMARY KEY (id);
 
 
 --
@@ -1895,6 +2151,22 @@ ALTER TABLE ONLY public.content_formats
 
 
 --
+-- Name: coverage_profile_translation_targets uq_coverage_profile_translation_targets_order; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_translation_targets
+    ADD CONSTRAINT uq_coverage_profile_translation_targets_order UNIQUE (profile_id, preference_order);
+
+
+--
+-- Name: coverage_profiles uq_coverage_profiles_slug; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profiles
+    ADD CONSTRAINT uq_coverage_profiles_slug UNIQUE (slug);
+
+
+--
 -- Name: document_types uq_document_types_slug; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2080,6 +2352,76 @@ CREATE INDEX ix_classification_runs_status_started ON public.classification_runs
 --
 
 CREATE INDEX ix_content_formats_active ON public.content_formats USING btree (is_active);
+
+
+--
+-- Name: ix_coverage_profile_content_formats_content_format; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_content_formats_content_format ON public.coverage_profile_content_formats USING btree (content_format_slug);
+
+
+--
+-- Name: ix_coverage_profile_document_types_document_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_document_types_document_type ON public.coverage_profile_document_types USING btree (document_type_id);
+
+
+--
+-- Name: ix_coverage_profile_geographies_geography; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_geographies_geography ON public.coverage_profile_geographies USING btree (geography_id);
+
+
+--
+-- Name: ix_coverage_profile_languages_language; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_languages_language ON public.coverage_profile_languages USING btree (language_tag);
+
+
+--
+-- Name: ix_coverage_profile_source_polling_overrides_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_source_polling_overrides_source ON public.coverage_profile_source_polling_overrides USING btree (source_id);
+
+
+--
+-- Name: ix_coverage_profile_source_types_source_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_source_types_source_type ON public.coverage_profile_source_types USING btree (source_type_slug);
+
+
+--
+-- Name: ix_coverage_profile_sources_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_sources_source ON public.coverage_profile_sources USING btree (source_id);
+
+
+--
+-- Name: ix_coverage_profile_topics_topic; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_topics_topic ON public.coverage_profile_topics USING btree (topic_id);
+
+
+--
+-- Name: ix_coverage_profile_translation_targets_language; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profile_translation_targets_language ON public.coverage_profile_translation_targets USING btree (language_tag);
+
+
+--
+-- Name: ix_coverage_profiles_active_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_coverage_profiles_active_name ON public.coverage_profiles USING btree (is_active, name);
 
 
 --
@@ -2552,13 +2894,6 @@ CREATE INDEX ix_sources_country_status ON public.sources USING btree (country, s
 
 
 --
--- Name: ix_sources_priority; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_sources_priority ON public.sources USING btree (priority);
-
-
---
 -- Name: ix_sources_source_type; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2591,6 +2926,13 @@ CREATE INDEX ix_topics_active_sort_order ON public.topics USING btree (is_active
 --
 
 CREATE INDEX ix_topics_parent_sort_order ON public.topics USING btree (parent_id, sort_order);
+
+
+--
+-- Name: uq_coverage_profiles_default; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_coverage_profiles_default ON public.coverage_profiles USING btree (is_default) WHERE is_default;
 
 
 --
@@ -2692,6 +3034,13 @@ CREATE CONSTRAINT TRIGGER ck_entity_type_hierarchy_edges_acyclic AFTER INSERT OR
 
 
 --
+-- Name: coverage_profiles coverage_profiles_require_default; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER coverage_profiles_require_default AFTER INSERT OR DELETE OR UPDATE ON public.coverage_profiles DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_default_coverage_profile();
+
+
+--
 -- Name: classification_runs fk_classification_runs_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2705,6 +3054,150 @@ ALTER TABLE ONLY public.classification_runs
 
 ALTER TABLE ONLY public.classification_runs
     ADD CONSTRAINT fk_classification_runs_language_language_tags_tag FOREIGN KEY (language) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_content_formats fk_coverage_profile_content_formats_content_format_slug_815f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_content_formats
+    ADD CONSTRAINT fk_coverage_profile_content_formats_content_format_slug_815f FOREIGN KEY (content_format_slug) REFERENCES public.content_formats(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_content_formats fk_coverage_profile_content_formats_profile_id_coverage_ddbc; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_content_formats
+    ADD CONSTRAINT fk_coverage_profile_content_formats_profile_id_coverage_ddbc FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: coverage_profile_document_types fk_coverage_profile_document_types_document_type_id_doc_5404; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_document_types
+    ADD CONSTRAINT fk_coverage_profile_document_types_document_type_id_doc_5404 FOREIGN KEY (document_type_id) REFERENCES public.document_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_document_types fk_coverage_profile_document_types_profile_id_coverage_profiles; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_document_types
+    ADD CONSTRAINT fk_coverage_profile_document_types_profile_id_coverage_profiles FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: coverage_profile_geographies fk_coverage_profile_geographies_geography_id_geographies; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_geographies
+    ADD CONSTRAINT fk_coverage_profile_geographies_geography_id_geographies FOREIGN KEY (geography_id) REFERENCES public.geographies(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_geographies fk_coverage_profile_geographies_profile_id_coverage_profiles; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_geographies
+    ADD CONSTRAINT fk_coverage_profile_geographies_profile_id_coverage_profiles FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: coverage_profile_languages fk_coverage_profile_languages_language_tag_language_tags; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_languages
+    ADD CONSTRAINT fk_coverage_profile_languages_language_tag_language_tags FOREIGN KEY (language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_languages fk_coverage_profile_languages_profile_id_coverage_profiles; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_languages
+    ADD CONSTRAINT fk_coverage_profile_languages_profile_id_coverage_profiles FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: coverage_profile_source_polling_overrides fk_coverage_profile_source_polling_overrides_profile_id_4ac5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_source_polling_overrides
+    ADD CONSTRAINT fk_coverage_profile_source_polling_overrides_profile_id_4ac5 FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: coverage_profile_source_polling_overrides fk_coverage_profile_source_polling_overrides_source_id_sources; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_source_polling_overrides
+    ADD CONSTRAINT fk_coverage_profile_source_polling_overrides_source_id_sources FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_source_types fk_coverage_profile_source_types_profile_id_coverage_profiles; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_source_types
+    ADD CONSTRAINT fk_coverage_profile_source_types_profile_id_coverage_profiles FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: coverage_profile_source_types fk_coverage_profile_source_types_source_type_slug_source_types; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_source_types
+    ADD CONSTRAINT fk_coverage_profile_source_types_source_type_slug_source_types FOREIGN KEY (source_type_slug) REFERENCES public.source_types(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_sources fk_coverage_profile_sources_profile_id_coverage_profiles; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_sources
+    ADD CONSTRAINT fk_coverage_profile_sources_profile_id_coverage_profiles FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: coverage_profile_sources fk_coverage_profile_sources_source_id_sources; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_sources
+    ADD CONSTRAINT fk_coverage_profile_sources_source_id_sources FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_topics fk_coverage_profile_topics_profile_id_coverage_profiles; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_topics
+    ADD CONSTRAINT fk_coverage_profile_topics_profile_id_coverage_profiles FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: coverage_profile_topics fk_coverage_profile_topics_topic_id_topics; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_topics
+    ADD CONSTRAINT fk_coverage_profile_topics_topic_id_topics FOREIGN KEY (topic_id) REFERENCES public.topics(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_translation_targets fk_coverage_profile_translation_targets_language_tag_la_304e; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_translation_targets
+    ADD CONSTRAINT fk_coverage_profile_translation_targets_language_tag_la_304e FOREIGN KEY (language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: coverage_profile_translation_targets fk_coverage_profile_translation_targets_profile_id_cove_74c2; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coverage_profile_translation_targets
+    ADD CONSTRAINT fk_coverage_profile_translation_targets_profile_id_cove_74c2 FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE CASCADE;
 
 
 --
@@ -3159,5 +3652,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict pjYFihODyZYtdkH2tDQ5BkwqjSRq6NiosjXZ9Jw7GwCdzbafsg6TTGF7nX1WUEa
+\unrestrict AXDyd9iyuHSS8Vp1PoCQF3Ek4J5SJk4W9QiqFmNFps23SpCGRsYgvnFPboHr5HY
 

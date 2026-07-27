@@ -8,17 +8,28 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    and_,
     func,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    Mapped,
+    column_property,
+    mapped_column,
+    relationship,
+)
 
 from app.models.base import Base
+from app.models.coverage_profile import (
+    CoverageProfile,
+    CoverageProfileSourcePollingOverride,
+)
 
 if TYPE_CHECKING:
     from app.models.document import Document
-    from app.models.ingestion_run import IngestionRun    
+    from app.models.ingestion_run import IngestionRun
     from app.models.source_endpoint import SourceEndpoint
 
 class Source(Base):
@@ -79,13 +90,6 @@ class Source(Base):
         index=True,
     )
 
-    priority: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        server_default="normal",
-        index=True,
-    )
-
     website_url: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
@@ -111,6 +115,34 @@ class Source(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+    priority: Mapped[str] = column_property(
+        func.coalesce(
+            select(
+                func.coalesce(
+                    CoverageProfileSourcePollingOverride.polling_priority,
+                    CoverageProfile.default_polling_priority,
+                )
+            )
+            .select_from(CoverageProfile)
+            .outerjoin(
+                CoverageProfileSourcePollingOverride,
+                and_(
+                    CoverageProfileSourcePollingOverride.profile_id
+                    == CoverageProfile.id,
+                    CoverageProfileSourcePollingOverride.source_id
+                    == id,
+                ),
+            )
+            .where(CoverageProfile.is_default.is_(True))
+            .correlate_except(
+                CoverageProfile,
+                CoverageProfileSourcePollingOverride,
+            )
+            .scalar_subquery(),
+            "normal",
+        )
     )
 
     endpoints: Mapped[list["SourceEndpoint"]] = relationship(

@@ -109,6 +109,15 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            coverage_profile_source_polling_overrides,
+            coverage_profile_content_formats,
+            coverage_profile_document_types,
+            coverage_profile_translation_targets,
+            coverage_profile_languages,
+            coverage_profile_sources,
+            coverage_profile_source_types,
+            coverage_profile_topics,
+            coverage_profile_geographies,
             entity_geographies,
             entity_type_assignments,
             entity_aliases,
@@ -167,6 +176,16 @@ async def truncate_test_tables() -> None:
                 DELETE FROM external_semantic_authorities
                 WHERE metadata ->> 'seed_set'
                     IS DISTINCT FROM 'gfa_c_5';
+
+                DELETE FROM coverage_profiles
+                WHERE metadata ->> 'seed_set'
+                    IS DISTINCT FROM 'gfa_e_1';
+
+                UPDATE coverage_profiles
+                SET is_active = true,
+                    is_default = true,
+                    default_polling_priority = 'normal'
+                WHERE metadata ->> 'seed_set' = 'gfa_e_1';
                 """
             )
         )

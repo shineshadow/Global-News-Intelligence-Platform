@@ -12,6 +12,18 @@ from app.models.classification import (
     Topic,
 )
 from app.models.content_format import ContentFormat
+from app.models.coverage_profile import (
+    CoverageProfile,
+    CoverageProfileContentFormat,
+    CoverageProfileDocumentType,
+    CoverageProfileGeography,
+    CoverageProfileLanguage,
+    CoverageProfileSource,
+    CoverageProfileSourcePollingOverride,
+    CoverageProfileSourceType,
+    CoverageProfileTopic,
+    CoverageProfileTranslationTarget,
+)
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.entity_semantics import (
@@ -46,6 +58,16 @@ __all__ = [
     "Base",
     "ClassificationRun",
     "ContentFormat",
+    "CoverageProfile",
+    "CoverageProfileContentFormat",
+    "CoverageProfileDocumentType",
+    "CoverageProfileGeography",
+    "CoverageProfileLanguage",
+    "CoverageProfileSource",
+    "CoverageProfileSourcePollingOverride",
+    "CoverageProfileSourceType",
+    "CoverageProfileTopic",
+    "CoverageProfileTranslationTarget",
     "Document",
     "DocumentEntity",
     "DocumentGeography",
