@@ -628,17 +628,22 @@ docs/database/DATABASE_SCHEMA.md
 
 ## Next Planned Schema Milestone
 
-Step 22 is now implemented.
+Steps 22 and 23 are implemented. Step 23 includes source and endpoint
+defaults, structured metadata mappings, deterministic keyword/rule
+classification, ingestion integration, and persistence of confidence,
+provenance, and history.
 
-The next schema work should be driven by actual requirements from:
+The next work is:
 
 ```text
-Step 22.5 — Identity & Audit Architecture Documentation
-Step 23   — Deterministic Classification
 Step 24   — Classification-aware document filters
 Step 25   — Monitor Rule Engine
 Step 26   — Alerts / ntfy
 ```
+
+Step 24 must establish one reusable document-matching contract. The News Feed
+uses it as a transient query; Step 25 persists equivalent criteria as active
+monitors; Step 26 delivers notifications for new matches.
 
 No additional classification schema should be added merely because it appears convenient.
 

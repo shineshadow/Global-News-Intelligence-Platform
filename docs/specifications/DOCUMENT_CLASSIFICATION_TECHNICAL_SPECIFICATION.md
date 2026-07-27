@@ -977,6 +977,70 @@ Date = Last 30 days
 
 Saved filters/views should eventually preserve these combinations.
 
+### 17.1 Step 24 Shared Matching Contract
+
+Step 24 upgrades the existing `/web/documents` News Feed and defines the
+matching contract later consumed by persistent monitors.
+
+The contract must support:
+
+```text
+coverage profile
+canonical document geography, with explicit descendant inclusion
+canonical topic, with explicit descendant inclusion
+canonical entity
+entity role
+semantic document type
+content format
+source
+source type
+language
+minimum classification confidence
+time window
+keywords and phrases
+```
+
+Unset criteria are unrestricted. Multiple values inside one dimension combine
+with OR; constrained dimensions combine with AND. Coverage-profile scope is
+applied first and additional News Feed criteria further narrow that scope.
+
+Hierarchy expansion is explicit and read-time. Filtering must not materialize
+inferred ancestor or descendant classification assertions. Classification
+criteria match active assertions only, and a confidence threshold applies to
+the assertion satisfying that criterion.
+
+The current News Feed `Country / Region` input filters `Source.country`, which
+is publisher home jurisdiction. Step 24 must replace that behavior with
+canonical `document_geographies` matching. Publisher jurisdiction may remain
+available as a separately named source filter, but it must never masquerade as
+document subject geography.
+
+Relationship filters should use `EXISTS`-style predicates or an equivalent
+duplicate-safe query plan so multi-label classifications do not corrupt result
+counts or pagination.
+
+The Step 24 implementation must expose one typed criteria object and one
+matching/query service rather than independently recreating semantics in the
+web route, API, and future monitor worker.
+
+### 17.2 Step 24, Step 25, and Step 26 Boundary
+
+```text
+Step 24
+Build and validate a transient News Feed filter
+        ↓
+Step 25
+Persist equivalent criteria as an active Monitor
+        ↓
+Step 26
+Notify when new documents match
+```
+
+Step 25 owns rule lifecycle, evaluation runs, idempotent matches, activation,
+and continuous reevaluation after enrichment. Step 26 owns notification
+delivery and delivery history. Step 24 does not create hidden saved monitors or
+send alerts.
+
 ---
 
 ## 18. Classification-Assisted Story Clustering
@@ -1246,7 +1310,7 @@ Low-confidence classifications may be visually distinguished and optionally hidd
 
 ## 27. Implementation Roadmap
 
-### Classification Phase 1 — Canonical Data Model
+### Classification Phase 1 — Canonical Data Model — Implemented
 
 Add:
 
@@ -1261,7 +1325,7 @@ document_type_assignments
 classification_runs
 ```
 
-### Classification Phase 2 — Deterministic Classification
+### Classification Phase 2 — Deterministic Classification — Implemented
 
 Add:
 
@@ -1273,14 +1337,38 @@ keyword/rule classification
 alias matching
 ```
 
-### Classification Phase 3 — Filtering and Monitoring
+### Classification Phase 3A — Step 24 Filtering — Next
 
 Add:
 
 ```text
 classification-aware document filters
-classification-aware monitor rules
-saved views
+shared typed matching criteria
+News Feed canonical geography/topic/entity/type filters
+coverage-profile scope
+duplicate-safe pagination and counts
+```
+
+### Classification Phase 3B — Step 25 Monitoring
+
+Add:
+
+```text
+persistent monitor rules
+classification-aware evaluation
+activation and lifecycle
+idempotent monitor matches
+saved monitor views
+```
+
+### Classification Phase 3C — Step 26 Alerts
+
+Add:
+
+```text
+alert events
+ntfy delivery
+delivery attempts and status
 ```
 
 ### Classification Phase 4 — Local AI

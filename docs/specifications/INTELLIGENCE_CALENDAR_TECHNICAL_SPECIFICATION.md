@@ -2800,6 +2800,26 @@ Where practical, important schedules should be stored durably in PostgreSQL and 
 
 The Intelligence Calendar should be implemented incrementally.
 
+### Calendar Foundation Audit — Required Before Phase 1
+
+The Foundation Audit begins in parallel with main-track Step 24. It must freeze:
+
+```text
+scheduled Calendar Event versus observed real-world Event
+event identity and deduplication boundary
+date precision, time precision, timezone, and all-day semantics
+recurrence, exceptions, rescheduling, postponement, and cancellation history
+validation state, confidence, evidence, and provenance accumulation
+canonical geography, topic, entity, source, and document relationships
+canonical event facts versus coverage-profile monitoring policy
+actor representation before the identity model exists
+```
+
+The audit must reconcile this specification with GFA-A through GFA-E. In
+particular, Calendar monitoring priority, watch sources, temporary monitors,
+and polling escalation are operator configuration and must not be silently
+collapsed into globally canonical Calendar Event facts.
+
 ### Calendar Phase 1 — Manual Calendar
 
 Build:
@@ -2854,6 +2874,8 @@ candidate deduplication
 ```
 
 ### Calendar Phase 5 — Automated Event Scheduler
+
+This phase begins only after the Step 25 Monitor Rule Engine is frozen.
 
 Add:
 

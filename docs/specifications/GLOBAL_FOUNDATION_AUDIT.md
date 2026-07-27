@@ -201,6 +201,18 @@ GFA-E  Coverage Profiles
 
 Each migration must be independently testable and preserve existing history.
 
-Step 23B.2 structured metadata classification waits until GFA-A through GFA-D
-are stable because those dimensions directly affect ingestion and
-classification semantics.
+The former Step 23B.2 dependency gate is satisfied. Deterministic
+classification, including structured metadata mappings, is implemented, and
+GFA-A through GFA-E are frozen.
+
+The main track now proceeds:
+
+```text
+Step 24  Classification-aware News Feed filters and shared matching contract
+Step 25  Persistent Monitor Rule Engine
+Step 26  Alert delivery and ntfy integration
+```
+
+The Intelligence Calendar begins its Foundation Audit in parallel. Calendar
+Phase 1 may overlap Step 25, but automated temporary monitors and polling
+escalation wait for the frozen Monitor Rule Engine.

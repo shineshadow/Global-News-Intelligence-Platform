@@ -2546,6 +2546,21 @@ Success criterion:
 
 Reliable real-time monitoring and high-value classification/filtering without requiring AI dependency for baseline operation.
 
+Current implementation sequence:
+
+```text
+Step 22  Canonical classification persistence foundation       implemented
+Step 23  Deterministic and structured-metadata classification  implemented
+GFA A-E  Global canonical/configuration foundations             frozen
+Step 24  Classification-aware News Feed filters                next
+Step 25  Monitor Rule Engine
+Step 26  Alerts and ntfy delivery
+```
+
+Step 24 defines a shared document-matching contract. A News Feed filter is a
+transient use of that contract. Step 25 persists equivalent criteria and
+continuously evaluates new or enriched documents. Step 26 performs delivery.
+
 ---
 
 ### Phase 3 — Expanded Sources
@@ -2683,6 +2698,26 @@ The platform identifies meaningful developments rather than merely new documents
 
 The Intelligence Calendar should be developed as a parallel track aligned with dependencies in the main roadmap.
 
+#### Calendar Foundation Audit — Current Parallel Work
+
+Before the first Calendar migration, reconcile event identity, time and
+recurrence, validation state, confidence, evidence, history, canonical
+relationships, and operator policy with the frozen GFA foundations.
+
+The audit must preserve this ownership boundary:
+
+```text
+Calendar Event
+    canonical expected occurrence and schedule
+
+Coverage profile / Calendar monitoring policy
+    whether and how an operator monitors that occurrence
+```
+
+Calendar priority, watch sources, temporary monitors, and polling escalation
+must not become installation-global attributes merely because the initial
+deployment has one operator.
+
 #### Calendar Phase 1 — Manual Calendar
 
 Begin after the Core Platform foundation exists.
@@ -2732,7 +2767,8 @@ Add:
 
 #### Calendar Phase 5 — Automated Event Scheduler
 
-Align with Monitoring and YouTube capabilities.
+Begin only after the Monitor Rule Engine is frozen. Align later YouTube
+escalation with YouTube capabilities.
 
 Add:
 
