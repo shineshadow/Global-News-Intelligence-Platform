@@ -2,8 +2,8 @@
 
 **Document type:** Living implementation reference  
 **Snapshot date:** 2026-07-27
-**Platform phase:** Intelligence Calendar Phase 1 freeze candidate
-**Alembic revision:** `e27a6c9d4f10`
+**Platform phase:** Intelligence Calendar Phase 1 frozen
+**Alembic revision:** `f29b6d8e3c10`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -2036,7 +2036,7 @@ Monitor/destination bindings, snapshotted deliveries, and append-only delivery
 attempts. One alert is permitted per Monitor match. Delivery retries preserve
 the destination configuration effective when the alert was created.
 
-# 36. Intelligence Calendar Phase 1 — Freeze Candidate
+# 36. Intelligence Calendar Phase 1 — Frozen
 
 Revision `e27a6c9d4f10` adds 22 normalized Calendar tables. Stable Events point
 to immutable descriptive revisions. Every expected instance is an
@@ -2067,3 +2067,11 @@ retraction-only assertions, evidence/document source consistency,
 same-Event policy overrides, endpoint/source ownership, same-profile Monitor
 links, and acyclic identity-preserving merges. Downgrade refuses to remove any
 Calendar-owned state.
+
+Freeze-hardening revision `f29b6d8e3c10` requires legal Phase 1 state
+transition edges and matching state/merge history in the same transaction.
+Current descriptive and schedule pointers advance exactly one immutable
+revision. Unknown schedules require unknown date and time precision, timed
+schedules cannot use `not_applicable` time precision, and all-day recurrence
+duration uses complete local days. Calendar Monitor creation and linking now
+commit or roll back together.

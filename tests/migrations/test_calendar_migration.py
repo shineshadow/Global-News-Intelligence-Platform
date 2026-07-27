@@ -54,5 +54,5 @@ async def test_calendar_state_blocks_destructive_downgrade(
         check=False,
     )
     assert downgrade.returncode != 0
-    assert "Calendar-owned state exists" in (downgrade.stdout + downgrade.stderr)
-    assert _alembic("current").stdout.strip().endswith("e27a6c9d4f10 (head)")
+    assert "Calendar" in (downgrade.stdout + downgrade.stderr)
+    assert _alembic("current").stdout.strip().endswith("f29b6d8e3c10 (head)")

@@ -328,49 +328,59 @@ async def _create_revision(
     return revision, criteria
 
 
+async def create_monitor_in_transaction(
+    session: AsyncSession,
+    data: MonitorCreate,
+) -> MonitorDetail:
+    if (
+        await monitor_repository.get_monitor_by_slug(
+            session,
+            data.slug,
+        )
+        is not None
+    ):
+        raise ResourceConflictError(f"Monitor slug '{data.slug}' already exists.")
+    profile = await _require_profile(
+        session,
+        data.revision.criteria.coverage_profile_id,
+    )
+    monitor = await monitor_repository.create_monitor(
+        session,
+        {
+            "slug": data.slug,
+            "name": data.name,
+            "description": data.description,
+            "coverage_profile_id": profile.id,
+            "status": "draft",
+            "current_revision_number": 1,
+            "match_existing_on_activation": (data.match_existing_on_activation),
+            "expires_at": data.expires_at,
+            "monitor_metadata": {},
+        },
+    )
+    revision, criteria = await _create_revision(
+        session,
+        monitor=monitor,
+        revision_number=1,
+        data=data.revision,
+    )
+    return MonitorDetail(
+        monitor=monitor,
+        revision=revision,
+        criteria=criteria,
+        match_count=0,
+    )
+
+
 async def create_monitor(
     session: AsyncSession,
     data: MonitorCreate,
 ) -> MonitorDetail:
     try:
         async with session.begin():
-            if (
-                await monitor_repository.get_monitor_by_slug(
-                    session,
-                    data.slug,
-                )
-                is not None
-            ):
-                raise ResourceConflictError(f"Monitor slug '{data.slug}' already exists.")
-            profile = await _require_profile(
+            return await create_monitor_in_transaction(
                 session,
-                data.revision.criteria.coverage_profile_id,
-            )
-            monitor = await monitor_repository.create_monitor(
-                session,
-                {
-                    "slug": data.slug,
-                    "name": data.name,
-                    "description": data.description,
-                    "coverage_profile_id": profile.id,
-                    "status": "draft",
-                    "current_revision_number": 1,
-                    "match_existing_on_activation": (data.match_existing_on_activation),
-                    "expires_at": data.expires_at,
-                    "monitor_metadata": {},
-                },
-            )
-            revision, criteria = await _create_revision(
-                session,
-                monitor=monitor,
-                revision_number=1,
-                data=data.revision,
-            )
-            return MonitorDetail(
-                monitor=monitor,
-                revision=revision,
-                criteria=criteria,
-                match_count=0,
+                data,
             )
     except IntegrityError as exc:
         raise ResourceConflictError("The Monitor conflicts with existing configuration.") from exc

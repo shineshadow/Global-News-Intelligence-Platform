@@ -2872,8 +2872,8 @@ in `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`.
 
 ### Calendar Phase 1 — Manual Calendar
 
-**Implementation status:** FREEZE CANDIDATE at Alembic revision
-`e27a6c9d4f10`. The candidate contract and proof mapping are recorded in
+**Implementation status:** FROZEN at Alembic revision `f29b6d8e3c10`.
+The implemented contract and proof mapping are recorded in
 `INTELLIGENCE_CALENDAR_PHASE_1.md`.
 
 Build:

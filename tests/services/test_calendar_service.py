@@ -34,6 +34,7 @@ from app.schemas.calendar import (
     CalendarEventCreate,
     CalendarEvidenceCreate,
     CalendarMergeInput,
+    CalendarMonitorCreate,
     CalendarMonitorLink,
     CalendarRecurrenceInput,
     CalendarRescheduleInput,
@@ -699,6 +700,176 @@ async def test_postponement_without_replacement_and_illegal_transition(
             )
 
 
+async def test_database_rejects_illegal_or_unrecorded_state_changes(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session:
+        created = await calendar_service.create_event(
+            session,
+            CalendarEventCreate(
+                title="Database state guard",
+                schedule=_timed_schedule(),
+            ),
+        )
+        event_id = created.event.id
+
+    async with database_session_factory() as session:
+        with pytest.raises(IntegrityError):
+            async with session.begin():
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO intelligence_calendar_event_state_transitions (
+                            event_id,
+                            dimension,
+                            previous_state,
+                            next_state,
+                            reason
+                        ) VALUES (
+                            :event_id,
+                            'validation',
+                            'candidate',
+                            'confirmed',
+                            'illegal direct transition'
+                        )
+                        """
+                    ),
+                    {"event_id": event_id},
+                )
+
+    async with database_session_factory() as session:
+        with pytest.raises(DBAPIError, match="same-transaction history"):
+            async with session.begin():
+                await session.execute(
+                    text(
+                        """
+                        UPDATE intelligence_calendar_events
+                        SET validation_state = 'probable'
+                        WHERE id = :event_id
+                        """
+                    ),
+                    {"event_id": event_id},
+                )
+
+
+async def test_database_rejects_contradictory_unknown_precision(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session:
+        created = await calendar_service.create_event(
+            session,
+            CalendarEventCreate(
+                title="Unknown precision guard",
+                schedule=CalendarScheduleInput(
+                    temporal_mode="unknown",
+                    date_precision="unknown",
+                    time_precision="unknown",
+                    original_text="Date to be announced",
+                ),
+            ),
+        )
+        event_id = created.event.id
+    async with database_session_factory() as session:
+        detail = await calendar_service.get_event(session, event_id)
+        occurrence_id = detail.occurrences[0].id
+
+    async with database_session_factory() as session:
+        with pytest.raises(IntegrityError):
+            async with session.begin():
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO
+                            intelligence_calendar_occurrence_schedule_revisions (
+                                occurrence_id,
+                                revision_number,
+                                temporal_mode,
+                                date_precision,
+                                time_precision,
+                                all_day
+                            )
+                        VALUES (
+                            :occurrence_id,
+                            2,
+                            'unknown',
+                            'exact',
+                            'unknown',
+                            false
+                        )
+                        """
+                    ),
+                    {"occurrence_id": occurrence_id},
+                )
+
+
+async def test_create_and_link_monitor_is_atomic_on_invalid_occurrence(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session:
+        profile_id = await _default_profile_id(session)
+    async with database_session_factory() as session:
+        watched = await calendar_service.create_event(
+            session,
+            CalendarEventCreate(
+                title="Atomic Monitor Event",
+                schedule=_timed_schedule(),
+                coverage_policy=CalendarCoveragePolicyInput(
+                    profile_id=profile_id
+                ),
+            ),
+        )
+        watched_event_id = watched.event.id
+    async with database_session_factory() as session:
+        watched_detail = await calendar_service.get_event(
+            session, watched_event_id
+        )
+        policy_id = watched_detail.coverage_policy_ids[0]
+    async with database_session_factory() as session:
+        other = await calendar_service.create_event(
+            session,
+            CalendarEventCreate(
+                title="Other occurrence owner",
+                schedule=_timed_schedule(),
+            ),
+        )
+        other_event_id = other.event.id
+    async with database_session_factory() as session:
+        other_detail = await calendar_service.get_event(session, other_event_id)
+        wrong_occurrence_id = other_detail.occurrences[0].id
+
+    monitor_data = MonitorCreate(
+        slug="calendar_atomic_guard",
+        name="Calendar Atomic Guard",
+        revision=MonitorRevisionInput(
+            criteria=DocumentMatchCriteria(
+                coverage_profile_id=profile_id,
+                text_query="atomic guard",
+            )
+        ),
+    )
+    async with database_session_factory() as session:
+        with pytest.raises(
+            InvalidUpdateError,
+            match="Occurrence does not belong",
+        ):
+            await calendar_service.create_and_link_monitor(
+                session,
+                watched_event_id,
+                CalendarMonitorCreate(
+                    policy_id=policy_id,
+                    occurrence_id=wrong_occurrence_id,
+                    purpose="pre_event",
+                    monitor=monitor_data,
+                ),
+                actor=CalendarActor(),
+            )
+    async with database_session_factory() as session:
+        orphan = await session.scalar(
+            select(Monitor).where(Monitor.slug == monitor_data.slug)
+        )
+    assert orphan is None
+
+
 async def test_precision_does_not_fabricate_time_and_invalid_modes_fail() -> None:
     month = CalendarScheduleInput(
         temporal_mode="date",
@@ -725,6 +896,12 @@ async def test_precision_does_not_fabricate_time_and_invalid_modes_fail() -> Non
             temporal_mode="unknown",
             start_date=date(2027, 2, 1),
             date_precision="unknown",
+            time_precision="unknown",
+        )
+    with pytest.raises(ValidationError):
+        CalendarScheduleInput(
+            temporal_mode="unknown",
+            date_precision="exact",
             time_precision="unknown",
         )
 

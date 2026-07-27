@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict CrmfOXF6l65Jgm3ilY5Mr100DMYapjJPSKgBJTKmlaq8hj4yvx0LAmc963Gp8Fc
+\restrict OFXkLJHNcZbcErrwqX9HNuEz6cUelR5KgljRV9lhQEhxHKn42rtIb2xGqoq1GbY
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -28,6 +28,152 @@ CREATE FUNCTION public.calendar_reject_mutation() RETURNS trigger
     AS $$
         BEGIN
             RAISE EXCEPTION '% is append-only', TG_TABLE_NAME;
+        END
+        $$;
+
+
+--
+-- Name: calendar_require_forward_revision(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_require_forward_revision() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE old_number integer;
+        DECLARE new_number integer;
+        BEGIN
+            IF TG_TABLE_NAME = 'intelligence_calendar_events' THEN
+                IF OLD.current_revision_id = NEW.current_revision_id THEN
+                    RETURN NEW;
+                END IF;
+                SELECT revision_number INTO old_number
+                FROM intelligence_calendar_event_revisions
+                WHERE id = OLD.current_revision_id AND event_id = OLD.id;
+                SELECT revision_number INTO new_number
+                FROM intelligence_calendar_event_revisions
+                WHERE id = NEW.current_revision_id AND event_id = NEW.id;
+            ELSE
+                IF OLD.current_schedule_revision_id
+                   = NEW.current_schedule_revision_id
+                THEN
+                    RETURN NEW;
+                END IF;
+                SELECT revision_number INTO old_number
+                FROM intelligence_calendar_occurrence_schedule_revisions
+                WHERE id = OLD.current_schedule_revision_id
+                  AND occurrence_id = OLD.id;
+                SELECT revision_number INTO new_number
+                FROM intelligence_calendar_occurrence_schedule_revisions
+                WHERE id = NEW.current_schedule_revision_id
+                  AND occurrence_id = NEW.id;
+            END IF;
+            IF new_number IS NULL OR old_number IS NULL
+               OR new_number <> old_number + 1
+            THEN
+                RAISE EXCEPTION
+                    'Calendar current revision pointers advance exactly one revision';
+            END IF;
+            RETURN NEW;
+        END
+        $$;
+
+
+--
+-- Name: calendar_require_state_history(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_require_state_history() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE inherited_validation text;
+        BEGIN
+            IF TG_TABLE_NAME = 'intelligence_calendar_events' THEN
+                IF OLD.identity_state IS DISTINCT FROM NEW.identity_state
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM intelligence_calendar_event_state_transitions
+                       WHERE event_id = NEW.id
+                         AND occurrence_id IS NULL
+                         AND dimension = 'identity'
+                         AND previous_state = OLD.identity_state
+                         AND next_state = NEW.identity_state
+                         AND transitioned_at >= transaction_timestamp()
+                   )
+                THEN
+                    RAISE EXCEPTION
+                        'Event identity change requires same-transaction history';
+                END IF;
+                IF OLD.validation_state IS DISTINCT FROM NEW.validation_state
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM intelligence_calendar_event_state_transitions
+                       WHERE event_id = NEW.id
+                         AND occurrence_id IS NULL
+                         AND dimension = 'validation'
+                         AND previous_state = OLD.validation_state
+                         AND next_state = NEW.validation_state
+                         AND transitioned_at >= transaction_timestamp()
+                   )
+                THEN
+                    RAISE EXCEPTION
+                        'Event validation change requires same-transaction history';
+                END IF;
+                IF NEW.identity_state = 'merged'
+                   AND (
+                       NEW.merged_into_event_id IS NULL
+                       OR NOT EXISTS (
+                           SELECT 1
+                           FROM intelligence_calendar_event_merge_history
+                           WHERE loser_event_id = NEW.id
+                             AND winner_event_id = NEW.merged_into_event_id
+                             AND merged_at >= transaction_timestamp()
+                       )
+                   )
+                THEN
+                    RAISE EXCEPTION
+                        'merged Event requires same-transaction merge history';
+                END IF;
+            ELSE
+                IF OLD.schedule_state IS DISTINCT FROM NEW.schedule_state
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM intelligence_calendar_event_state_transitions
+                       WHERE event_id = NEW.event_id
+                         AND occurrence_id = NEW.id
+                         AND dimension = 'schedule'
+                         AND previous_state = OLD.schedule_state
+                         AND next_state = NEW.schedule_state
+                         AND transitioned_at >= transaction_timestamp()
+                   )
+                THEN
+                    RAISE EXCEPTION
+                        'Occurrence schedule change requires same-transaction history';
+                END IF;
+                IF OLD.validation_state IS DISTINCT FROM NEW.validation_state THEN
+                    SELECT validation_state INTO inherited_validation
+                    FROM intelligence_calendar_events
+                    WHERE id = NEW.event_id;
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM intelligence_calendar_event_state_transitions
+                        WHERE event_id = NEW.event_id
+                          AND occurrence_id = NEW.id
+                          AND dimension = 'validation'
+                          AND previous_state = COALESCE(
+                              OLD.validation_state,
+                              inherited_validation
+                          )
+                          AND next_state = NEW.validation_state
+                          AND transitioned_at >= transaction_timestamp()
+                    )
+                    THEN
+                        RAISE EXCEPTION
+                            'Occurrence validation change requires '
+                            'same-transaction history';
+                    END IF;
+                END IF;
+            END IF;
+            RETURN NULL;
         END
         $$;
 
@@ -2464,6 +2610,7 @@ CREATE TABLE public.intelligence_calendar_event_recurrence_rules (
     actor_label character varying(255),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'ai_job'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_all_day_7d90 CHECK (((NOT all_day) OR (duration_seconds IS NULL) OR ((duration_seconds % 86400) = 0))),
     CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_duratio_6c64 CHECK (((duration_seconds IS NULL) OR (duration_seconds > 0))),
     CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_horizon CHECK (((materialization_horizon_days >= 1) AND (materialization_horizon_days <= 3660))),
     CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_start_mode CHECK (((all_day AND (dtstart_date IS NOT NULL) AND (dtstart_local IS NULL) AND (timezone_name IS NULL)) OR ((NOT all_day) AND (dtstart_local IS NOT NULL) AND (dtstart_date IS NULL) AND (timezone_name IS NOT NULL)))),
@@ -2602,6 +2749,8 @@ CREATE TABLE public.intelligence_calendar_event_state_transitions (
     CONSTRAINT ck_intelligence_calendar_event_state_transitions_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'ai_job'::character varying])::text[]))),
     CONSTRAINT ck_intelligence_calendar_event_state_transitions_dimens_37c8 CHECK (((((dimension)::text = 'identity'::text) AND ((previous_state)::text = ANY ((ARRAY['active'::character varying, 'archived'::character varying, 'merged'::character varying])::text[])) AND ((next_state)::text = ANY ((ARRAY['active'::character varying, 'archived'::character varying, 'merged'::character varying])::text[]))) OR (((dimension)::text = 'validation'::text) AND ((previous_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[])) AND ((next_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))) OR (((dimension)::text = 'schedule'::text) AND ((previous_state)::text = ANY ((ARRAY['tentative'::character varying, 'scheduled'::character varying, 'postponed'::character varying, 'cancelled'::character varying])::text[])) AND ((next_state)::text = ANY ((ARRAY['tentative'::character varying, 'scheduled'::character varying, 'postponed'::character varying, 'cancelled'::character varying])::text[]))) OR (((dimension)::text = 'outcome'::text) AND ((previous_state)::text = ANY ((ARRAY['pending'::character varying, 'in_progress'::character varying, 'occurred'::character varying, 'partially_occurred'::character varying, 'did_not_occur'::character varying, 'unknown'::character varying])::text[])) AND ((next_state)::text = ANY ((ARRAY['pending'::character varying, 'in_progress'::character varying, 'occurred'::character varying, 'partially_occurred'::character varying, 'did_not_occur'::character varying, 'unknown'::character varying])::text[]))))),
     CONSTRAINT ck_intelligence_calendar_event_state_transitions_dimension CHECK (((dimension)::text = ANY ((ARRAY['identity'::character varying, 'validation'::character varying, 'schedule'::character varying, 'outcome'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_legal__04f0 CHECK (((((dimension)::text = 'identity'::text) AND ((((previous_state)::text = 'active'::text) AND ((next_state)::text = ANY ((ARRAY['archived'::character varying, 'merged'::character varying])::text[]))) OR (((previous_state)::text = 'archived'::text) AND ((next_state)::text = 'active'::text)))) OR (((dimension)::text = 'validation'::text) AND ((((previous_state)::text = 'candidate'::text) AND ((next_state)::text = ANY ((ARRAY['probable'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))) OR (((previous_state)::text = 'probable'::text) AND ((next_state)::text = ANY ((ARRAY['verified'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))) OR (((previous_state)::text = 'verified'::text) AND ((next_state)::text = ANY ((ARRAY['confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))) OR (((previous_state)::text = 'confirmed'::text) AND ((next_state)::text = 'disputed'::text)) OR (((previous_state)::text = 'disputed'::text) AND ((next_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'rejected'::character varying])::text[]))) OR (((previous_state)::text = 'rejected'::text) AND ((next_state)::text = 'candidate'::text)))) OR (((dimension)::text = 'schedule'::text) AND ((((previous_state)::text = 'tentative'::text) AND ((next_state)::text = ANY ((ARRAY['scheduled'::character varying, 'postponed'::character varying, 'cancelled'::character varying])::text[]))) OR (((previous_state)::text = 'scheduled'::text) AND ((next_state)::text = ANY ((ARRAY['postponed'::character varying, 'cancelled'::character varying])::text[]))) OR (((previous_state)::text = 'postponed'::text) AND ((next_state)::text = ANY ((ARRAY['scheduled'::character varying, 'cancelled'::character varying])::text[]))))))),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_phase1_0704 CHECK (((dimension)::text <> 'outcome'::text)),
     CONSTRAINT ck_intelligence_calendar_event_state_transitions_schedu_9990 CHECK (((((dimension)::text = 'schedule'::text) AND (occurrence_id IS NOT NULL)) OR ((dimension)::text <> 'schedule'::text))),
     CONSTRAINT ck_intelligence_calendar_event_state_transitions_state_changes CHECK (((previous_state)::text <> (next_state)::text))
 );
@@ -2791,12 +2940,14 @@ CREATE TABLE public.intelligence_calendar_occurrence_schedule_revisions (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__0a53 CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'ai_job'::character varying])::text[]))),
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__1e22 CHECK (((date_precision)::text = ANY ((ARRAY['exact'::character varying, 'range'::character varying, 'month'::character varying, 'quarter'::character varying, 'year'::character varying, 'approximate'::character varying, 'unknown'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__23e2 CHECK (((((temporal_mode)::text = 'timed'::text) AND ((time_precision)::text <> 'not_applicable'::text)) OR ((temporal_mode)::text <> 'timed'::text))),
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__2686 CHECK (((((temporal_mode)::text = 'date'::text) AND ((time_precision)::text = 'not_applicable'::text)) OR ((temporal_mode)::text <> 'date'::text))),
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__4862 CHECK (((time_precision)::text = ANY ((ARRAY['exact'::character varying, 'approximate'::character varying, 'part_of_day'::character varying, 'unknown'::character varying, 'not_applicable'::character varying])::text[]))),
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__5417 CHECK (((temporal_mode)::text = ANY ((ARRAY['timed'::character varying, 'date'::character varying, 'unknown'::character varying])::text[]))),
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__a151 CHECK (((((temporal_mode)::text = 'timed'::text) AND (scheduled_start_at IS NOT NULL) AND (start_date IS NULL) AND (end_date_exclusive IS NULL) AND (timezone_name IS NOT NULL) AND (NOT all_day)) OR (((temporal_mode)::text = 'date'::text) AND (scheduled_start_at IS NULL) AND (scheduled_end_at IS NULL) AND (start_date IS NOT NULL) AND (end_date_exclusive IS NOT NULL) AND all_day) OR (((temporal_mode)::text = 'unknown'::text) AND (scheduled_start_at IS NULL) AND (scheduled_end_at IS NULL) AND (start_date IS NULL) AND (end_date_exclusive IS NULL) AND (NOT all_day)))),
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__aaff CHECK (((scheduled_end_at IS NULL) OR (scheduled_end_at > scheduled_start_at))),
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__bc1f CHECK ((revision_number > 0)),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__caee CHECK (((((temporal_mode)::text = 'unknown'::text) AND ((date_precision)::text = 'unknown'::text) AND ((time_precision)::text = 'unknown'::text)) OR ((temporal_mode)::text <> 'unknown'::text))),
     CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__d8bc CHECK (((end_date_exclusive IS NULL) OR (end_date_exclusive > start_date)))
 );
 
@@ -6066,6 +6217,20 @@ CREATE CONSTRAINT TRIGGER revisions_preserve_monitor_current AFTER DELETE OR UPD
 
 
 --
+-- Name: intelligence_calendar_events trg_calendar_events_forward_revision; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_events_forward_revision AFTER UPDATE ON public.intelligence_calendar_events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_require_forward_revision();
+
+
+--
+-- Name: intelligence_calendar_events trg_calendar_events_state_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_events_state_history AFTER UPDATE ON public.intelligence_calendar_events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_require_state_history();
+
+
+--
 -- Name: intelligence_calendar_event_evidence trg_calendar_evidence_source; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -6084,6 +6249,20 @@ CREATE TRIGGER trg_calendar_merge_history BEFORE INSERT ON public.intelligence_c
 --
 
 CREATE TRIGGER trg_calendar_monitor_profile BEFORE INSERT OR UPDATE ON public.intelligence_calendar_event_monitors FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_monitor_profile();
+
+
+--
+-- Name: intelligence_calendar_event_occurrences trg_calendar_occurrences_forward_revision; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_occurrences_forward_revision AFTER UPDATE ON public.intelligence_calendar_event_occurrences DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_require_forward_revision();
+
+
+--
+-- Name: intelligence_calendar_event_occurrences trg_calendar_occurrences_state_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_occurrences_state_history AFTER UPDATE ON public.intelligence_calendar_event_occurrences DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_require_state_history();
 
 
 --
@@ -7553,5 +7732,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict CrmfOXF6l65Jgm3ilY5Mr100DMYapjJPSKgBJTKmlaq8hj4yvx0LAmc963Gp8Fc
+\unrestrict OFXkLJHNcZbcErrwqX9HNuEz6cUelR5KgljRV9lhQEhxHKn42rtIb2xGqoq1GbY
 

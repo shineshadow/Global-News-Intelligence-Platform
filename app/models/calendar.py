@@ -312,6 +312,11 @@ class IntelligenceCalendarEventRecurrenceRule(Base, ActorMixin):
             name="duration_positive",
         ),
         CheckConstraint(
+            "NOT all_day OR duration_seconds IS NULL "
+            "OR duration_seconds % 86400 = 0",
+            name="all_day_duration",
+        ),
+        CheckConstraint(
             "materialization_horizon_days BETWEEN 1 AND 3660",
             name="horizon",
         ),
@@ -576,6 +581,19 @@ class IntelligenceCalendarOccurrenceScheduleRevision(Base, ActorMixin):
             name="date_time_precision",
         ),
         CheckConstraint(
+            "(temporal_mode = 'unknown' "
+            "AND date_precision = 'unknown' "
+            "AND time_precision = 'unknown') "
+            "OR temporal_mode <> 'unknown'",
+            name="unknown_precision",
+        ),
+        CheckConstraint(
+            "(temporal_mode = 'timed' "
+            "AND time_precision <> 'not_applicable') "
+            "OR temporal_mode <> 'timed'",
+            name="timed_time_precision",
+        ),
+        CheckConstraint(
             "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
             name="actor_kind",
         ),
@@ -815,6 +833,36 @@ class IntelligenceCalendarEventStateTransition(Base, ActorMixin):
             "('pending', 'in_progress', 'occurred', 'partially_occurred', "
             "'did_not_occur', 'unknown'))",
             name="dimension_states",
+        ),
+        CheckConstraint(
+            "dimension <> 'outcome'",
+            name="phase1_no_outcome",
+        ),
+        CheckConstraint(
+            "(dimension = 'identity' AND ("
+            "(previous_state = 'active' "
+            "AND next_state IN ('archived', 'merged')) OR "
+            "(previous_state = 'archived' AND next_state = 'active'))) OR "
+            "(dimension = 'validation' AND ("
+            "(previous_state = 'candidate' "
+            "AND next_state IN ('probable', 'disputed', 'rejected')) OR "
+            "(previous_state = 'probable' "
+            "AND next_state IN ('verified', 'disputed', 'rejected')) OR "
+            "(previous_state = 'verified' "
+            "AND next_state IN ('confirmed', 'disputed', 'rejected')) OR "
+            "(previous_state = 'confirmed' AND next_state = 'disputed') OR "
+            "(previous_state = 'disputed' "
+            "AND next_state IN "
+            "('candidate', 'probable', 'verified', 'confirmed', 'rejected')) OR "
+            "(previous_state = 'rejected' AND next_state = 'candidate'))) OR "
+            "(dimension = 'schedule' AND ("
+            "(previous_state = 'tentative' "
+            "AND next_state IN ('scheduled', 'postponed', 'cancelled')) OR "
+            "(previous_state = 'scheduled' "
+            "AND next_state IN ('postponed', 'cancelled')) OR "
+            "(previous_state = 'postponed' "
+            "AND next_state IN ('scheduled', 'cancelled'))))",
+            name="legal_transition",
         ),
         CheckConstraint(
             "actor_kind IN ('operator', 'system', 'import', 'ai_job')",

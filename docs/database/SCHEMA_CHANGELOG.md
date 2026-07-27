@@ -6,9 +6,10 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
-## 2026-07-27 — Intelligence Calendar Phase 1 Freeze Candidate
+## 2026-07-27 — Intelligence Calendar Phase 1 Frozen
 
-**Candidate revision:** `e27a6c9d4f10`
+**Freeze revision:** `f29b6d8e3c10`
+**Foundation revision:** `e27a6c9d4f10`
 **Revises:** `d26e5b8c1a40`
 
 Added the 22 normalized Calendar tables frozen by the Calendar Foundation
@@ -25,9 +26,16 @@ Calendar creation has no implicit Monitor or alert side effect. Explicit
 linked Monitors remain governed by Step 25, and their new document matches
 create the ordinary Step 26 `content_monitor_match` alert.
 
-The candidate passed 19 focused Calendar tests, all 209 repository tests, a
-clean downgrade/re-upgrade, destructive-downgrade refusal, and zero-drift
-Alembic comparison. Formal freeze review remains pending.
+Formal freeze review found and corrected three blockers: database state
+changes now require legal same-transaction history, unknown schedules cannot
+claim contradictory exact precision, and Calendar Monitor creation/linking is
+one atomic transaction. Current descriptive and schedule pointers also advance
+exactly one immutable revision.
+
+All 22 focused Calendar tests, all 212 repository tests, clean
+downgrade/re-upgrade, destructive-downgrade refusal, live HTTP smoke checks,
+and zero-drift Alembic comparison passed. Calendar Phase 1 is frozen at
+`f29b6d8e3c10`.
 
 ---
 

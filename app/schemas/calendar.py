@@ -78,6 +78,10 @@ class CalendarScheduleInput(BaseModel):
                 )
             ):
                 raise ValueError("unknown schedules cannot contain normalized bounds")
+            if self.date_precision != "unknown" or self.time_precision != "unknown":
+                raise ValueError("unknown schedules require unknown date/time precision")
+        if self.temporal_mode == "timed" and self.time_precision == "not_applicable":
+            raise ValueError("timed schedules require an applicable time precision")
         return self
 
 
@@ -97,6 +101,13 @@ class CalendarRecurrenceInput(BaseModel):
                 raise ValueError("all-day recurrence requires dtstart_date only")
             if self.timezone_name is not None:
                 raise ValueError("all-day recurrence does not use a timezone")
+            if (
+                self.duration_seconds is not None
+                and self.duration_seconds % 86400 != 0
+            ):
+                raise ValueError(
+                    "all-day recurrence duration must use complete local days"
+                )
         else:
             if self.dtstart_local is None or self.dtstart_date is not None:
                 raise ValueError("timed recurrence requires dtstart_local only")

@@ -1,8 +1,9 @@
 # Intelligence Calendar Phase 1
 
-**Status:** FREEZE CANDIDATE
+**Status:** FROZEN
 **Date:** 2026-07-27
-**Alembic revision:** `e27a6c9d4f10`
+**Freeze revision:** `f29b6d8e3c10`
+**Foundation revision:** `e27a6c9d4f10`
 **Revises:** `d26e5b8c1a40`
 **Authority:** `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`
 
@@ -19,9 +20,12 @@ Monitor           optional Step 25 matching authority
 Alert             ordinary Step 26 result of a new Monitor/document match
 ```
 
-The additive migration creates the 22 normalized Calendar tables authorized
-by the foundation audit. It does not seed Events, create Monitors, alter
-Step 24 matching, widen Step 26 alert classes, or perform network work.
+The additive foundation migration creates the 22 normalized Calendar tables
+authorized by the foundation audit. Freeze revision `f29b6d8e3c10` adds
+database enforcement for legal, fully historied state transitions,
+uncertainty-safe precision, forward-only current revisions, and atomic
+Calendar-to-Monitor creation. Neither migration seeds Events, alters Step 24
+matching, widens Step 26 alert classes, or performs network work.
 
 ## Implemented Capabilities
 
@@ -114,13 +118,33 @@ regression checks:
 ## Candidate Validation
 
 ```text
-Calendar-focused service/API tests       17 passed
+Calendar-focused service/API tests       20 passed
 Calendar migration tests                  2 passed
-complete repository regression          209 passed
+complete repository regression          212 passed
 Alembic drift operations                  0
 diff whitespace errors                    0
 ```
 
-Formal freeze review has not yet been performed. The candidate should be
-frozen only after reviewing the migration triggers, proof mapping, public API,
-and generated schema snapshot.
+## Formal Freeze Review
+
+The formal review found and corrected three blockers:
+
+```text
+state legality existed at the service boundary but was not fully enforced
+at the database boundary, and direct state changes could omit history
+
+unknown temporal assertions could carry contradictory exact precision
+
+create-and-link Monitor used two transactions and could leave an unintended
+unlinked Monitor when link validation failed
+```
+
+Freeze hardening now requires legal Phase 1 transition edges, same-transaction
+state and merge history, forward-only revision pointers, uncertainty-safe
+precision, complete-day all-day recurrence duration, and one transaction for
+Monitor creation plus Calendar linking.
+
+All 22 focused Calendar tests, all 212 repository tests, clean
+downgrade/re-upgrade, stateful-downgrade refusal, live HTTP smoke checks,
+lint, whitespace validation, and zero-drift Alembic comparison passed.
+Calendar Phase 1 is frozen at `f29b6d8e3c10`.

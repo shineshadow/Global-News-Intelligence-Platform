@@ -2741,8 +2741,8 @@ and direct invariant proof matrix are in
 
 #### Calendar Phase 1 — Manual Calendar
 
-**Implementation status:** FREEZE CANDIDATE at Alembic revision
-`e27a6c9d4f10`; see `INTELLIGENCE_CALENDAR_PHASE_1.md` for the implemented
+**Implementation status:** FROZEN at Alembic revision `f29b6d8e3c10`; see
+`INTELLIGENCE_CALENDAR_PHASE_1.md` for the implemented
 surface and the 29-proof mapping.
 
 Begin after the Core Platform foundation exists.

@@ -947,30 +947,50 @@ async def create_and_link_monitor(
     *,
     actor: CalendarActor,
 ) -> IntelligenceCalendarEventMonitor:
-    async with session.begin():
-        policy = await session.get(
-            IntelligenceCalendarEventCoveragePolicy, data.policy_id
-        )
-        if policy is None or policy.event_id != event_id:
-            raise InvalidUpdateError(
-                "Calendar policy does not belong to this Event."
+    try:
+        async with session.begin():
+            policy = await session.get(
+                IntelligenceCalendarEventCoveragePolicy, data.policy_id
             )
-        policy_profile_id = policy.profile_id
-    criteria_profile = data.monitor.revision.criteria.coverage_profile_id
-    if criteria_profile != policy_profile_id:
-        raise InvalidUpdateError(
-            "New Monitor criteria must use the Calendar policy Coverage Profile."
-        )
-    detail = await monitor_service.create_monitor(session, data.monitor)
-    return await link_monitor(
-        session,
-        event_id,
-        CalendarMonitorLink(
-            policy_id=data.policy_id,
-            monitor_id=detail.monitor.id,
-            occurrence_id=data.occurrence_id,
-            purpose=data.purpose,
-            is_calendar_managed=data.is_calendar_managed,
-        ),
-        actor=actor,
-    )
+            if policy is None or policy.event_id != event_id:
+                raise InvalidUpdateError(
+                    "Calendar policy does not belong to this Event."
+                )
+            criteria_profile = (
+                data.monitor.revision.criteria.coverage_profile_id
+            )
+            if criteria_profile != policy.profile_id:
+                raise InvalidUpdateError(
+                    "New Monitor criteria must use the Calendar policy "
+                    "Coverage Profile."
+                )
+            if data.occurrence_id is not None:
+                occurrence = await session.get(
+                    IntelligenceCalendarEventOccurrence,
+                    data.occurrence_id,
+                )
+                if occurrence is None or occurrence.event_id != event_id:
+                    raise InvalidUpdateError(
+                        "Calendar Occurrence does not belong to this Event."
+                    )
+            detail = await monitor_service.create_monitor_in_transaction(
+                session,
+                data.monitor,
+            )
+            link = IntelligenceCalendarEventMonitor(
+                event_id=event_id,
+                occurrence_id=data.occurrence_id,
+                policy_id=policy.id,
+                monitor_id=detail.monitor.id,
+                purpose=data.purpose,
+                is_calendar_managed=data.is_calendar_managed,
+                link_status="linked",
+                **_actor_values(actor),
+            )
+            session.add(link)
+            await session.flush()
+            return link
+    except IntegrityError as exc:
+        raise ResourceConflictError(
+            "Calendar Monitor creation conflicts with existing state."
+        ) from exc
