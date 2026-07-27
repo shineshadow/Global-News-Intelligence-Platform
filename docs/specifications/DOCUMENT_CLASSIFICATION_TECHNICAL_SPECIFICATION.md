@@ -1337,7 +1337,7 @@ keyword/rule classification
 alias matching
 ```
 
-### Classification Phase 3A — Step 24 Filtering — Next
+### Classification Phase 3A — Step 24 Filtering — Frozen
 
 Add:
 
@@ -1349,7 +1349,7 @@ coverage-profile scope
 duplicate-safe pagination and counts
 ```
 
-### Classification Phase 3B — Step 25 Monitoring
+### Classification Phase 3B — Step 25 Monitoring — Next
 
 Add:
 

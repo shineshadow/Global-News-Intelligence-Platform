@@ -636,7 +636,7 @@ provenance, and history.
 The next work is:
 
 ```text
-Step 24   — Classification-aware document filters
+Step 24   — Classification-aware document filters (frozen; no schema change)
 Step 25   — Monitor Rule Engine
 Step 26   — Alerts / ntfy
 ```

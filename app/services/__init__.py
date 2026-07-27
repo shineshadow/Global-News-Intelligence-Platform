@@ -11,6 +11,10 @@ from app.services.coverage_profile_service import (
     resolve_coverage_profile_scope,
     set_source_polling_priority,
 )
+from app.services.document_matching_service import (
+    DocumentMatchPlan,
+    build_document_match_plan,
+)
 from app.services.entity_semantics_service import (
     assert_entity_geography,
     assign_entity_type,
@@ -29,6 +33,7 @@ from app.services.ingestion_service import (
 
 __all__ = [
     "DeterministicClassificationSummary",
+    "DocumentMatchPlan",
     "EndpointPollSummary",
     "InvalidUpdateError",
     "ResolvedCoverageProfileScope",
@@ -37,6 +42,7 @@ __all__ = [
     "ServiceError",
     "assert_entity_geography",
     "assign_entity_type",
+    "build_document_match_plan",
     "classify_document_by_id",
     "classify_document_deterministically",
     "create_coverage_profile",

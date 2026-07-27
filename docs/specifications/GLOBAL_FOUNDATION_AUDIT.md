@@ -209,6 +209,7 @@ The main track now proceeds:
 
 ```text
 Step 24  Classification-aware News Feed filters and shared matching contract
+         (frozen)
 Step 25  Persistent Monitor Rule Engine
 Step 26  Alert delivery and ntfy integration
 ```

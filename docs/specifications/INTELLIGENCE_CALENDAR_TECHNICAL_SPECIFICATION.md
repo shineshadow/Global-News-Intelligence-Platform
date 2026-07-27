@@ -2820,6 +2820,9 @@ particular, Calendar monitoring priority, watch sources, temporary monitors,
 and polling escalation are operator configuration and must not be silently
 collapsed into globally canonical Calendar Event facts.
 
+The active decision register is maintained in
+`INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`.
+
 ### Calendar Phase 1 — Manual Calendar
 
 Build:
