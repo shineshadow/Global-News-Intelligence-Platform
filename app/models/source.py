@@ -1,15 +1,35 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, DateTime, Index, String, Text, func, text
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    and_,
+    func,
+    select,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    Mapped,
+    column_property,
+    mapped_column,
+    relationship,
+)
 
 from app.models.base import Base
+from app.models.coverage_profile import (
+    CoverageProfile,
+    CoverageProfileSourcePollingOverride,
+)
 
 if TYPE_CHECKING:
     from app.models.document import Document
-    from app.models.ingestion_run import IngestionRun    
+    from app.models.ingestion_run import IngestionRun
     from app.models.source_endpoint import SourceEndpoint
 
 class Source(Base):
@@ -45,12 +65,20 @@ class Source(Base):
     )
 
     primary_language: Mapped[str] = mapped_column(
-        String(20),
+        String(255),
+        ForeignKey(
+            "language_tags.tag",
+            ondelete="RESTRICT",
+        ),
         nullable=False,
     )
 
     source_type: Mapped[str] = mapped_column(
         String(50),
+        ForeignKey(
+            "source_types.slug",
+            ondelete="RESTRICT",
+        ),
         nullable=False,
         index=True,
     )
@@ -59,13 +87,6 @@ class Source(Base):
         String(30),
         nullable=False,
         server_default="active",
-        index=True,
-    )
-
-    priority: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        server_default="normal",
         index=True,
     )
 
@@ -94,6 +115,34 @@ class Source(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+    priority: Mapped[str] = column_property(
+        func.coalesce(
+            select(
+                func.coalesce(
+                    CoverageProfileSourcePollingOverride.polling_priority,
+                    CoverageProfile.default_polling_priority,
+                )
+            )
+            .select_from(CoverageProfile)
+            .outerjoin(
+                CoverageProfileSourcePollingOverride,
+                and_(
+                    CoverageProfileSourcePollingOverride.profile_id
+                    == CoverageProfile.id,
+                    CoverageProfileSourcePollingOverride.source_id
+                    == id,
+                ),
+            )
+            .where(CoverageProfile.is_default.is_(True))
+            .correlate_except(
+                CoverageProfile,
+                CoverageProfileSourcePollingOverride,
+            )
+            .scalar_subquery(),
+            "normal",
+        )
     )
 
     endpoints: Mapped[list["SourceEndpoint"]] = relationship(

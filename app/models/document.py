@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
-    from app.models.document_version import DocumentVersion    
+    from app.models.document_version import DocumentVersion
     from app.models.source import Source
     from app.models.source_endpoint import SourceEndpoint
 
@@ -45,8 +45,13 @@ class Document(Base):
             "published_at",
         ),
         Index(
-            "ix_documents_source_type_published_at",
-            "source_type",
+            "ix_documents_ingestion_format_published_at",
+            "ingestion_format",
+            "published_at",
+        ),
+        Index(
+            "ix_documents_content_format_published_at",
+            "content_format",
             "published_at",
         ),
     )
@@ -77,11 +82,22 @@ class Document(Base):
         index=True,
     )
 
-    source_type: Mapped[str] = mapped_column(
-        String(30),
+    ingestion_format: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey(
+            "endpoint_formats.slug",
+            ondelete="RESTRICT",
+        ),
         nullable=False,
-        server_default="rss",
-        index=True,
+    )
+
+    content_format: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey(
+            "content_formats.slug",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
     )
 
     external_id: Mapped[str | None] = mapped_column(
@@ -110,7 +126,11 @@ class Document(Base):
     )
 
     language: Mapped[str | None] = mapped_column(
-        String(20),
+        String(255),
+        ForeignKey(
+            "language_tags.tag",
+            ondelete="RESTRICT",
+        ),
         nullable=True,
         index=True,
     )
@@ -184,7 +204,7 @@ class Document(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="DocumentVersion.version_number",
-    )    
+    )
 
     def __repr__(self) -> str:
         return (

@@ -7,6 +7,7 @@ Generated files:
 - `ARCHITECTURE.md`
 - `BENCHMARK_PROCEDURES.md`
 - `CANONICAL_TOPIC_TAXONOMY.md` — authoritative frozen 23-root topic taxonomy and versioning policy
+- `GFA_C_CANONICAL_ENTITY_TYPE_TAXONOMY.md` — GFA-C entity-type, external semantic mapping, and entity-geography foundation candidate
 - `DATABASE_SCHEMA_SPECIFICATION.md`
 - `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`
 - `IMPLEMENTATION.md`

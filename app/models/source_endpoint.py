@@ -73,9 +73,42 @@ class SourceEndpoint(Base):
     )
 
     endpoint_type: Mapped[str] = mapped_column(
-        String(30),
+        String(50),
+        ForeignKey(
+            "endpoint_types.slug",
+            ondelete="RESTRICT",
+        ),
         nullable=False,
-        server_default="rss",
+        index=True,
+    )
+
+    endpoint_format: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey(
+            "endpoint_formats.slug",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    acquisition_method: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey(
+            "acquisition_methods.slug",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    platform: Mapped[str | None] = mapped_column(
+        String(50),
+        ForeignKey(
+            "platforms.slug",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
         index=True,
     )
 

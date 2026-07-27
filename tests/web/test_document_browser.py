@@ -106,7 +106,9 @@ async def create_document(
                 source_endpoint_id=
                     endpoint_id,
 
-                source_type="rss",
+                ingestion_format="rss",
+
+                content_format="plain_text",
 
                 external_id=
                     f"external-{value}",
@@ -464,6 +466,9 @@ async def test_document_version_history(
 
                 content_original=
                     "Old content",
+
+                content_format=
+                    "plain_text",
 
                 language="en",
 

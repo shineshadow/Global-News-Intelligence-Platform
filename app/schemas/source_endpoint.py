@@ -16,9 +16,27 @@ class SourceEndpointBase(BaseModel):
     )
 
     endpoint_type: str = Field(
-        default="rss",
+        default="feed",
         min_length=1,
-        max_length=30,
+        max_length=50,
+    )
+
+    endpoint_format: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+
+    acquisition_method: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+
+    platform: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
     )
 
     url: HttpUrl
@@ -34,6 +52,8 @@ class SourceEndpointBase(BaseModel):
 
     @field_validator(
         "endpoint_type",
+        "endpoint_format",
+        "acquisition_method",
         mode="before",
     )
     @classmethod
@@ -45,6 +65,7 @@ class SourceEndpointBase(BaseModel):
 
     @field_validator(
         "name",
+        "platform",
         mode="before",
     )
     @classmethod
@@ -73,7 +94,25 @@ class SourceEndpointUpdate(BaseModel):
     endpoint_type: str | None = Field(
         default=None,
         min_length=1,
-        max_length=30,
+        max_length=50,
+    )
+
+    endpoint_format: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+
+    acquisition_method: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+
+    platform: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
     )
 
     url: HttpUrl | None = None
@@ -87,6 +126,8 @@ class SourceEndpointUpdate(BaseModel):
 
     @field_validator(
         "endpoint_type",
+        "endpoint_format",
+        "acquisition_method",
         mode="before",
     )
     @classmethod
@@ -98,6 +139,7 @@ class SourceEndpointUpdate(BaseModel):
 
     @field_validator(
         "name",
+        "platform",
         mode="before",
     )
     @classmethod
@@ -118,6 +160,9 @@ class SourceEndpointRead(BaseModel):
     source_id: int
     name: str | None
     endpoint_type: str
+    endpoint_format: str
+    acquisition_method: str
+    platform: str | None
     url: str
     status: EndpointStatus
     poll_interval_seconds: int

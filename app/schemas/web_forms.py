@@ -8,6 +8,8 @@ from pydantic import (
     field_validator,
 )
 
+from app.language_tags import require_language_tag
+
 
 def validate_http_url(
     value: str | None,
@@ -52,7 +54,7 @@ class SourceLifecycleForm(BaseModel):
 
     primary_language: str = Field(
         min_length=1,
-        max_length=50,
+        max_length=255,
     )
 
     source_type: str = Field(
@@ -94,6 +96,14 @@ class SourceLifecycleForm(BaseModel):
         value: str | None,
     ) -> str | None:
         return validate_http_url(value)
+
+    @field_validator("primary_language")
+    @classmethod
+    def canonicalize_primary_language(
+        cls,
+        value: str,
+    ) -> str:
+        return require_language_tag(value)
 
 
 class EndpointLifecycleForm(BaseModel):

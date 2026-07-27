@@ -20,7 +20,6 @@ from app.config import settings
 from app.database import get_db_session
 from app.main import app
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -35,10 +34,7 @@ def require_test_database_url() -> str:
     test_database_url = settings.test_database_url
 
     if not test_database_url:
-        raise RuntimeError(
-            "TEST_DATABASE_URL is missing. "
-            "Add it to the repository's .env file."
-        )
+        raise RuntimeError("TEST_DATABASE_URL is missing. Add it to the repository's .env file.")
 
     development_url = make_url(settings.database_url)
     test_url = make_url(test_database_url)
@@ -47,20 +43,16 @@ def require_test_database_url() -> str:
     test_database = test_url.database
 
     if not test_database:
-        raise RuntimeError(
-            "TEST_DATABASE_URL does not contain a database name."
-        )
+        raise RuntimeError("TEST_DATABASE_URL does not contain a database name.")
 
     if "test" not in test_database.lower():
         raise RuntimeError(
-            "Refusing to run tests because the test database name "
-            'does not contain the word "test".'
+            'Refusing to run tests because the test database name does not contain the word "test".'
         )
 
     if test_database == development_database:
         raise RuntimeError(
-            "Refusing to run tests because TEST_DATABASE_URL points "
-            "to the development database."
+            "Refusing to run tests because TEST_DATABASE_URL points to the development database."
         )
 
     return test_database_url
@@ -112,11 +104,24 @@ def apply_test_migrations() -> None:
 
 
 async def truncate_test_tables() -> None:
-    """Remove test records while preserving the migrated schema."""
+    """Remove test records while preserving migrated reference seeds."""
 
     statement = text(
         """
         TRUNCATE TABLE
+            coverage_profile_source_polling_overrides,
+            coverage_profile_content_formats,
+            coverage_profile_document_types,
+            coverage_profile_translation_targets,
+            coverage_profile_languages,
+            coverage_profile_sources,
+            coverage_profile_source_types,
+            coverage_profile_topics,
+            coverage_profile_geographies,
+            entity_geographies,
+            entity_type_assignments,
+            entity_aliases,
+            entities,
             document_versions,
             documents,
             ingestion_runs,
@@ -128,6 +133,62 @@ async def truncate_test_tables() -> None:
 
     async with test_engine.begin() as connection:
         await connection.execute(statement)
+        await connection.execute(
+            text(
+                """
+                DELETE FROM
+                    entity_geography_relationship_type_external_mappings
+                WHERE provenance ->> 'seed_set' IS DISTINCT FROM 'gfa_c_5';
+
+                DELETE FROM entity_type_external_mappings
+                WHERE provenance ->> 'seed_set' IS DISTINCT FROM 'gfa_c_5';
+
+                DELETE FROM entity_type_hierarchy_edges
+                WHERE parent_entity_type_id IN (
+                    SELECT id
+                    FROM entity_types
+                    WHERE metadata ->> 'seed_set'
+                        IS DISTINCT FROM 'gfa_c_5'
+                )
+                OR child_entity_type_id IN (
+                    SELECT id
+                    FROM entity_types
+                    WHERE metadata ->> 'seed_set'
+                        IS DISTINCT FROM 'gfa_c_5'
+                );
+
+                DELETE FROM entity_geography_relationship_types
+                WHERE metadata ->> 'seed_set'
+                    IS DISTINCT FROM 'gfa_c_5';
+
+                DELETE FROM entity_types
+                WHERE metadata ->> 'seed_set'
+                    IS DISTINCT FROM 'gfa_c_5';
+
+                DELETE FROM external_semantic_resources
+                WHERE metadata ->> 'seed_set'
+                    IS DISTINCT FROM 'gfa_c_5';
+
+                DELETE FROM external_semantic_schemes
+                WHERE metadata ->> 'seed_set'
+                    IS DISTINCT FROM 'gfa_c_5';
+
+                DELETE FROM external_semantic_authorities
+                WHERE metadata ->> 'seed_set'
+                    IS DISTINCT FROM 'gfa_c_5';
+
+                DELETE FROM coverage_profiles
+                WHERE metadata ->> 'seed_set'
+                    IS DISTINCT FROM 'gfa_e_1';
+
+                UPDATE coverage_profiles
+                SET is_active = true,
+                    is_default = true,
+                    default_polling_priority = 'normal'
+                WHERE metadata ->> 'seed_set' = 'gfa_e_1';
+                """
+            )
+        )
 
 
 @pytest_asyncio.fixture(
@@ -173,9 +234,7 @@ async def client() -> AsyncIterator[AsyncClient]:
                 await session.rollback()
                 raise
 
-    app.dependency_overrides[get_db_session] = (
-        override_get_db_session
-    )
+    app.dependency_overrides[get_db_session] = override_get_db_session
 
     transport = ASGITransport(
         app=app,
@@ -189,6 +248,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         yield test_client
 
     app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def database_session_factory():

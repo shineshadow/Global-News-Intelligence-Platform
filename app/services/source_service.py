@@ -3,8 +3,9 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.language_tags import require_language_tag
 from app.models import Source
-from app.repositories import source_repository
+from app.repositories import coverage_profile_repository, source_repository
 from app.schemas import (
     SourceCreate,
     SourceStatus,
@@ -14,8 +15,9 @@ from app.services.exceptions import (
     InvalidUpdateError,
     ResourceConflictError,
     ResourceNotFoundError,
+    ServiceUnavailableError,
 )
-
+from app.services.language_service import ensure_language_tag
 
 NON_NULLABLE_SOURCE_FIELDS = {
     "name",
@@ -27,15 +29,31 @@ NON_NULLABLE_SOURCE_FIELDS = {
 }
 
 
+LEGACY_SOURCE_TYPE_MAP = {
+    "news": "news_organization",
+    "research": "research_institute",
+}
+
+
 def _normalize_source_values(
     values: dict[str, Any],
 ) -> dict[str, Any]:
-    """Convert schema-specific values into ORM-compatible values."""
+    """Convert legacy/API values into canonical ORM-compatible values."""
 
     website_url = values.get("website_url")
 
     if website_url is not None:
         values["website_url"] = str(website_url)
+
+    primary_language = values.get("primary_language")
+    if primary_language is not None:
+        values["primary_language"] = require_language_tag(
+            primary_language
+        )
+
+    source_type = values.get("source_type")
+    if source_type in LEGACY_SOURCE_TYPE_MAP:
+        values["source_type"] = LEGACY_SOURCE_TYPE_MAP[source_type]
 
     return values
 
@@ -68,11 +86,17 @@ async def create_source(
     values = _normalize_source_values(
         data.model_dump()
     )
+    priority = values.pop("priority")
 
     values["status"] = "active"
 
     try:
         async with session.begin():
+            await ensure_language_tag(
+                session,
+                values["primary_language"],
+            )
+
             website_url = values.get("website_url")
 
             if website_url is not None:
@@ -88,10 +112,34 @@ async def create_source(
                         "A source with this website URL already exists."
                     )
 
-            return await source_repository.create_source(
+            source = await source_repository.create_source(
                 session,
                 values,
             )
+            default_profile = (
+                await coverage_profile_repository.get_default_profile(
+                    session,
+                    for_update=True,
+                )
+            )
+            if default_profile is not None:
+                await coverage_profile_repository.set_polling_override(
+                    session,
+                    profile_id=default_profile.id,
+                    source_id=source.id,
+                    polling_priority=(
+                        priority
+                        if priority
+                        != default_profile.default_polling_priority
+                        else None
+                    ),
+                )
+            else:
+                raise ServiceUnavailableError(
+                    "No default coverage profile is configured."
+                )
+            source.priority = priority
+            return source
 
     except IntegrityError as exc:
         raise ResourceConflictError(
@@ -148,8 +196,9 @@ async def update_source(
 
     _validate_source_update(values)
     _normalize_source_values(values)
+    priority = values.pop("priority", None)
 
-    if not values:
+    if not values and priority is None:
         return await get_source(
             session,
             source_id,
@@ -157,6 +206,12 @@ async def update_source(
 
     try:
         async with session.begin():
+            if "primary_language" in values:
+                await ensure_language_tag(
+                    session,
+                    values["primary_language"],
+                )
+
             source = await source_repository.get_source_by_id(
                 session,
                 source_id,
@@ -183,11 +238,36 @@ async def update_source(
                         "Another source already uses this website URL."
                     )
 
-            return await source_repository.update_source(
+            source = await source_repository.update_source(
                 session,
                 source,
                 values,
             )
+            if priority is not None:
+                default_profile = (
+                    await coverage_profile_repository.get_default_profile(
+                        session,
+                        for_update=True,
+                    )
+                )
+                if default_profile is not None:
+                    await coverage_profile_repository.set_polling_override(
+                        session,
+                        profile_id=default_profile.id,
+                        source_id=source.id,
+                        polling_priority=(
+                            priority
+                            if priority
+                            != default_profile.default_polling_priority
+                            else None
+                        ),
+                    )
+                else:
+                    raise ServiceUnavailableError(
+                        "No default coverage profile is configured."
+                    )
+                source.priority = priority
+            return source
 
     except IntegrityError as exc:
         raise ResourceConflictError(

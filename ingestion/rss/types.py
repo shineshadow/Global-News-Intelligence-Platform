@@ -31,6 +31,7 @@ class ParsedFeedItem:
     title_original: str
     summary_original: str | None
     content_original: str | None
+    content_format: str
 
     language: str | None
     author: str | None

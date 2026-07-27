@@ -11,12 +11,19 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.database import async_session_factory
+from app.language_tags import require_language_tag
 from app.models import Source, SourceEndpoint
+from app.models.coverage_profile import POLLING_PRIORITIES
 from app.repositories import (
+    coverage_profile_repository,
     source_endpoint_repository,
     source_repository,
 )
-from app.services.exceptions import ResourceConflictError
+from app.services.exceptions import (
+    ResourceConflictError,
+    ServiceUnavailableError,
+)
+from app.services.language_service import ensure_language_tag
 
 
 @dataclass(slots=True, frozen=True)
@@ -119,6 +126,17 @@ async def import_source_inventory(
 
     async with session_factory() as session:
         async with session.begin():
+            default_profile = (
+                await coverage_profile_repository.get_default_profile(
+                    session,
+                    for_update=True,
+                )
+            )
+            if default_profile is None:
+                raise ServiceUnavailableError(
+                    "No default coverage profile is configured."
+                )
+
             existing_sources = list(
                 (
                     await session.scalars(
@@ -161,6 +179,19 @@ async def import_source_inventory(
                 metadata = _read_metadata(
                     row["metadata_json"]
                 )
+                primary_language = require_language_tag(
+                    row["primary_language"]
+                )
+                await ensure_language_tag(
+                    session,
+                    primary_language,
+                )
+                priority = row["priority"]
+                if priority not in POLLING_PRIORITIES:
+                    raise ValueError(
+                        "Inventory source priority must be one of: "
+                        + ", ".join(POLLING_PRIORITIES)
+                    )
 
                 if source is None:
                     source = (
@@ -170,18 +201,33 @@ async def import_source_inventory(
                                 "name": row["name"],
                                 "country": row["country"],
                                 "primary_language": (
-                                    row["primary_language"]
+                                    primary_language
                                 ),
                                 "source_type": (
                                     row["source_type"]
                                 ),
                                 "status": "active",
-                                "priority": row["priority"],
                                 "website_url": website_url,
                                 "source_metadata": metadata,
                             },
                         )
                     )
+                    await (
+                        coverage_profile_repository
+                        .set_polling_override(
+                            session,
+                            profile_id=default_profile.id,
+                            source_id=source.id,
+                            polling_priority=(
+                                priority
+                                if priority
+                                != default_profile
+                                .default_polling_priority
+                                else None
+                            ),
+                        )
+                    )
+                    source.priority = priority
 
                     source_by_url[
                         normalized_url

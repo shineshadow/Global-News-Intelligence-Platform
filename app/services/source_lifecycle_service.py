@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Source, SourceEndpoint
 from app.repositories import (
+    coverage_profile_repository,
     source_endpoint_repository,
     source_repository,
 )
@@ -17,11 +18,47 @@ from app.services.exceptions import (
     InvalidUpdateError,
     ResourceConflictError,
     ResourceNotFoundError,
+    ServiceUnavailableError,
+)
+from app.services.language_service import ensure_language_tag
+from app.services.source_endpoint_service import (
+    _normalize_endpoint_values,
+)
+from app.services.source_service import (
+    _normalize_source_values,
 )
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+async def _set_default_profile_priority(
+    session: AsyncSession,
+    *,
+    source_id: int,
+    priority: str,
+) -> None:
+    profile = (
+        await coverage_profile_repository.get_default_profile(
+            session,
+            for_update=True,
+        )
+    )
+    if profile is None:
+        raise ServiceUnavailableError(
+            "No default coverage profile is configured."
+        )
+    await coverage_profile_repository.set_polling_override(
+        session,
+        profile_id=profile.id,
+        source_id=source_id,
+        polling_priority=(
+            priority
+            if priority != profile.default_polling_priority
+            else None
+        ),
+    )
 
 
 async def get_source_for_lifecycle(
@@ -92,24 +129,34 @@ async def create_source(
                 "that website URL."
             )
 
+    values = {
+        "name": form.name,
+        "native_name": form.native_name,
+        "country": form.country,
+        "primary_language": form.primary_language,
+        "source_type": form.source_type,
+        "status": "active",
+        "website_url": form.website_url,
+        "source_metadata": {
+            "created_from": "web",
+        },
+    }
+    _normalize_source_values(values)
+    await ensure_language_tag(
+        session,
+        values["primary_language"],
+    )
+
     source = await source_repository.create_source(
         session,
-        {
-            "name": form.name,
-            "native_name": form.native_name,
-            "country": form.country,
-            "primary_language": (
-                form.primary_language
-            ),
-            "source_type": form.source_type,
-            "status": "active",
-            "priority": form.priority,
-            "website_url": form.website_url,
-            "source_metadata": {
-                "created_from": "web",
-            },
-        },
+        values,
     )
+    await _set_default_profile_priority(
+        session,
+        source_id=source.id,
+        priority=form.priority,
+    )
+    source.priority = form.priority
 
     await _commit_or_conflict(
         session,
@@ -145,21 +192,31 @@ async def update_source(
                 "that website URL."
             )
 
+    values = {
+        "name": form.name,
+        "native_name": form.native_name,
+        "country": form.country,
+        "primary_language": form.primary_language,
+        "source_type": form.source_type,
+        "website_url": form.website_url,
+    }
+    _normalize_source_values(values)
+    await ensure_language_tag(
+        session,
+        values["primary_language"],
+    )
+
     source = await source_repository.update_source(
         session,
         source,
-        {
-            "name": form.name,
-            "native_name": form.native_name,
-            "country": form.country,
-            "primary_language": (
-                form.primary_language
-            ),
-            "source_type": form.source_type,
-            "priority": form.priority,
-            "website_url": form.website_url,
-        },
+        values,
     )
+    await _set_default_profile_priority(
+        session,
+        source_id=source.id,
+        priority=form.priority,
+    )
+    source.priority = form.priority
 
     await _commit_or_conflict(
         session,
@@ -285,37 +342,31 @@ async def create_endpoint(
             "that URL."
         )
 
+    values = {
+        "source_id": source_id,
+        "name": form.name,
+        "endpoint_type": form.endpoint_type,
+        "url": form.url,
+
+        # Never immediately schedule a newly-entered endpoint.
+        "status": "disabled",
+
+        "poll_interval_seconds": form.poll_interval_seconds,
+
+        "endpoint_metadata": _pending_verification_metadata(
+            {
+                "created_from": "web",
+            },
+            reason="new_endpoint",
+        ),
+    }
+    _normalize_endpoint_values(values)
+
     endpoint = (
         await source_endpoint_repository
         .create_source_endpoint(
             session,
-            {
-                "source_id": source_id,
-                "name": form.name,
-                "endpoint_type": (
-                    form.endpoint_type
-                ),
-                "url": form.url,
-
-                # Never immediately schedule a
-                # newly-entered endpoint.
-                "status": "disabled",
-
-                "poll_interval_seconds": (
-                    form.poll_interval_seconds
-                ),
-
-                "endpoint_metadata":
-                    _pending_verification_metadata(
-                        {
-                            "created_from":
-                                "web",
-                        },
-                        reason=(
-                            "new_endpoint"
-                        ),
-                    ),
-            },
+            values,
         )
     )
 
@@ -353,19 +404,23 @@ async def update_endpoint(
 
     old_url = endpoint.url
 
-    retrieval_changed = (
-        form.url != endpoint.url
-        or form.endpoint_type
-        != endpoint.endpoint_type
-    )
-
     values = {
         "name": form.name,
         "endpoint_type": form.endpoint_type,
         "url": form.url,
-        "poll_interval_seconds":
-            form.poll_interval_seconds,
+        "poll_interval_seconds": form.poll_interval_seconds,
     }
+    _normalize_endpoint_values(values)
+
+    retrieval_changed = (
+        values["url"] != endpoint.url
+        or values["endpoint_type"] != endpoint.endpoint_type
+        or values["endpoint_format"] != endpoint.endpoint_format
+        or (
+            values["acquisition_method"]
+            != endpoint.acquisition_method
+        )
+    )
 
     if retrieval_changed:
         values.update(

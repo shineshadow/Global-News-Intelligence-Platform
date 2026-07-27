@@ -23,10 +23,14 @@ from app.repositories import (
     source_endpoint_repository,
     source_repository,
 )
+from app.services.classification_service import (
+    classify_document_deterministically,
+)
 from app.services.exceptions import (
     InvalidUpdateError,
     ResourceNotFoundError,
 )
+from app.services.language_service import ensure_language_tag
 from ingestion.rss import (
     FeedHTTPStatusError,
     FeedPollResult,
@@ -206,7 +210,8 @@ def _current_document_values(
     return {
         "source_id": source.id,
         "source_endpoint_id": endpoint.id,
-        "source_type": endpoint.endpoint_type,
+        "ingestion_format": endpoint.endpoint_format,
+        "content_format": item.content_format,
         "external_id": item.external_id,
         "canonical_url": item.canonical_url,
         "title_original": item.title_original,
@@ -234,6 +239,7 @@ def _changed_document_fields(
         "title_original": item.title_original,
         "summary_original": item.summary_original,
         "content_original": item.content_original,
+        "content_format": item.content_format,
         "language": item.language,
         "author": item.author,
         "published_at": item.published_at,
@@ -269,6 +275,7 @@ async def _snapshot_document_if_needed(
             session,
             document.id,
             document.content_hash,
+            document.content_format,
         )
     )
 
@@ -292,6 +299,7 @@ async def _snapshot_document_if_needed(
             "title_original": document.title_original,
             "summary_original": document.summary_original,
             "content_original": document.content_original,
+            "content_format": document.content_format,
             "language": document.language,
             "country": document.country,
             "author": document.author,
@@ -314,8 +322,10 @@ async def _persist_feed_item(
     source: Source,
     endpoint: SourceEndpoint,
     retrieved_at: datetime,
-) -> DocumentAction:
+) -> tuple[DocumentAction, int]:
     """Create, update, or exactly deduplicate one feed item."""
+
+    await ensure_language_tag(session, item.language)
 
     document = (
         await document_repository
@@ -346,14 +356,17 @@ async def _persist_feed_item(
     )
 
     if document is None:
-        await document_repository.create_document(
+        document = await document_repository.create_document(
             session,
             values,
         )
 
-        return "created"
+        return "created", document.id
 
-    if document.content_hash == item.content_hash:
+    if (
+        document.content_hash == item.content_hash
+        and document.content_format == item.content_format
+    ):
         # Refresh identity, metadata, country, and retrieval time
         # without creating a historical content version.
         await document_repository.update_document(
@@ -362,7 +375,7 @@ async def _persist_feed_item(
             values,
         )
 
-        return "unchanged"
+        return "unchanged", document.id
 
     changed_fields = _changed_document_fields(
         document,
@@ -381,7 +394,7 @@ async def _persist_feed_item(
         values,
     )
 
-    return "updated"
+    return "updated", document.id
 
 
 async def _finish_successful_fetch(
@@ -519,12 +532,38 @@ async def _finish_successful_fetch(
             for item in result.feed.items:
                 try:
                     async with session.begin_nested():
-                        action = await _persist_feed_item(
+                        action, document_id = await _persist_feed_item(
                             session,
                             item,
                             source=source,
                             endpoint=endpoint,
                             retrieved_at=finished_at,
+                        )
+
+                    try:
+                        classification_summary = (
+                            await classify_document_deterministically(
+                                session,
+                                document_id,
+                                trigger="ingestion",
+                            )
+                        )
+                        if classification_summary.status == "failed":
+                            logger.warning(
+                                "Deterministic classification failed "
+                                "after preserving document %s: %s",
+                                document_id,
+                                classification_summary.error,
+                            )
+                    except Exception as exc:
+                        # Classification is enrichment. A classifier/config
+                        # failure must never discard a valid raw document.
+                        logger.warning(
+                            "Deterministic classification could not run "
+                            "after preserving document %s: %s",
+                            document_id,
+                            exc,
+                            exc_info=True,
                         )
 
                     if action == "created":

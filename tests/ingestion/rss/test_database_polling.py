@@ -4,6 +4,8 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from app.repositories import source_endpoint_repository
+
 from app.models import (
     Document,
     DocumentVersion,
@@ -42,7 +44,7 @@ def build_feed(
     </item>
   </channel>
 </rss>
-""".encode("utf-8")
+""".encode()
 
 
 async def create_source_and_endpoint(
@@ -85,6 +87,38 @@ async def create_source_and_endpoint(
         source_id,
         endpoint_response.json()["id"],
     )
+
+
+async def test_due_query_uses_canonical_feed_dimensions(
+    client,
+    database_session_factory,
+) -> None:
+    _, endpoint_id = await create_source_and_endpoint(
+        client
+    )
+
+    async with database_session_factory() as session:
+        endpoint = await session.get(
+            SourceEndpoint,
+            endpoint_id,
+        )
+
+        assert endpoint is not None
+        assert endpoint.status == "active"
+        assert endpoint.endpoint_type == "feed"
+        assert endpoint.endpoint_format == "rss"
+        assert endpoint.acquisition_method == "feed_parser"
+        assert endpoint.next_poll_at is None
+
+        due_ids = await (
+            source_endpoint_repository
+            .list_due_source_endpoint_ids(
+                session,
+                limit=500,
+            )
+        )
+
+    assert endpoint_id in due_ids
 
 
 async def test_poll_creates_document_and_run(
@@ -153,6 +187,9 @@ async def test_poll_creates_document_and_run(
     assert documents[0].title_original == (
         "Original Headline"
     )
+    assert documents[0].ingestion_format == "rss"
+    assert documents[0].content_format == "html"
+    assert not hasattr(documents[0], "source_type")
 
     assert run is not None
     assert run.status == "succeeded"
@@ -319,6 +356,71 @@ async def test_changed_document_creates_version(
     assert "title_original" in (
         versions[0].changed_fields
     )
+
+
+async def test_format_only_change_creates_version(
+    client,
+    database_session_factory,
+) -> None:
+    _, endpoint_id = await create_source_and_endpoint(
+        client
+    )
+    feed = build_feed(
+        title="Stable Headline",
+        description="Stable article text.",
+    )
+
+    def handler(
+        _request: httpx.Request,
+    ) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={
+                "Content-Type": "application/rss+xml",
+            },
+            content=feed,
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+    ) as http_client:
+        first = await poll_source_endpoint(
+            endpoint_id,
+            client=http_client,
+            session_factory=database_session_factory,
+        )
+
+        async with (
+            database_session_factory() as session,
+            session.begin(),
+        ):
+            document = await session.scalar(
+                select(Document)
+            )
+            assert document is not None
+            document.content_format = "plain_text"
+
+        second = await poll_source_endpoint(
+            endpoint_id,
+            client=http_client,
+            session_factory=database_session_factory,
+        )
+
+    assert first.items_created == 1
+    assert second.items_updated == 1
+
+    async with database_session_factory() as session:
+        document = await session.scalar(select(Document))
+        version = await session.scalar(
+            select(DocumentVersion)
+        )
+
+    assert document is not None
+    assert version is not None
+    assert document.content_format == "html"
+    assert version.content_format == "plain_text"
+    assert version.content_hash == document.content_hash
+    assert version.changed_fields == ["content_format"]
 
 
 async def test_conditional_request_handles_304(

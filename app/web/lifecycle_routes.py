@@ -74,6 +74,14 @@ async def request_form(
 def source_form_values(
     source,
 ) -> dict[str, str]:
+    source_type = {
+        "news_organization": "news",
+        "research_institute": "research",
+    }.get(
+        source.source_type,
+        source.source_type,
+    )
+
     return {
         "name": source.name or "",
         "native_name":
@@ -82,7 +90,7 @@ def source_form_values(
         "primary_language":
             source.primary_language or "",
         "source_type":
-            source.source_type or "news",
+            source_type or "news",
         "priority":
             source.priority or "normal",
         "website_url":
@@ -96,7 +104,7 @@ def endpoint_form_values(
     return {
         "name": endpoint.name or "",
         "endpoint_type":
-            endpoint.endpoint_type or "rss",
+            endpoint.endpoint_format or "rss",
         "url": endpoint.url or "",
         "poll_interval_seconds": str(
             endpoint.poll_interval_seconds

@@ -1,0 +1,816 @@
+{
+  "ruleset_version": "deterministic-rules-v1.0",
+  "taxonomy_version": "1.0",
+  "metadata_topic_mappings": [
+    {
+      "terms": [
+        "politics",
+        "political",
+        "정치",
+        "政治"
+      ],
+      "topic_slug": "politics",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "law",
+        "legal",
+        "judiciary",
+        "court",
+        "법률",
+        "사법",
+        "司法",
+        "法律"
+      ],
+      "topic_slug": "law-judiciary",
+      "confidence": 0.88
+    },
+    {
+      "terms": [
+        "defense",
+        "defence",
+        "military",
+        "national security",
+        "국방",
+        "안보",
+        "군사",
+        "防衛",
+        "軍事",
+        "国防",
+        "國防"
+      ],
+      "topic_slug": "war-security",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "foreign affairs",
+        "diplomacy",
+        "외교",
+        "外交"
+      ],
+      "topic_slug": "foreign-affairs",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "economy",
+        "economics",
+        "경제",
+        "経済",
+        "经济",
+        "經濟"
+      ],
+      "topic_slug": "economy",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "business",
+        "corporate",
+        "기업",
+        "비즈니스",
+        "企業",
+        "商业",
+        "商業"
+      ],
+      "topic_slug": "business",
+      "confidence": 0.88
+    },
+    {
+      "terms": [
+        "technology",
+        "tech",
+        "it",
+        "기술",
+        "科技",
+        "テクノロジー"
+      ],
+      "topic_slug": "technology",
+      "confidence": 0.88
+    },
+    {
+      "terms": [
+        "energy",
+        "에너지",
+        "能源"
+      ],
+      "topic_slug": "energy",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "health",
+        "healthcare",
+        "건강",
+        "보건",
+        "健康",
+        "医療",
+        "医疗"
+      ],
+      "topic_slug": "health",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "science",
+        "과학",
+        "科学",
+        "科學"
+      ],
+      "topic_slug": "science",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "environment",
+        "climate",
+        "환경",
+        "気候",
+        "環境",
+        "气候"
+      ],
+      "topic_slug": "environment",
+      "confidence": 0.88
+    },
+    {
+      "terms": [
+        "society",
+        "사회",
+        "社会",
+        "社會"
+      ],
+      "topic_slug": "society",
+      "confidence": 0.86
+    },
+    {
+      "terms": [
+        "crime",
+        "범죄",
+        "犯罪"
+      ],
+      "topic_slug": "crime",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "immigration",
+        "migration",
+        "이민",
+        "移民"
+      ],
+      "topic_slug": "immigration",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "media",
+        "press",
+        "언론",
+        "メディア",
+        "媒体",
+        "媒體"
+      ],
+      "topic_slug": "media",
+      "confidence": 0.86
+    },
+    {
+      "terms": [
+        "education",
+        "교육",
+        "教育"
+      ],
+      "topic_slug": "education",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "religion",
+        "종교",
+        "宗教"
+      ],
+      "topic_slug": "religion",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "culture",
+        "entertainment",
+        "문화",
+        "연예",
+        "文化",
+        "芸能",
+        "娱乐",
+        "娛樂"
+      ],
+      "topic_slug": "arts-culture-entertainment",
+      "confidence": 0.86
+    },
+    {
+      "terms": [
+        "disaster",
+        "emergency",
+        "재난",
+        "災害",
+        "灾害"
+      ],
+      "topic_slug": "disasters-emergencies",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "labor",
+        "labour",
+        "employment",
+        "노동",
+        "고용",
+        "労働",
+        "劳动",
+        "勞動"
+      ],
+      "topic_slug": "labor-employment",
+      "confidence": 0.9
+    },
+    {
+      "terms": [
+        "sports",
+        "스포츠",
+        "スポーツ",
+        "体育",
+        "體育"
+      ],
+      "topic_slug": "sports",
+      "confidence": 0.92
+    },
+    {
+      "terms": [
+        "weather",
+        "날씨",
+        "天気",
+        "天气",
+        "天氣"
+      ],
+      "topic_slug": "weather",
+      "confidence": 0.92
+    },
+    {
+      "terms": [
+        "lifestyle",
+        "라이프",
+        "生活"
+      ],
+      "topic_slug": "lifestyle-human-interest",
+      "confidence": 0.84
+    }
+  ],
+  "topic_keyword_rules": [
+    {
+      "id": "politics-election",
+      "topic_slug": "politics",
+      "confidence": 0.94,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "election",
+        "elections",
+        "선거",
+        "대선",
+        "총선",
+        "選挙",
+        "选举",
+        "選舉",
+        "halalan"
+      ]
+    },
+    {
+      "id": "law-courts",
+      "topic_slug": "law-judiciary",
+      "confidence": 0.93,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "supreme court",
+        "constitutional court",
+        "court ruling",
+        "indictment",
+        "대법원",
+        "헌법재판소",
+        "기소",
+        "最高裁",
+        "憲法裁判所",
+        "起訴",
+        "最高法院"
+      ]
+    },
+    {
+      "id": "war-security-missile-military",
+      "topic_slug": "war-security",
+      "confidence": 0.95,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "ballistic missile",
+        "missile launch",
+        "military exercise",
+        "naval exercise",
+        "nuclear weapon",
+        "탄도미사일",
+        "미사일 발사",
+        "군사훈련",
+        "軍事演習",
+        "弾道ミサイル",
+        "导弹",
+        "導彈",
+        "軍演"
+      ]
+    },
+    {
+      "id": "foreign-affairs-diplomacy",
+      "topic_slug": "foreign-affairs",
+      "confidence": 0.91,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "foreign minister",
+        "foreign ministry",
+        "state department",
+        "diplomatic relations",
+        "bilateral talks",
+        "외교부",
+        "외교장관",
+        "外務省",
+        "外相",
+        "外交部",
+        "外交部长",
+        "外交部長"
+      ]
+    },
+    {
+      "id": "economy-macro",
+      "topic_slug": "economy",
+      "confidence": 0.92,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "central bank",
+        "interest rate",
+        "gross domestic product",
+        "inflation rate",
+        "consumer price index",
+        "기준금리",
+        "물가상승률",
+        "국내총생산",
+        "中央銀行",
+        "消費者物価",
+        "央行",
+        "消费者价格",
+        "消費者價格"
+      ]
+    },
+    {
+      "id": "business-corporate",
+      "topic_slug": "business",
+      "confidence": 0.9,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "quarterly earnings",
+        "earnings report",
+        "merger and acquisition",
+        "files for bankruptcy",
+        "실적 발표",
+        "인수합병",
+        "決算",
+        "企業買収",
+        "季度业绩",
+        "季度業績"
+      ]
+    },
+    {
+      "id": "technology-ai-semiconductor-cyber",
+      "topic_slug": "technology",
+      "confidence": 0.95,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "artificial intelligence",
+        "semiconductor",
+        "cybersecurity",
+        "ransomware",
+        "ai chip",
+        "인공지능",
+        "반도체",
+        "사이버보안",
+        "人工知能",
+        "半導体",
+        "人工智能",
+        "半导体",
+        "半導體"
+      ]
+    },
+    {
+      "id": "energy-power-fuels",
+      "topic_slug": "energy",
+      "confidence": 0.92,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "nuclear power plant",
+        "natural gas",
+        "renewable energy",
+        "원자력발전소",
+        "천연가스",
+        "原子力発電所",
+        "天然ガス",
+        "核电站",
+        "核電站",
+        "天然气",
+        "天然氣"
+      ]
+    },
+    {
+      "id": "health-disease-vaccine",
+      "topic_slug": "health",
+      "confidence": 0.93,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "world health organization",
+        "disease outbreak",
+        "vaccine",
+        "clinical trial",
+        "질병관리청",
+        "백신",
+        "감염병",
+        "感染症",
+        "ワクチン",
+        "疫苗"
+      ]
+    },
+    {
+      "id": "science-research-space",
+      "topic_slug": "science",
+      "confidence": 0.89,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "space telescope",
+        "scientists discover",
+        "researchers discover",
+        "우주망원경",
+        "과학자 발견",
+        "宇宙望遠鏡",
+        "科学者",
+        "太空望远镜",
+        "太空望遠鏡"
+      ]
+    },
+    {
+      "id": "environment-climate",
+      "topic_slug": "environment",
+      "confidence": 0.93,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "climate change",
+        "carbon emissions",
+        "greenhouse gas",
+        "기후변화",
+        "탄소배출",
+        "気候変動",
+        "温室効果ガス",
+        "气候变化",
+        "氣候變化"
+      ]
+    },
+    {
+      "id": "crime-police",
+      "topic_slug": "crime",
+      "confidence": 0.91,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "police investigation",
+        "murder suspect",
+        "fraud charges",
+        "arrested for",
+        "경찰 수사",
+        "살인",
+        "사기 혐의",
+        "逮捕",
+        "殺人",
+        "詐欺",
+        "诈骗",
+        "詐騙"
+      ]
+    },
+    {
+      "id": "immigration-border",
+      "topic_slug": "immigration",
+      "confidence": 0.94,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "immigration",
+        "deportation",
+        "border patrol",
+        "asylum seeker",
+        "이민",
+        "추방",
+        "移民",
+        "強制送還",
+        "遣返"
+      ]
+    },
+    {
+      "id": "media-press-freedom",
+      "topic_slug": "media",
+      "confidence": 0.91,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "press freedom",
+        "journalist arrested",
+        "media regulation",
+        "언론 자유",
+        "기자 체포",
+        "報道の自由",
+        "记者被捕",
+        "記者被捕",
+        "新闻自由",
+        "新聞自由"
+      ]
+    },
+    {
+      "id": "education-schools",
+      "topic_slug": "education",
+      "confidence": 0.91,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "ministry of education",
+        "university admissions",
+        "school curriculum",
+        "교육부",
+        "대학 입시",
+        "文部科学省",
+        "大学入試",
+        "教育部",
+        "大学招生",
+        "大學招生"
+      ]
+    },
+    {
+      "id": "disaster-earthquake-storm-fire",
+      "topic_slug": "disasters-emergencies",
+      "confidence": 0.96,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "earthquake",
+        "typhoon",
+        "wildfire",
+        "flood warning",
+        "지진",
+        "태풍",
+        "산불",
+        "地震",
+        "台風",
+        "山火",
+        "台风",
+        "颱風"
+      ]
+    },
+    {
+      "id": "labor-union-strike",
+      "topic_slug": "labor-employment",
+      "confidence": 0.93,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "labor union",
+        "labour union",
+        "workers strike",
+        "unemployment rate",
+        "노동조합",
+        "파업",
+        "실업률",
+        "労働組合",
+        "ストライキ",
+        "工会",
+        "工會",
+        "罢工",
+        "罷工"
+      ]
+    },
+    {
+      "id": "sports-major",
+      "topic_slug": "sports",
+      "confidence": 0.94,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "world cup",
+        "olympics",
+        "championship game",
+        "league match",
+        "월드컵",
+        "올림픽",
+        "オリンピック",
+        "ワールドカップ",
+        "世界杯",
+        "奥运会",
+        "奧運會"
+      ]
+    },
+    {
+      "id": "weather-forecast-advisory",
+      "topic_slug": "weather",
+      "confidence": 0.94,
+      "relationship_role": "primary",
+      "fields": [
+        "title",
+        "summary"
+      ],
+      "any_terms": [
+        "weather forecast",
+        "heat advisory",
+        "cold wave",
+        "tropical storm",
+        "일기예보",
+        "폭염주의보",
+        "한파",
+        "天気予報",
+        "熱中症警戒",
+        "天气预报",
+        "天氣預報",
+        "寒潮"
+      ]
+    }
+  ],
+  "document_type_keyword_rules": [
+    {
+      "id": "doctype-breaking",
+      "document_type_slug": "breaking_news",
+      "confidence": 0.98,
+      "fields": [
+        "title"
+      ],
+      "any_terms": [
+        "breaking news",
+        "breaking:",
+        "속보",
+        "速報",
+        "快讯",
+        "快訊"
+      ]
+    },
+    {
+      "id": "doctype-press-release",
+      "document_type_slug": "press_release",
+      "confidence": 0.97,
+      "fields": [
+        "title",
+        "url"
+      ],
+      "any_terms": [
+        "press release",
+        "보도자료",
+        "プレスリリース",
+        "新闻稿",
+        "新聞稿"
+      ]
+    },
+    {
+      "id": "doctype-official-statement",
+      "document_type_slug": "official_statement",
+      "confidence": 0.94,
+      "fields": [
+        "title"
+      ],
+      "any_terms": [
+        "official statement",
+        "statement by",
+        "공식 성명",
+        "성명서",
+        "声明",
+        "聲明"
+      ]
+    },
+    {
+      "id": "doctype-speech",
+      "document_type_slug": "speech",
+      "confidence": 0.94,
+      "fields": [
+        "title"
+      ],
+      "any_terms": [
+        "speech by",
+        "remarks by",
+        "연설",
+        "演説",
+        "讲话",
+        "講話"
+      ]
+    },
+    {
+      "id": "doctype-transcript",
+      "document_type_slug": "transcript",
+      "confidence": 0.95,
+      "fields": [
+        "title"
+      ],
+      "any_terms": [
+        "transcript",
+        "전문",
+        "全文"
+      ]
+    },
+    {
+      "id": "doctype-court-decision",
+      "document_type_slug": "court_decision",
+      "confidence": 0.95,
+      "fields": [
+        "title"
+      ],
+      "any_terms": [
+        "court decision",
+        "judgment",
+        "judgement",
+        "판결",
+        "判決",
+        "判决"
+      ]
+    },
+    {
+      "id": "doctype-research-paper",
+      "document_type_slug": "research_paper",
+      "confidence": 0.92,
+      "fields": [
+        "title"
+      ],
+      "any_terms": [
+        "research paper",
+        "working paper",
+        "연구 논문",
+        "研究論文",
+        "研究论文"
+      ]
+    }
+  ]
+}

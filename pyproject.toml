@@ -8,7 +8,6 @@
 requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
-
 [project]
 name = "global-news-intelligence-platform"
 version = "0.1.0"
@@ -29,9 +28,9 @@ dependencies = [
     "redis>=5,<7",
     "httpx",
     "jinja2>=3.1,<4",
+    "langcodes>=3.5.1,<4",
     "python-multipart==0.0.32",
 ]
-
 
 [project.optional-dependencies]
 
@@ -42,6 +41,23 @@ dev = [
     "mypy",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "app",
+    "app.*",
+    "ingestion",
+    "ingestion.*",
+    "workers",
+    "workers.*",
+]
+exclude = [
+    "scripts",
+    "scripts.*",
+    "tests",
+    "tests.*",
+]
+namespaces = false
 
 [tool.ruff]
 line-length = 100

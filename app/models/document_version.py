@@ -37,6 +37,7 @@ class DocumentVersion(Base):
         UniqueConstraint(
             "document_id",
             "content_hash",
+            "content_format",
             name="uq_document_versions_document_hash",
         ),
         CheckConstraint(
@@ -91,8 +92,22 @@ class DocumentVersion(Base):
         nullable=True,
     )
 
+    content_format: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey(
+            "content_formats.slug",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+
     language: Mapped[str | None] = mapped_column(
-        String(20),
+        String(255),
+        ForeignKey(
+            "language_tags.tag",
+            ondelete="RESTRICT",
+        ),
         nullable=True,
     )
 
