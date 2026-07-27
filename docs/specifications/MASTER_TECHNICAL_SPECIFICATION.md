@@ -1435,7 +1435,9 @@ Example fields:
 ```
 id
 source_id
-source_type
+source_endpoint_id
+ingestion_format
+content_format
 external_id
 canonical_url
 title_original

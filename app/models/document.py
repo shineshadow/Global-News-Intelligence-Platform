@@ -45,13 +45,13 @@ class Document(Base):
             "published_at",
         ),
         Index(
-            "ix_documents_source_type_published_at",
-            "source_type",
+            "ix_documents_ingestion_format_published_at",
+            "ingestion_format",
             "published_at",
         ),
         Index(
-            "ix_documents_ingestion_format_published_at",
-            "ingestion_format",
+            "ix_documents_content_format_published_at",
+            "content_format",
             "published_at",
         ),
     )
@@ -82,19 +82,19 @@ class Document(Base):
         index=True,
     )
 
-    # Deprecated compatibility field. GFA-D removes this after all
-    # consumers migrate to ingestion_format/content_format.
-    source_type: Mapped[str] = mapped_column(
-        String(30),
-        nullable=False,
-        server_default="rss",
-        index=True,
-    )
-
     ingestion_format: Mapped[str] = mapped_column(
         String(50),
         ForeignKey(
             "endpoint_formats.slug",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+
+    content_format: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey(
+            "content_formats.slug",
             ondelete="RESTRICT",
         ),
         nullable=False,
@@ -204,7 +204,7 @@ class Document(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="DocumentVersion.version_number",
-    )    
+    )
 
     def __repr__(self) -> str:
         return (

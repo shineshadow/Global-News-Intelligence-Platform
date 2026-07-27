@@ -11,6 +11,7 @@ from app.models.classification import (
     Geography,
     Topic,
 )
+from app.models.content_format import ContentFormat
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.entity_semantics import (
@@ -44,6 +45,7 @@ __all__ = [
     "AcquisitionMethod",
     "Base",
     "ClassificationRun",
+    "ContentFormat",
     "Document",
     "DocumentEntity",
     "DocumentGeography",

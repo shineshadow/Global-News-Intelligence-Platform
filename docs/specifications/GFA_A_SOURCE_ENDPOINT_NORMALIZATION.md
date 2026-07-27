@@ -24,9 +24,9 @@ DOCUMENT
   ingestion_format
 ```
 
-`documents.source_type` remains temporarily as a deprecated compatibility
-column. GFA-D removes it after `content_format` is introduced and consumers have
-migrated.
+The former `documents.source_type` compatibility column was removed by
+GFA-D after `content_format` was introduced and consumers migrated.
+Historical acquisition provenance remains in `documents.ingestion_format`.
 
 ## Source type
 

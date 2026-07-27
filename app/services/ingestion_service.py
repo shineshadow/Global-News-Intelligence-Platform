@@ -210,9 +210,8 @@ def _current_document_values(
     return {
         "source_id": source.id,
         "source_endpoint_id": endpoint.id,
-        # Deprecated compatibility value retained through GFA-D.
-        "source_type": endpoint.endpoint_format,
         "ingestion_format": endpoint.endpoint_format,
+        "content_format": item.content_format,
         "external_id": item.external_id,
         "canonical_url": item.canonical_url,
         "title_original": item.title_original,
@@ -240,6 +239,7 @@ def _changed_document_fields(
         "title_original": item.title_original,
         "summary_original": item.summary_original,
         "content_original": item.content_original,
+        "content_format": item.content_format,
         "language": item.language,
         "author": item.author,
         "published_at": item.published_at,
@@ -275,6 +275,7 @@ async def _snapshot_document_if_needed(
             session,
             document.id,
             document.content_hash,
+            document.content_format,
         )
     )
 
@@ -298,6 +299,7 @@ async def _snapshot_document_if_needed(
             "title_original": document.title_original,
             "summary_original": document.summary_original,
             "content_original": document.content_original,
+            "content_format": document.content_format,
             "language": document.language,
             "country": document.country,
             "author": document.author,
@@ -361,7 +363,10 @@ async def _persist_feed_item(
 
         return "created", document.id
 
-    if document.content_hash == item.content_hash:
+    if (
+        document.content_hash == item.content_hash
+        and document.content_format == item.content_format
+    ):
         # Refresh identity, metadata, country, and retrieval time
         # without creating a historical content version.
         await document_repository.update_document(

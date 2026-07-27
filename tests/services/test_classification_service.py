@@ -60,8 +60,8 @@ async def _create_document(
     document = Document(
         source_id=source.id,
         source_endpoint_id=endpoint.id,
-        source_type="rss",
         ingestion_format="rss",
+        content_format="plain_text",
         external_id=f"item-{source.id}",
         canonical_url=f"https://example.com/{source.id}/item",
         title_original=title,

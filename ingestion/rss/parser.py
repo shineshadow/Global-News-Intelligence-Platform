@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 
 import feedparser
 
+from app.content_formats import normalize_content_format
 from app.language_tags import normalize_external_language_tag
 from ingestion.rss.exceptions import FeedParseError
 from ingestion.rss.types import (
@@ -133,8 +134,12 @@ def _entry_updated_at(
     return _parsed_datetime(updated_parsed)
 
 
-def _entry_content(entry: Any) -> str | None:
-    """Return the first nonempty Atom/RSS content value."""
+def _entry_representation(
+    entry: Any,
+    *,
+    summary: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Return item content and the strongest observed media-type evidence."""
 
     content_entries = entry.get("content") or []
 
@@ -144,9 +149,21 @@ def _entry_content(entry: Any) -> str | None:
         )
 
         if value is not None:
-            return value
+            return (
+                value,
+                _optional_string(content_entry.get("type")),
+                "content",
+            )
 
-    return None
+    if summary is not None:
+        detail = entry.get("summary_detail") or {}
+        return (
+            None,
+            _optional_string(detail.get("type")),
+            "summary",
+        )
+
+    return None, None, None
 
 
 def _entry_tags(entry: Any) -> list[dict[str, str | None]]:
@@ -295,7 +312,15 @@ def _parse_item(
         entry.get("summary")
     )
 
-    content = _entry_content(entry)
+    content, content_media_type, media_type_source = (
+        _entry_representation(
+            entry,
+            summary=summary,
+        )
+    )
+    content_format = normalize_content_format(
+        content_media_type
+    )
 
     author = _limited_string(
         entry.get("author"),
@@ -358,6 +383,8 @@ def _parse_item(
         "language_source": language_source,
         "language_normalization": language_result.status,
         "language_error": language_result.error,
+        "content_media_type": content_media_type,
+        "content_media_type_source": media_type_source,
         "published_text": _optional_string(
             _raw_feedparser_value(
                 entry,
@@ -383,6 +410,7 @@ def _parse_item(
         title_original=title,
         summary_original=summary,
         content_original=content,
+        content_format=content_format,
         language=language,
         author=author,
         published_at=published_at,

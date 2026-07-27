@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict tb40Sozhe3t1e4lhOutGbNifY5bW2B9C1wbShiYo0UnQeQSBiFoRbW3AnlWWtza
+\restrict pjYFihODyZYtdkH2tDQ5BkwqjSRq6NiosjXZ9Jw7GwCdzbafsg6TTGF7nX1WUEa
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -146,6 +146,41 @@ CREATE SEQUENCE public.classification_runs_id_seq
 --
 
 ALTER SEQUENCE public.classification_runs_id_seq OWNED BY public.classification_runs.id;
+
+
+--
+-- Name: content_formats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.content_formats (
+    id bigint NOT NULL,
+    slug character varying(50) NOT NULL,
+    name character varying(100) NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: content_formats_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.content_formats_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: content_formats_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.content_formats_id_seq OWNED BY public.content_formats.id;
 
 
 --
@@ -396,6 +431,7 @@ CREATE TABLE public.document_versions (
     changed_fields jsonb DEFAULT '[]'::jsonb NOT NULL,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    content_format character varying(50) NOT NULL,
     CONSTRAINT ck_document_versions_version_number_positive CHECK ((version_number >= 1))
 );
 
@@ -427,7 +463,6 @@ CREATE TABLE public.documents (
     id bigint NOT NULL,
     source_id bigint NOT NULL,
     source_endpoint_id bigint,
-    source_type character varying(30) DEFAULT 'rss'::character varying NOT NULL,
     external_id character varying(2048),
     canonical_url text,
     title_original text NOT NULL,
@@ -443,7 +478,8 @@ CREATE TABLE public.documents (
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    ingestion_format character varying(50) NOT NULL
+    ingestion_format character varying(50) NOT NULL,
+    content_format character varying(50) NOT NULL
 );
 
 
@@ -1358,6 +1394,13 @@ ALTER TABLE ONLY public.classification_runs ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
+-- Name: content_formats id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.content_formats ALTER COLUMN id SET DEFAULT nextval('public.content_formats_id_seq'::regclass);
+
+
+--
 -- Name: document_entities id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1561,6 +1604,14 @@ ALTER TABLE ONLY public.acquisition_methods
 
 ALTER TABLE ONLY public.classification_runs
     ADD CONSTRAINT pk_classification_runs PRIMARY KEY (id);
+
+
+--
+-- Name: content_formats pk_content_formats; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.content_formats
+    ADD CONSTRAINT pk_content_formats PRIMARY KEY (id);
 
 
 --
@@ -1836,6 +1887,14 @@ ALTER TABLE ONLY public.acquisition_methods
 
 
 --
+-- Name: content_formats uq_content_formats_slug; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.content_formats
+    ADD CONSTRAINT uq_content_formats_slug UNIQUE (slug);
+
+
+--
 -- Name: document_types uq_document_types_slug; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1848,7 +1907,7 @@ ALTER TABLE ONLY public.document_types
 --
 
 ALTER TABLE ONLY public.document_versions
-    ADD CONSTRAINT uq_document_versions_document_hash UNIQUE (document_id, content_hash);
+    ADD CONSTRAINT uq_document_versions_document_hash UNIQUE (document_id, content_hash, content_format);
 
 
 --
@@ -2017,6 +2076,13 @@ CREATE INDEX ix_classification_runs_status_started ON public.classification_runs
 
 
 --
+-- Name: ix_content_formats_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_content_formats_active ON public.content_formats USING btree (is_active);
+
+
+--
 -- Name: ix_document_entities_classification_run; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2115,6 +2181,13 @@ CREATE INDEX ix_document_types_parent_name ON public.document_types USING btree 
 
 
 --
+-- Name: ix_document_versions_content_format; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_document_versions_content_format ON public.document_versions USING btree (content_format);
+
+
+--
 -- Name: ix_document_versions_content_hash; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2133,6 +2206,13 @@ CREATE INDEX ix_document_versions_document_created_at ON public.document_version
 --
 
 CREATE INDEX ix_document_versions_document_id ON public.document_versions USING btree (document_id);
+
+
+--
+-- Name: ix_documents_content_format_published_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_documents_content_format_published_at ON public.documents USING btree (content_format, published_at);
 
 
 --
@@ -2203,20 +2283,6 @@ CREATE INDEX ix_documents_source_id ON public.documents USING btree (source_id);
 --
 
 CREATE INDEX ix_documents_source_published_at ON public.documents USING btree (source_id, published_at);
-
-
---
--- Name: ix_documents_source_type; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_documents_source_type ON public.documents USING btree (source_type);
-
-
---
--- Name: ix_documents_source_type_published_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_documents_source_type_published_at ON public.documents USING btree (source_type, published_at);
 
 
 --
@@ -2746,6 +2812,14 @@ ALTER TABLE ONLY public.document_types
 
 
 --
+-- Name: document_versions fk_document_versions_content_format_content_formats_slug; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_versions
+    ADD CONSTRAINT fk_document_versions_content_format_content_formats_slug FOREIGN KEY (content_format) REFERENCES public.content_formats(slug) ON DELETE RESTRICT;
+
+
+--
 -- Name: document_versions fk_document_versions_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2759,6 +2833,14 @@ ALTER TABLE ONLY public.document_versions
 
 ALTER TABLE ONLY public.document_versions
     ADD CONSTRAINT fk_document_versions_language_language_tags_tag FOREIGN KEY (language) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: documents fk_documents_content_format_content_formats_slug; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.documents
+    ADD CONSTRAINT fk_documents_content_format_content_formats_slug FOREIGN KEY (content_format) REFERENCES public.content_formats(slug) ON DELETE RESTRICT;
 
 
 --
@@ -3077,5 +3159,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tb40Sozhe3t1e4lhOutGbNifY5bW2B9C1wbShiYo0UnQeQSBiFoRbW3AnlWWtza
+\unrestrict pjYFihODyZYtdkH2tDQ5BkwqjSRq6NiosjXZ9Jw7GwCdzbafsg6TTGF7nX1WUEa
 

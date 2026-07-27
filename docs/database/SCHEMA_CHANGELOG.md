@@ -6,6 +6,51 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-26 — GFA-D Content-Format Separation Frozen
+
+**Alembic revision:** `e73f0a4b6c12`
+**Revises:** `d62e9f3a5b01`
+
+Separated three independent document dimensions:
+
+```text
+document_type      semantic information kind
+ingestion_format   acquisition envelope or serialization
+content_format     document medium or container
+```
+
+Added the 21-row, IANA-media-type-informed `content_formats` catalog
+and required reference-backed `content_format` columns on both
+`documents` and `document_versions`.
+
+Historical representation identity is unique by document, content
+hash, and content format, so a format-only change retains the prior
+representation instead of being treated as an unchanged duplicate.
+
+Historical rows backfill to `unknown`; RSS or Atom is never copied
+into content format because a feed envelope does not prove the entry's
+representation. New feed ingestion uses entry content media type,
+then summary media type, and preserves the observed value and evidence
+source in metadata.
+
+The migration removes the deprecated `documents.source_type` column
+only after verifying it equals `ingestion_format` for every row.
+Downgrade refuses to discard meaningful format values or custom
+catalog rows.
+
+The mismatch guard, honest backfill, clean upgrade, downgrade-loss
+guard, clean downgrade/re-upgrade, GFA-A and GFA-D verification SQL,
+43 focused tests, all 127 repository tests, and the Alembic drift
+check passed against isolated PostgreSQL 17.10.
+
+Formal review clarified that content format describes the normalized
+representation stored by the row; supplemental links and enclosures
+do not override it before they are separately ingested. No remaining
+code, schema, migration-safety, history, standards, test, or
+documentation blocker was found.
+
+---
+
 ## 2026-07-26 — GFA-C.6 Guarded Legacy Cleanup Frozen
 
 **Alembic revision:** `d62e9f3a5b01`

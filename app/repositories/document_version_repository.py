@@ -10,12 +10,14 @@ async def get_document_version_by_hash(
     session: AsyncSession,
     document_id: int,
     content_hash: str,
+    content_format: str,
 ) -> DocumentVersion | None:
-    """Find a historical version by document and content hash."""
+    """Find a historical version by document, hash, and format."""
 
     statement = select(DocumentVersion).where(
         DocumentVersion.document_id == document_id,
         DocumentVersion.content_hash == content_hash,
+        DocumentVersion.content_format == content_format,
     )
 
     return await session.scalar(statement)

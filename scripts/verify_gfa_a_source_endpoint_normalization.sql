@@ -86,10 +86,12 @@ GROUP BY ingestion_format
 ORDER BY documents DESC, ingestion_format;
 
 \echo ''
-\echo '=== INGESTION FORMAT / LEGACY MISMATCH: EXPECT 0 ==='
-SELECT COUNT(*) AS mismatches
-FROM documents
-WHERE ingestion_format <> source_type;
+\echo '=== LEGACY DOCUMENT SOURCE TYPE AFTER GFA-D: EXPECT 0 ==='
+SELECT COUNT(*) AS legacy_columns
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'documents'
+  AND column_name = 'source_type';
 
 \echo ''
 \echo '=== END GFA-A VERIFICATION ==='

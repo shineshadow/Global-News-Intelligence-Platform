@@ -2,8 +2,8 @@
 
 **Document type:** Living implementation reference  
 **Snapshot date:** 2026-07-26
-**Platform phase:** Global Foundation Audit — GFA-C frozen
-**Alembic revision:** `d62e9f3a5b01`
+**Platform phase:** Global Foundation Audit — GFA-D frozen
+**Alembic revision:** `e73f0a4b6c12`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -28,13 +28,14 @@ Future database design work should consult this document before adding or changi
 
 ## 2. Current Schema Summary
 
-The current schema contains **36 tables**:
+The current schema contains **37 tables**:
 
 1 Alembic infrastructure table
 15 pre-GFA application/classification tables
 5 GFA-A reference-catalog tables
 2 GFA-B language-foundation tables
 13 GFA-C semantic-entity foundation tables
+1 GFA-D content-format catalog table
 
 | Table | Purpose |
 |---|---|
@@ -57,6 +58,7 @@ The current schema contains **36 tables**:
 | `source_types` | Canonical source-organization type catalog. |
 | `endpoint_types` | Canonical acquisition endpoint-type catalog. |
 | `endpoint_formats` | Canonical endpoint-format catalog. |
+| `content_formats` | Canonical document medium/container catalog. |
 | `acquisition_methods` | Canonical retrieval/acquisition-method catalog. |
 | `platforms` | Canonical external platform catalog. |
 | `language_tags` | Canonical BCP 47 language-tag registry used by persisted language fields. |
@@ -78,7 +80,7 @@ The current schema contains **36 tables**:
 Current Alembic revision:
 
 ```text
-d62e9f3a5b01
+e73f0a4b6c12
 ```
 
 No custom PostgreSQL enum types or extensions are present. One
@@ -201,7 +203,7 @@ Stores the Alembic migration revision currently applied to the database.
 Current value at this snapshot:
 
 ```text
-d62e9f3a5b01
+e73f0a4b6c12
 ```
 
 ---
@@ -235,7 +237,8 @@ A Source is distinct from a Source Endpoint. One source may own multiple endpoin
 
 ## Language invariant
 
-`sources.primary_language` describesical source type referencing `source_types.slug`. |
+`sources.primary_language` describes the source's default language; it
+does not determine document language.
 
 ## Important semantic invariant
 
@@ -344,7 +347,8 @@ Stores the current normalized representation of an ingested content item.
 | `id` | `bigint` | No | sequence | Primary key. |
 | `source_id` | `bigint` | No | — | Canonical publishing Source. |
 | `source_endpoint_id` | `bigint` | Yes | — | Endpoint that acquired the item. |
-| `source_type` | `varchar(30)` | No | `'rss'` | Acquisition/source channel type. |
+| `ingestion_format` | `varchar(50)` | No | — | Canonical acquisition envelope referencing `endpoint_formats.slug`. |
+| `content_format` | `varchar(50)` | No | — | Canonical medium/container referencing `content_formats.slug`. |
 | `external_id` | `varchar(2048)` | Yes | — | Source-provided item identifier. |
 | `canonical_url` | `text` | Yes | — | Canonical publisher URL. |
 | `title_original` | `text` | No | — | Original-language title. |
@@ -372,36 +376,38 @@ geographies
 document_geographies
 ```
 
-`documents.source_type` remains an acquisition/source channel field and **is not canonical semantic document type**.
-
-Canonical semantic document type is now:
+Semantic document type remains:
 
 ```text
 document_types
 document_type_assignments
 ```
 
+It is independent from both `ingestion_format` and `content_format`.
+
 ## Constraints
 
 - Primary key: `id`
 - Foreign key: `source_id → sources.id ON DELETE RESTRICT`
 - Foreign key: `source_endpoint_id → source_endpoints.id ON DELETE SET NULL`
+- Foreign key: `ingestion_format → endpoint_formats.slug ON DELETE RESTRICT`
+- Foreign key: `content_format → content_formats.slug ON DELETE RESTRICT`
 - Unique: `(source_endpoint_id, external_id)`
 
 ## Indexes
 
 ```text
 ix_documents_content_hash
+ix_documents_content_format_published_at
 ix_documents_country
 ix_documents_endpoint_published_at
 ix_documents_language
+ix_documents_ingestion_format_published_at
 ix_documents_published_at
 ix_documents_retrieved_at
 ix_documents_source_endpoint_id
 ix_documents_source_id
 ix_documents_source_published_at
-ix_documents_source_type
-ix_documents_source_type_published_at
 ```
 
 ---
@@ -423,6 +429,7 @@ Stores historical snapshots when an existing document changes.
 | `title_original` | `text` | No | — | Title snapshot. |
 | `summary_original` | `text` | Yes | — | Summary snapshot. |
 | `content_original` | `text` | Yes | — | Content snapshot. |
+| `content_format` | `varchar(50)` | No | — | Canonical medium/container snapshot. |
 | `language` | `varchar(255)` | Yes | — | Language snapshot. |
 | `country` | `varchar(100)` | Yes | — | Legacy Phase 1 country snapshot. |
 | `author` | `varchar(512)` | Yes | — | Author snapshot. |
@@ -438,7 +445,8 @@ Stores historical snapshots when an existing document changes.
 
 - Primary key: `id`
 - Foreign key: `document_id → documents.id ON DELETE CASCADE`
-- Unique: `(document_id, content_hash)`
+- Foreign key: `content_format → content_formats.slug ON DELETE RESTRICT`
+- Unique: `(document_id, content_hash, content_format)`
 - Unique: `(document_id, version_number)`
 - Check: `version_number >= 1`
 
@@ -446,6 +454,7 @@ Stores historical snapshots when an existing document changes.
 
 ```text
 ix_document_versions_content_hash
+ix_document_versions_content_format
 ix_document_versions_document_created_at
 ix_document_versions_document_id
 ```
@@ -1108,6 +1117,7 @@ The schema contains one PostgreSQL sequence for each bigint application-table pr
 
 ```text
 classification_runs_id_seq
+content_formats_id_seq
 document_entities_id_seq
 document_geographies_id_seq
 document_topics_id_seq
@@ -1117,9 +1127,22 @@ document_versions_id_seq
 documents_id_seq
 entities_id_seq
 entity_aliases_id_seq
+entity_geographies_id_seq
+entity_geography_relationship_type_external_mappings_id_seq
+entity_type_assignments_id_seq
+entity_type_external_mappings_id_seq
+entity_type_hierarchy_edges_id_seq
+entity_types_id_seq
+external_semantic_resources_id_seq
+external_semantic_schemes_id_seq
 geographies_id_seq
 ingestion_runs_id_seq
+acquisition_methods_id_seq
+endpoint_formats_id_seq
+endpoint_types_id_seq
+platforms_id_seq
 source_endpoints_id_seq
+source_types_id_seq
 sources_id_seq
 topics_id_seq
 ```
@@ -1159,22 +1182,23 @@ ix_source_endpoints_status
 
 ```text
 ix_documents_content_hash
+ix_documents_content_format_published_at
 ix_documents_country
 ix_documents_endpoint_published_at
 ix_documents_language
+ix_documents_ingestion_format_published_at
 ix_documents_published_at
 ix_documents_retrieved_at
 ix_documents_source_endpoint_id
 ix_documents_source_id
 ix_documents_source_published_at
-ix_documents_source_type
-ix_documents_source_type_published_at
 ```
 
 ### Document Versions
 
 ```text
 ix_document_versions_content_hash
+ix_document_versions_content_format
 ix_document_versions_document_created_at
 ix_document_versions_document_id
 ```
@@ -1334,7 +1358,6 @@ document_geographies
 ```text
 sources.source_type
 source_endpoints.endpoint_type
-documents.source_type
 ```
 
 do not define semantic document type.
@@ -1345,6 +1368,13 @@ Semantic document type is:
 document_types
 +
 document_type_assignments
+```
+
+Acquisition and representation are separately:
+
+```text
+documents.ingestion_format
+documents.content_format
 ```
 
 ## Topic hierarchy is not limited to two levels
@@ -1531,7 +1561,7 @@ A discrepancy between the implemented schema and a future specification may simp
 
 # 28. Snapshot Verification
 
-This document was updated from the frozen GFA-C.6
+This document was updated from the frozen GFA-D
 schema-only PostgreSQL dump generated on 2026-07-26.
 
 Observed/verified characteristics:
@@ -1539,10 +1569,10 @@ Observed/verified characteristics:
 ```text
 PostgreSQL server:    17.10
 pg_dump version:      17.10
-Alembic revision:     d62e9f3a5b01
+Alembic revision:     e73f0a4b6c12
 Schema:               public
-Total tables:         36
-Application tables:   35
+Total tables:         37
+Application tables:   36
 Infrastructure tables: 1
 ```
 
@@ -1844,4 +1874,60 @@ legacy indexes after clean upgrade                           0
 required GFA-C tables                                       13
 repository tests passed                                    110
 guarded downgrade and re-upgrade passed                    yes
+```
+
+# 32. GFA-D Content-Format Separation — Frozen
+
+Alembic revision `e73f0a4b6c12` adds:
+
+```text
+content_formats
+
+id
+slug
+name
+description
+is_active
+metadata
+created_at
+updated_at
+```
+
+The catalog contains 21 reviewed medium/container formats informed by
+the IANA Media Types registry. `unknown` means evidence is missing;
+`other` means evidence exists but does not map to a current entry.
+RSS, Atom, and JSON Feed remain endpoint/ingestion formats and are not
+content formats.
+
+Required foreign keys now preserve both current and historical
+representation:
+
+```text
+documents.content_format
+    → content_formats.slug ON DELETE RESTRICT
+
+document_versions.content_format
+    → content_formats.slug ON DELETE RESTRICT
+```
+
+`documents.ingestion_format` remains independently reference-backed by
+`endpoint_formats.slug`. Semantic document type remains independently
+represented by `document_type_assignments`.
+
+The migration removes the deprecated `documents.source_type` copy only
+after proving it agrees with `ingestion_format`. Historical rows become
+`unknown` rather than inheriting an unsupported format from their
+acquisition envelope.
+
+Verified results:
+
+```text
+seeded content formats                                     21
+acquisition-envelope leakage                                0
+legacy document source columns                              0
+legacy document source indexes                              0
+focused and affected tests                                 43
+repository tests                                          127
+Alembic drift operations                                    0
+guarded downgrade and re-upgrade passed                   yes
 ```

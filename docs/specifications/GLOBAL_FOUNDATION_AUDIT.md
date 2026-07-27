@@ -118,6 +118,8 @@ other
 
 ## GFA-D — Semantic document type vs content format
 
+**Status: FROZEN**
+
 These are independent:
 
 ```text
@@ -136,8 +138,10 @@ official_statement + plain_text
 dataset + csv
 ```
 
-The existing `document_types` catalog remains semantic. A new canonical
-`content_formats` catalog will describe the medium/container.
+The existing `document_types` catalog remains semantic. The canonical
+`content_formats` catalog describes the medium/container. The
+implementation and migration policy are defined by
+`GFA_D_DOCUMENT_CONTENT_FORMAT_SEPARATION.md`.
 
 ## GFA-E — Coverage Profiles
 

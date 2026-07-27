@@ -5,7 +5,6 @@ import pytest
 from ingestion.rss.exceptions import FeedParseError
 from ingestion.rss.parser import parse_feed
 
-
 RSS_SAMPLE = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
@@ -75,6 +74,15 @@ def test_parse_rss_feed() -> None:
         "https://example.com/news/first-article"
     )
     assert item.title_original == "First RSS Article"
+    assert item.content_format == "html"
+    assert (
+        item.item_metadata["content_media_type"]
+        == "text/html"
+    )
+    assert (
+        item.item_metadata["content_media_type_source"]
+        == "summary"
+    )
     assert item.author == "Reporter One"
     assert item.published_at == datetime(
         2026,
@@ -137,6 +145,11 @@ def test_parse_atom_feed() -> None:
     assert "Full Atom article content" in (
         item.content_original or ""
     )
+    assert item.content_format == "html"
+    assert (
+        item.item_metadata["content_media_type_source"]
+        == "content"
+    )
     assert len(item.content_hash) == 64
 
 
@@ -158,4 +171,3 @@ def test_parse_rejects_non_feed_content() -> None:
             base_url="https://example.com/feed.xml",
             content_type="text/html",
         )
-

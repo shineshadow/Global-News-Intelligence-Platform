@@ -1,0 +1,133 @@
+{
+  "version": "1.0",
+  "authority": "IANA Media Types registry",
+  "authority_url": "https://www.iana.org/assignments/media-types/media-types.xhtml",
+  "content_formats": [
+    {
+      "slug": "unknown",
+      "name": "Unknown",
+      "description": "The content representation has not been determined.",
+      "metadata": {"media_family": "unknown", "mime_types": [], "file_extensions": []}
+    },
+    {
+      "slug": "html",
+      "name": "HTML",
+      "description": "Hypertext Markup Language content, including XHTML.",
+      "metadata": {"media_family": "text", "mime_types": ["text/html", "application/xhtml+xml"], "file_extensions": ["html", "htm", "xhtml"]}
+    },
+    {
+      "slug": "plain_text",
+      "name": "Plain Text",
+      "description": "Unformatted textual content.",
+      "metadata": {"media_family": "text", "mime_types": ["text/plain"], "file_extensions": ["txt"]}
+    },
+    {
+      "slug": "markdown",
+      "name": "Markdown",
+      "description": "Text content using Markdown markup.",
+      "metadata": {"media_family": "text", "mime_types": ["text/markdown"], "file_extensions": ["md", "markdown"]}
+    },
+    {
+      "slug": "pdf",
+      "name": "PDF",
+      "description": "Portable Document Format content.",
+      "metadata": {"media_family": "paginated_document", "mime_types": ["application/pdf"], "file_extensions": ["pdf"]}
+    },
+    {
+      "slug": "word_processing",
+      "name": "Word-Processing Document",
+      "description": "Editable word-processing document content.",
+      "metadata": {"media_family": "office_document", "mime_types": ["application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.oasis.opendocument.text"], "file_extensions": ["doc", "docx", "odt"]}
+    },
+    {
+      "slug": "presentation",
+      "name": "Presentation",
+      "description": "Slide presentation content.",
+      "metadata": {"media_family": "office_document", "mime_types": ["application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.oasis.opendocument.presentation"], "file_extensions": ["ppt", "pptx", "odp"]}
+    },
+    {
+      "slug": "spreadsheet",
+      "name": "Spreadsheet",
+      "description": "Spreadsheet workbook content.",
+      "metadata": {"media_family": "tabular_data", "mime_types": ["application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.oasis.opendocument.spreadsheet"], "file_extensions": ["xls", "xlsx", "ods"]}
+    },
+    {
+      "slug": "csv",
+      "name": "CSV",
+      "description": "Comma-separated tabular text.",
+      "metadata": {"media_family": "tabular_data", "mime_types": ["text/csv"], "file_extensions": ["csv"]}
+    },
+    {
+      "slug": "tsv",
+      "name": "TSV",
+      "description": "Tab-separated tabular text.",
+      "metadata": {"media_family": "tabular_data", "mime_types": ["text/tab-separated-values"], "file_extensions": ["tsv"]}
+    },
+    {
+      "slug": "json",
+      "name": "JSON",
+      "description": "JSON or a media type using the +json structured syntax suffix.",
+      "metadata": {"media_family": "structured_data", "mime_types": ["application/json", "*/*+json"], "file_extensions": ["json"]}
+    },
+    {
+      "slug": "xml",
+      "name": "XML",
+      "description": "XML or a media type using the +xml structured syntax suffix.",
+      "metadata": {"media_family": "structured_data", "mime_types": ["application/xml", "text/xml", "*/*+xml"], "file_extensions": ["xml"]}
+    },
+    {
+      "slug": "email_message",
+      "name": "Email Message",
+      "description": "Internet email message content.",
+      "metadata": {"media_family": "message", "mime_types": ["message/rfc822"], "file_extensions": ["eml"]}
+    },
+    {
+      "slug": "calendar",
+      "name": "Calendar",
+      "description": "Calendar or scheduling data.",
+      "metadata": {"media_family": "calendar", "mime_types": ["text/calendar"], "file_extensions": ["ics", "ifb"]}
+    },
+    {
+      "slug": "image",
+      "name": "Image",
+      "description": "Still-image content.",
+      "metadata": {"media_family": "image", "mime_types": ["image/*"], "file_extensions": []}
+    },
+    {
+      "slug": "audio",
+      "name": "Audio",
+      "description": "Audio content.",
+      "metadata": {"media_family": "audio", "mime_types": ["audio/*"], "file_extensions": []}
+    },
+    {
+      "slug": "video",
+      "name": "Video",
+      "description": "Video content.",
+      "metadata": {"media_family": "video", "mime_types": ["video/*"], "file_extensions": []}
+    },
+    {
+      "slug": "archive",
+      "name": "Archive",
+      "description": "Archive or compressed container content.",
+      "metadata": {"media_family": "archive", "mime_types": ["application/zip", "application/gzip", "application/x-tar", "application/x-7z-compressed", "application/vnd.rar"], "file_extensions": ["zip", "gz", "tar", "7z", "rar"]}
+    },
+    {
+      "slug": "ebook",
+      "name": "E-book",
+      "description": "Electronic publication container content.",
+      "metadata": {"media_family": "paginated_document", "mime_types": ["application/epub+zip"], "file_extensions": ["epub"]}
+    },
+    {
+      "slug": "binary",
+      "name": "Binary",
+      "description": "Known generic binary content without a more specific representation.",
+      "metadata": {"media_family": "binary", "mime_types": ["application/octet-stream"], "file_extensions": []}
+    },
+    {
+      "slug": "other",
+      "name": "Other",
+      "description": "A known representation that does not yet have a canonical content-format entry.",
+      "metadata": {"media_family": "other", "mime_types": [], "file_extensions": []}
+    }
+  ]
+}
