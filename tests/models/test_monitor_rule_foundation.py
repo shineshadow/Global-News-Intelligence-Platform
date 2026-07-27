@@ -78,23 +78,5 @@ async def test_step_25_criteria_are_normalized_not_json_metadata(
                 )
             ).all()
         )
-        alert_tables = list(
-            (
-                await session.scalars(
-                    text(
-                        """
-                        SELECT table_name
-                        FROM information_schema.tables
-                        WHERE table_schema = 'public'
-                          AND table_name IN (
-                              'alerts',
-                              'alert_deliveries'
-                          )
-                        """
-                    )
-                )
-            ).all()
-        )
 
     assert metadata_columns == set()
-    assert alert_tables == []

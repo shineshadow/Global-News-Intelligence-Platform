@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.api.dependencies import DatabaseSession
 from app.repositories import monitor_repository
+from app.schemas.alert import MonitorAlertDestinationInput
 from app.schemas.document_match import (
     DocumentMatchCriteria,
     HierarchyIdMatch,
@@ -14,7 +15,7 @@ from app.schemas.monitor import (
     MonitorCreate,
     MonitorRevisionInput,
 )
-from app.services import monitor_service
+from app.services import alert_service, monitor_service
 from app.services.document_browser_service import effective_time_cutoff
 from app.web.document_routes import (
     optional_confidence,
@@ -202,6 +203,14 @@ async def monitor_detail_page(
         monitor_id,
         limit=25,
     )
+    destinations = await alert_service.list_destinations(
+        session,
+        active_only=True,
+    )
+    bindings = await alert_service.list_monitor_destinations(
+        session,
+        monitor_id,
+    )
     return templates.TemplateResponse(
         request=request,
         name="monitor_detail.html",
@@ -210,6 +219,10 @@ async def monitor_detail_page(
             "detail": detail,
             "matches": matches,
             "evaluations": evaluations,
+            "alert_destinations": destinations,
+            "alert_bindings": {
+                binding.destination_id: binding for binding in bindings
+            },
         },
     )
 
@@ -259,4 +272,29 @@ async def evaluate_monitor(
     session: DatabaseSession,
 ) -> RedirectResponse:
     await monitor_service.evaluate_monitor(session, monitor_id)
+    return _redirect_to_monitor(monitor_id)
+
+
+@router.post(
+    "/web/monitors/{monitor_id}/alert-destinations",
+    name="web_monitor_alert_destination",
+)
+async def set_monitor_alert_destination(
+    monitor_id: int,
+    session: DatabaseSession,
+    destination_id: int = Form(),
+    is_enabled: bool = Form(default=False),
+    priority: Literal["low", "normal", "high", "critical"] | None = Form(
+        default=None,
+    ),
+) -> RedirectResponse:
+    await alert_service.set_monitor_destination(
+        session,
+        monitor_id,
+        MonitorAlertDestinationInput(
+            destination_id=destination_id,
+            is_enabled=is_enabled,
+            priority=priority,
+        ),
+    )
     return _redirect_to_monitor(monitor_id)

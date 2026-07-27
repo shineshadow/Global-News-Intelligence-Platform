@@ -26,6 +26,9 @@ from app.services.web_ui_service import (
     list_run_overviews,
     list_source_overviews,
 )
+from app.web.alert_routes import (
+    router as alert_router,
+)
 from app.web.document_routes import (
     router as document_router,
 )
@@ -44,6 +47,9 @@ router = APIRouter(
 # Lifecycle routes contain fixed paths such as
 # /web/sources/new. Include them before dynamic
 # routes such as /web/sources/{source_id}.
+router.include_router(
+    alert_router
+)
 router.include_router(
     lifecycle_router
 )

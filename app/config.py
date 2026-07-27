@@ -16,7 +16,9 @@ class Settings(BaseSettings):
 
     celery_endpoint_claim_ttl_seconds: int = 3600
     celery_dispatch_interval_seconds: int = 30
-    celery_dispatch_limit: int = 500    
+    celery_dispatch_limit: int = 500
+    celery_alert_dispatch_interval_seconds: int = 15
+    celery_alert_dispatch_limit: int = 500
 
     model_config = SettingsConfigDict(
         env_file=".env",

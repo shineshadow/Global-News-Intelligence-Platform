@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Alert {{ alert.id }} — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Content Monitor Alert</div>
+        <h2 class="page-title">{{ alert.title }}</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-body">
+        <p>{{ alert.message }}</p>
+        <div class="text-secondary">
+            Monitor {{ alert.monitor_id }} · Document {{ alert.document_id }} ·
+            {{ alert.created_at | datetime_utc }}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Deliveries</h3>
+    </div>
+    <div class="table-responsive">
+        <table class="table card-table">
+            <thead>
+                <tr>
+                    <th>Destination</th>
+                    <th>Status</th>
+                    <th>Attempts</th>
+                    <th>Last response</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for delivery in deliveries %}
+                <tr>
+                    <td>{{ delivery.destination_id }}</td>
+                    <td>{{ delivery.status | replace("_", " ") | title }}</td>
+                    <td>{{ delivery.attempt_count }}</td>
+                    <td>
+                        {% if delivery.last_http_status %}
+                        HTTP {{ delivery.last_http_status }}
+                        {% endif %}
+                        {{ delivery.last_error or "" }}
+                    </td>
+                    <td>
+                        {% if delivery.status in ["retry_scheduled", "permanent_failure", "cancelled"] %}
+                        <form method="post"
+                            action="{{ url_for('web_alert_delivery_retry', delivery_id=delivery.id) }}">
+                            <input type="hidden" name="alert_id" value="{{ alert.id }}">
+                            <button class="btn btn-sm" type="submit">Retry</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% for attempt in attempts[delivery.id] %}
+                <tr class="text-secondary">
+                    <td colspan="2">Attempt {{ attempt.attempt_number }}</td>
+                    <td>{{ attempt.status | replace("_", " ") }}</td>
+                    <td colspan="2">
+                        {% if attempt.http_status %}HTTP {{ attempt.http_status }}{% endif %}
+                        {{ attempt.error or "" }}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-secondary">
+                        No destination was routed when this alert was created.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

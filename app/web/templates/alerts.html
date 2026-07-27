@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Notification Delivery</div>
+        <h2 class="page-title">Alerts</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+    <a class="btn" href="{{ url_for('web_alert_destinations') }}">
+        Alert destinations
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">{{ alerts | length }} Recent Alerts</h3>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for alert in alerts %}
+        <a class="list-group-item list-group-item-action"
+            href="{{ url_for('web_alert_detail', alert_id=alert.id) }}">
+            <div class="d-flex justify-content-between">
+                <strong>{{ alert.title }}</strong>
+                <span class="badge bg-blue-lt">{{ alert.priority }}</span>
+            </div>
+            <div class="text-secondary mt-1">
+                {{ alert.message | truncate(220) }}
+            </div>
+            <div class="small text-secondary mt-1">
+                {{ alert.created_at | datetime_utc }}
+            </div>
+        </a>
+        {% else %}
+        <div class="card-body text-secondary">
+            No alerts have been created. A new Monitor match creates the first
+            alert event.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

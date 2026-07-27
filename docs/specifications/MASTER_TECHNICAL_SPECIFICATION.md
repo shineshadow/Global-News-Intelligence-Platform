@@ -2554,7 +2554,7 @@ Step 23  Deterministic and structured-metadata classification  implemented
 GFA A-E  Global canonical/configuration foundations             frozen
 Step 24  Classification-aware News Feed filters                frozen
 Step 25  Monitor Rule Engine                                   frozen
-Step 26  Alerts and ntfy delivery
+Step 26  Alerts and ntfy delivery                              freeze candidate
 ```
 
 Step 24 defines a shared document-matching contract. A News Feed filter is a

@@ -1,3 +1,10 @@
+from app.models.alert import (
+    Alert,
+    AlertDelivery,
+    AlertDeliveryAttempt,
+    AlertDestination,
+    MonitorAlertDestination,
+)
 from app.models.base import Base
 from app.models.classification import (
     ClassificationRun,
@@ -70,6 +77,10 @@ from app.models.source_reference import (
 
 __all__ = [
     "AcquisitionMethod",
+    "Alert",
+    "AlertDelivery",
+    "AlertDeliveryAttempt",
+    "AlertDestination",
     "Base",
     "ClassificationRun",
     "ContentFormat",
@@ -110,6 +121,7 @@ __all__ = [
     "LanguageTag",
     "LanguageTagAlias",
     "Monitor",
+    "MonitorAlertDestination",
     "MonitorEvaluationRun",
     "MonitorMatch",
     "MonitorRevision",

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Alert Destinations — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Notification Delivery</div>
+        <h2 class="page-title">Alert Destinations</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+    <a class="btn btn-primary" href="{{ url_for('web_alert_destination_new') }}">
+        Add ntfy destination
+    </a>
+</div>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table card-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Endpoint</th>
+                    <th>Token environment</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for destination in destinations %}
+                <tr>
+                    <td>{{ destination.name }}</td>
+                    <td>{{ destination.base_url }}/{{ destination.topic }}</td>
+                    <td>{{ destination.auth_token_env_var or "None" }}</td>
+                    <td>{{ "Active" if destination.is_active else "Inactive" }}</td>
+                    <td>
+                        <a class="btn btn-sm"
+                            href="{{ url_for('web_alert_destination_edit', destination_id=destination.id) }}">
+                            Edit
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-secondary">
+                        No ntfy destinations configured.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

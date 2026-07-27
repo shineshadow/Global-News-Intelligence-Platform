@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    alerts,
     ingestion,
     monitors,
     observability,
@@ -12,6 +13,9 @@ api_router = APIRouter(
     prefix="/api/v1",
 )
 
+api_router.include_router(
+    alerts.router
+)
 api_router.include_router(
     sources.router
 )

@@ -6,7 +6,9 @@ from app.database import async_session_factory
 from app.repositories import (
     source_endpoint_repository,
 )
+from app.services.alert_service import list_due_delivery_ids
 from app.services.monitor_service import expire_due_monitors
+from workers.alerts.tasks import deliver_alert_delivery_task
 from workers.async_runner import run_async
 from workers.celery_app import celery_app
 from workers.ingestion.tasks import (
@@ -36,12 +38,47 @@ async def _expire_due_monitor_ids() -> list[int]:
         return await expire_due_monitors(session)
 
 
+async def _get_due_alert_delivery_ids() -> list[int]:
+    async with async_session_factory() as session:
+        return await list_due_delivery_ids(
+            session,
+            limit=settings.celery_alert_dispatch_limit,
+        )
+
+
 @celery_app.task(
     name="scheduler.expire_due_monitors",
 )
 def expire_due_monitors_task() -> dict[str, int]:
     expired_ids = run_async(_expire_due_monitor_ids)
     return {"expired": len(expired_ids)}
+
+
+@celery_app.task(
+    name="scheduler.dispatch_due_alert_deliveries",
+)
+def dispatch_due_alert_deliveries() -> dict[str, int]:
+    delivery_ids = run_async(_get_due_alert_delivery_ids)
+    queued = 0
+    enqueue_failed = 0
+    for delivery_id in delivery_ids:
+        try:
+            deliver_alert_delivery_task.apply_async(
+                args=[delivery_id],
+                queue="alerts",
+            )
+            queued += 1
+        except Exception:
+            enqueue_failed += 1
+            logger.exception(
+                "Could not enqueue alert delivery %s",
+                delivery_id,
+            )
+    return {
+        "due": len(delivery_ids),
+        "queued": queued,
+        "enqueue_failed": enqueue_failed,
+    }
 
 
 @celery_app.task(

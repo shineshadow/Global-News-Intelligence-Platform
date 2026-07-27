@@ -6,6 +6,7 @@ celery_app = Celery(
     "global_news_intelligence",
     broker=settings.celery_broker_url,
     include=[
+        "workers.alerts.tasks",
         "workers.ingestion.tasks",
         "workers.scheduler.tasks",
     ],
@@ -42,6 +43,12 @@ celery_app.conf.update(
         "scheduler.expire_due_monitors": {
             "queue": "scheduler",
         },
+        "scheduler.dispatch_due_alert_deliveries": {
+            "queue": "scheduler",
+        },
+        "alerts.deliver": {
+            "queue": "alerts",
+        },
     },
     beat_schedule={
         "dispatch-due-source-endpoints": {
@@ -54,6 +61,15 @@ celery_app.conf.update(
         "expire-due-monitors": {
             "task": "scheduler.expire_due_monitors",
             "schedule": float(settings.celery_dispatch_interval_seconds),
+            "options": {
+                "queue": "scheduler",
+            },
+        },
+        "dispatch-due-alert-deliveries": {
+            "task": "scheduler.dispatch_due_alert_deliveries",
+            "schedule": float(
+                settings.celery_alert_dispatch_interval_seconds
+            ),
             "options": {
                 "queue": "scheduler",
             },

@@ -496,6 +496,11 @@ class MonitorMatch(Base):
             "document_id",
             name="uq_monitor_matches_monitor_document",
         ),
+        UniqueConstraint(
+            "monitor_id",
+            "id",
+            name="uq_monitor_matches_monitor_id",
+        ),
         ForeignKeyConstraint(
             ["monitor_id", "first_monitor_revision_id"],
             ["monitor_revisions.monitor_id", "monitor_revisions.id"],

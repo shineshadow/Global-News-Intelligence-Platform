@@ -68,6 +68,69 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
+                <h3 class="card-title">Alert routing</h3>
+                <a class="btn btn-sm ms-auto" href="{{ url_for('web_alert_destinations') }}">
+                    Manage destinations
+                </a>
+            </div>
+            <div class="card-body">
+                <p class="text-secondary">
+                    Routes apply only to new matches. Existing alerts retain the
+                    destination settings captured when they were created.
+                </p>
+                {% for destination in alert_destinations %}
+                {% set binding = alert_bindings.get(destination.id) %}
+                <form class="row align-items-end g-2 mb-3" method="post"
+                    action="{{ url_for('web_monitor_alert_destination', monitor_id=detail.monitor.id) }}">
+                    <input type="hidden" name="destination_id" value="{{ destination.id }}">
+                    <div class="col-md-5">
+                        <label class="form-label">{{ destination.name }}</label>
+                        <div class="text-secondary">{{ destination.base_url }} / {{ destination.topic }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Priority</label>
+                        <select class="form-select" name="priority">
+                            <option value="" {% if not binding or not binding.priority %}selected{% endif %}>
+                                Monitor default
+                            </option>
+                            {% for value in ["low", "normal", "high", "critical"] %}
+                            <option value="{{ value }}"
+                                {% if binding and binding.priority == value %}selected{% endif %}>
+                                {{ value | title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-check">
+                            <input type="checkbox" class="form-check-input" name="is_enabled"
+                                {% if binding and binding.is_enabled %}checked{% endif %}>
+                            <span class="form-check-label">Enabled</span>
+                        </label>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100">Save route</button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="empty">
+                    <p class="empty-title">No active alert destinations</p>
+                    <p class="empty-subtitle text-secondary">
+                        Create an ntfy destination before routing this monitor.
+                    </p>
+                    <div class="empty-action">
+                        <a class="btn btn-primary" href="{{ url_for('web_alert_destination_new') }}">
+                            Add destination
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
                 <h3 class="card-title">Recent evaluations</h3>
             </div>
             <div class="table-responsive">

@@ -78,3 +78,28 @@ GPU inference
 high-priority real-time
 bulk/backfill
 ```
+
+---
+
+## Active Step 26 Alert Worker
+
+Step 26 activates the `alerts` queue. Celery Beat asks the scheduler worker to
+dispatch due delivery identifiers every
+`CELERY_ALERT_DISPATCH_INTERVAL_SECONDS` (15 seconds by default). The
+`gni-celery-alerts.service` worker consumes those identifiers.
+
+The task argument contains only the database delivery identifier. The worker:
+
+```text
+claims the delivery transactionally
+appends a running attempt
+commits before external I/O
+publishes to the snapshotted ntfy endpoint
+finalizes the attempt and delivery in a new transaction
+```
+
+Claims expire and are recoverable. Duplicate queued tasks cannot create two
+simultaneous active attempts. Retry scheduling is durable in PostgreSQL;
+Celery transport retries do not own the business retry policy. Destination
+authentication tokens are resolved from the configured environment-variable
+name inside the alerts worker and are never Celery arguments.

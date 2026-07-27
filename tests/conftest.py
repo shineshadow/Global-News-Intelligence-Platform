@@ -109,6 +109,11 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            alert_delivery_attempts,
+            alert_deliveries,
+            alerts,
+            monitor_alert_destinations,
+            alert_destinations,
             monitor_matches,
             monitor_evaluation_runs,
             monitor_revision_entity_roles,

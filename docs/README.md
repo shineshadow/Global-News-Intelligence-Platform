@@ -20,6 +20,7 @@ Generated files:
 - `STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md`
 - `STEP_24_CLASSIFICATION_AWARE_NEWS_FEED_FILTERS.md` — shared transient filter and future monitor-matching contract
 - `STEP_25_MONITOR_RULE_ENGINE.md` — active persistent Monitor lifecycle, revision, evaluation, and match contract
+- `STEP_26_ALERTS_AND_NTFY.md` — active alert event, delivery, retry, and ntfy contract
 - `UI_IMPLEMENTATION_NOTES.md`
 - `WORKER_DESIGN_SPECIFICATION.md`
 - `WEB_UI_IMPLEMENTATION_STRATEGY.md` — Web UI architecture, component boundaries, and rationale

@@ -544,9 +544,10 @@ async def _evaluate_monitor(
                 (await session.scalars(matched_statement.order_by(Document.id))).all()
             )
             new_ids: list[int] = []
+            new_match_ids: list[int] = []
             matched_at = _utcnow()
             for matched_document_id in matched_ids:
-                _, is_new = await monitor_repository.record_match(
+                match, is_new = await monitor_repository.record_match(
                     session,
                     monitor_id=monitor.id,
                     document_id=matched_document_id,
@@ -556,6 +557,20 @@ async def _evaluate_monitor(
                 )
                 if is_new:
                     new_ids.append(matched_document_id)
+                    new_match_ids.append(match.id)
+
+            if new_match_ids:
+                # Imported lazily to keep the frozen matching service
+                # independent of Step 26 delivery implementation details.
+                from app.services.alert_service import (
+                    create_alert_for_match,
+                )
+
+                for new_match_id in new_match_ids:
+                    await create_alert_for_match(
+                        session,
+                        new_match_id,
+                    )
 
         await monitor_repository.finish_evaluation_run(
             session,
