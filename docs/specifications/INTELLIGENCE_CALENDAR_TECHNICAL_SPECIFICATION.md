@@ -125,6 +125,13 @@ This changes the system from purely reactive monitoring into partially anticipat
 
 The Intelligence Calendar must reuse the platform-wide canonical geography, topic, entity, and document-type systems defined in `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`. The Calendar must not maintain a parallel or incompatible taxonomy merely for event filtering. Calendar-specific relationship tables may carry event roles and confidence while referencing the same canonical records used by documents, stories, and observed Events.
 
+The normative Calendar foundation, Phase 1 ownership boundaries, time and
+recurrence model, independent state machines, evidence accumulation policy,
+Coverage Profile policy, and frozen Step 25/26 integration rules are defined
+in `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`. The field sketches later in
+this document describe product intent; they are not migration blueprints where
+they conflict with that audit.
+
 ---
 
 ## 3. Core Intelligence Model
@@ -303,9 +310,13 @@ intelligence_calendar_event_history
 
 ---
 
-## 6. Three Primary Calendar Event Types
+## 6. Three Primary Calendar Population Patterns
 
-### 6.1 Recurring Events
+These patterns are not values of one `event_type` field. Recurrence is a
+schedule dimension, one-time versus recurring is represented through Event
+and Occurrence structure, and AI discovery is provenance.
+
+### 6.1 Recurring Schedule Pattern
 
 Recurring events are predictable events that repeat according to a known schedule.
 
@@ -335,7 +346,7 @@ Example:
 title:
 South Korea Constitution Day
 
-event_type:
+schedule_pattern:
 recurring
 
 country:
@@ -347,8 +358,8 @@ FREQ=YEARLY;BYMONTH=7;BYMONTHDAY=17
 calendar_validation:
 verified
 
-calendar_priority:
-critical
+coverage_profile_policy:
+  monitoring_priority: critical
 ```
 
 Recurring events should support iCalendar-compatible recurrence rules where practical.
@@ -367,7 +378,7 @@ The system should also support exceptions and overrides.
 
 ---
 
-### 6.2 Scheduled One-Time Events
+### 6.2 Scheduled One-Time Pattern
 
 Scheduled one-time events are explicitly announced future events.
 
@@ -393,7 +404,7 @@ Example:
 title:
 Presidential Address to the Nation
 
-event_type:
+schedule_pattern:
 one_time
 
 start_at:
@@ -402,16 +413,14 @@ start_at:
 calendar_validation:
 confirmed
 
-calendar_priority:
-critical
-
-expected_news_importance:
-critical
+coverage_profile_policy:
+  monitoring_priority: critical
+  expected_news_importance: critical
 ```
 
 ---
 
-### 6.3 AI-Discovered Future Events
+### 6.3 AI Discovery Method
 
 AI-Discovered Future Events are identified automatically from incoming documents.
 
@@ -442,14 +451,14 @@ confidence:
 source:
 White House
 
-event_type:
+discovery_method:
 ai_discovered
 
 calendar_validation:
 confirmed
 
-calendar_priority:
-critical
+coverage_profile_policy:
+  monitoring_priority: critical
 ```
 
 Another example:
@@ -847,7 +856,7 @@ Q4
 later this year
 ```
 
-Recommended fields:
+Superseded pre-audit inventory (must not be implemented as one table):
 
 ```text
 start_at
@@ -875,13 +884,18 @@ unknown
 
 All normalized dates should preserve the original temporal phrase for auditability.
 
+The authoritative persistence contract is the immutable Occurrence schedule
+revision in `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`. In particular,
+all-day dates remain local dates, uncertain month/quarter/year values do not
+become fabricated exact datetimes, and rescheduling appends a revision.
+
 ---
 
 ## 11. Event Validation
 
 AI extraction alone does not make an event verified.
 
-Recommended validation and lifecycle states:
+The following product-language list historically combined several dimensions:
 
 ```text
 Candidate
@@ -896,6 +910,10 @@ Unconfirmed
 Disputed
 Archived
 ```
+
+The foundation replaces that combined field with independent validation,
+schedule, and future outcome state machines. The terms below remain useful UI
+descriptions but must map to the correct state dimension.
 
 ### Candidate
 
@@ -1009,6 +1027,9 @@ Validation should be revisited as additional evidence arrives.
 
 The subsystem must distinguish operational monitoring priority from expected news importance.
 
+Both values are Coverage Profile policy under the frozen foundation. They are
+not installation-global columns on the canonical Event.
+
 Recommended fields:
 
 ```text
@@ -1120,6 +1141,12 @@ Primary table:
 intelligence_calendar_events
 ```
 
+The table is the stable Event definition, not a combined Event, Occurrence,
+schedule-history, policy, evidence, Monitor and observed-outcome record. The
+field list below is retained as a product-domain inventory only. Calendar
+Phase 1 must use the normalized schema package frozen by
+`INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`.
+
 Recommended fields:
 
 ```text
@@ -1202,21 +1229,21 @@ metadata
 
 Calendar event geography should use canonical geography relationships rather than relying only on the scalar `country`, `region`, and `city` convenience fields above. Those fields may remain useful for display, indexing, schedule defaults, or denormalized snapshots, but canonical multi-geography semantics belong in normalized event-geography relationships.
 
-Recommended `event_type` values:
+Schedule-pattern examples:
 
 ```text
 recurring
 one_time
-ai_discovered
 ```
 
-Recommended `discovery_method` values:
+Discovery-method examples:
 
 ```text
 recurring_event_research
 manual
 document_extraction
 official_calendar
+ai_discovered
 ```
 
 ---
@@ -1224,6 +1251,13 @@ official_calendar
 ## 16. Relational Tables
 
 All Calendar classification relationships must reference the same canonical classification records used elsewhere in the platform.
+
+The normalized relationship families remain valid product requirements.
+Their exact Phase 1 columns, evidence/provenance rules, Coverage Profile
+ownership, and Monitor linkage are governed by the Foundation Audit. In
+particular, watch sources, search terms, priority, expected importance and
+polling escalation are profile policy; Event Monitors reference frozen Step
+25 Monitors and never store duplicate matching rules.
 
 ### 16.1 Event Geographies
 
@@ -1508,16 +1542,20 @@ Fields:
 ```text
 id
 name
-event_type
+template_kind
 pre_event_window
 post_event_window
 polling_escalation_enabled
 youtube_monitoring_enabled
 temporary_monitor_enabled
-default_rules
+default_policy_suggestions
 created_at
 updated_at
 ```
+
+Templates suggest Coverage Profile policy and Step 24 criteria inputs. They do
+not persist a second Monitor rules document; accepted matching criteria are
+stored as a frozen Step 25 Monitor revision.
 
 Examples:
 
@@ -2321,17 +2359,16 @@ Possible fields:
 country
 event_name
 native_name
-event_type
 recurrence_rule
 official_source
 topics
-expected_sources
-default_monitoring_window
-default_calendar_priority
-default_news_importance
 ```
 
 This dataset should be periodically revalidated.
+
+Expected/watch sources, monitoring windows, priority and expected-importance
+defaults belong in separate Coverage Profile policy templates, not in the
+canonical recurring-event dataset.
 
 ---
 
@@ -2402,6 +2439,10 @@ GET    /api/intelligence-calendar/events/{id}/stories
 GET    /api/intelligence-calendar/events/{id}/monitors
 GET    /api/intelligence-calendar/events/{id}/history
 ```
+
+The `DELETE` route is conceptual only. The frozen identity/history contract
+requires archive or explicit merge; a Phase 1 API must not physically delete
+an Event that owns Occurrences, evidence, policy, Monitor links or history.
 
 ---
 
@@ -2735,7 +2776,8 @@ The LLM Router should receive metadata such as:
 ```text
 task = future_event_detection
 language
-calendar_priority
+coverage_profile_id
+monitoring_priority
 source_authority
 maximum_cost
 minimum_quality
@@ -2754,6 +2796,11 @@ UTC timestamp
 original timezone
 country timezone
 ```
+
+The Foundation Audit refines this shorthand: timed Occurrence schedule
+revisions store normalized UTC timestamps plus their original IANA timezone;
+all-day and date-granular schedules remain local dates. Publisher country is
+not an Event timezone or Event geography assertion.
 
 The UI should support displaying:
 
@@ -2800,7 +2847,7 @@ Where practical, important schedules should be stored durably in PostgreSQL and 
 
 The Intelligence Calendar should be implemented incrementally.
 
-### Calendar Foundation Audit — Required Before Phase 1
+### Calendar Foundation Audit — FROZEN
 
 The Foundation Audit begins in parallel with main-track Step 24. It must freeze:
 
@@ -2820,38 +2867,38 @@ particular, Calendar monitoring priority, watch sources, temporary monitors,
 and polling escalation are operator configuration and must not be silently
 collapsed into globally canonical Calendar Event facts.
 
-The active decision register is maintained in
-`INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`.
+The closed decision register and Phase 1 invariant proof matrix are maintained
+in `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`.
 
 ### Calendar Phase 1 — Manual Calendar
 
 Build:
 
 ```text
-intelligence_calendar_events
-manual event entry
-basic calendar UI
-basic recurrence
+normalized Event and Occurrence identity
+immutable descriptive and schedule revisions
+manual entry and structured evidence
+basic Calendar UI
+bounded recurrence and explicit exceptions
+Coverage Profile policy
+optional normalized Step 25 Monitor integration
 ```
 
 Success criterion:
 
-Users can add one-time and recurring events and view them reliably.
+Users can add one-time and recurring Events, view their Occurrences reliably,
+and explicitly save or link equivalent criteria as a Monitor without creating
+one implicitly.
 
-### Calendar Phase 2 — Validation and Relationships
+### Calendar Phase 2 — Validation Automation and Relationship Enrichment
 
-Add:
+Build on the normalized manual foundation with:
 
 ```text
-event validation
-calendar priority
-expected news importance
-event geographies
-event topics
-event entities
-event sources
-event history
-canonical classification reuse
+automated corroboration and source-authority assessment
+relationship suggestions and review workflow
+occurrence-specific policy overrides
+advanced evidence and history UI
 ```
 
 ### Calendar Phase 3 — Official and Recurring Calendar Ingestion
@@ -2876,7 +2923,7 @@ AI-discovered candidates
 candidate deduplication
 ```
 
-### Calendar Phase 5 — Automated Event Scheduler
+### Calendar Phase 5 — Automated Event Scheduler and Escalation
 
 This phase begins only after the Step 25 Monitor Rule Engine is frozen.
 

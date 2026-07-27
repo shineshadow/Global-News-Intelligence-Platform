@@ -1018,7 +1018,9 @@ Calendar-related request metadata may additionally include:
 
 ```text
 calendar_event_id
-calendar_priority
+calendar_occurrence_id
+coverage_profile_id
+monitoring_priority
 expected_news_importance
 source_authority
 event_confidence
@@ -1550,17 +1552,27 @@ transcripts
 transcript_segments
 
 intelligence_calendar_events
+intelligence_calendar_event_revisions
+intelligence_calendar_event_aliases
+intelligence_calendar_event_recurrence_rules
+intelligence_calendar_event_recurrence_exceptions
+intelligence_calendar_event_occurrences
+intelligence_calendar_occurrence_schedule_revisions
+intelligence_calendar_event_evidence
+intelligence_calendar_event_state_transitions
 intelligence_calendar_event_geographies
 intelligence_calendar_event_topics
 intelligence_calendar_event_entities
 intelligence_calendar_event_sources
 intelligence_calendar_event_documents
-intelligence_calendar_event_stories
 intelligence_calendar_event_monitors
-intelligence_calendar_event_history
-intelligence_calendar_event_watch_sources
-intelligence_calendar_event_search_terms
-intelligence_calendar_monitor_templates
+intelligence_calendar_event_coverage_policies
+intelligence_calendar_occurrence_policy_overrides
+intelligence_calendar_policy_watch_sources
+intelligence_calendar_policy_search_terms
+intelligence_calendar_policy_document_types
+intelligence_calendar_policy_content_formats
+intelligence_calendar_event_merge_history
 ```
 
 The `events` table represents observed real-world occurrences.
@@ -1569,7 +1581,9 @@ The `intelligence_calendar_events` table represents known, scheduled, recurring,
 
 A Calendar Event may later link to an observed real-world Event, allowing the system to distinguish what was expected from what actually occurred.
 
-Detailed Calendar field definitions and relational-table schemas are maintained in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
+The normative Calendar Phase 1 schema and ownership rules are maintained in
+`INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`. Later Calendar behavior remains
+detailed in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
 
 Detailed classification schemas, relationship metadata, provenance fields, taxonomy versioning, confidence semantics, and backfill behavior are maintained in `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`.
 
@@ -2698,25 +2712,32 @@ The platform identifies meaningful developments rather than merely new documents
 
 The Intelligence Calendar should be developed as a parallel track aligned with dependencies in the main roadmap.
 
-#### Calendar Foundation Audit — Current Parallel Work
+#### Calendar Foundation Audit — FROZEN
 
 Before the first Calendar migration, reconcile event identity, time and
 recurrence, validation state, confidence, evidence, history, canonical
 relationships, and operator policy with the frozen GFA foundations.
 
-The audit must preserve this ownership boundary:
+The audit freezes this ownership boundary:
 
 ```text
 Calendar Event
-    canonical expected occurrence and schedule
+    canonical definition of an expected occurrence or recurring series
+
+Calendar Occurrence
+    one scheduled instance with immutable schedule history
 
 Coverage profile / Calendar monitoring policy
-    whether and how an operator monitors that occurrence
+    whether and how an operator monitors an Event or Occurrence
 ```
 
 Calendar priority, watch sources, temporary monitors, and polling escalation
 must not become installation-global attributes merely because the initial
 deployment has one operator.
+
+The authoritative closed decision register, normalized Phase 1 schema package,
+and direct invariant proof matrix are in
+`INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`.
 
 #### Calendar Phase 1 — Manual Calendar
 
@@ -2724,24 +2745,24 @@ Begin after the Core Platform foundation exists.
 
 Add:
 
-- `intelligence_calendar_events`
-- manual event entry
+- normalized Event and Occurrence identity
+- immutable descriptive and schedule revisions
+- manual entry and structured evidence
 - basic Calendar UI
-- basic recurrence
+- bounded recurrence and explicit exceptions
+- Coverage Profile policy
+- optional normalized Step 25 Monitor creation/linking
 
-#### Calendar Phase 2 — Validation and Relationships
+#### Calendar Phase 2 — Validation Automation and Relationship Enrichment
 
 Align with Monitoring, Topic, and Entity capabilities.
 
 Add:
 
-- event validation
-- Calendar priority
-- expected news importance
-- event topics
-- event entities
-- event sources
-- event history
+- automated corroboration and source-authority assessment
+- relationship suggestions and review workflow
+- occurrence-specific policy overrides
+- advanced evidence and history UI
 
 #### Calendar Phase 3 — Official and Recurring Calendar Ingestion
 

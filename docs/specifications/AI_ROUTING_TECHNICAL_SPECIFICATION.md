@@ -69,11 +69,13 @@ context_length
 schema_id
 classification_confidence
 source_authority
-calendar_priority
+coverage_profile_id
+monitoring_priority
 story_importance
 document_id
 story_id
 calendar_event_id
+calendar_occurrence_id
 ```
 
 ---
