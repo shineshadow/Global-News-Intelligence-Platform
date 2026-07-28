@@ -98,10 +98,13 @@ Calendar creation, rescheduling, and linking do not create Calendar reminder
 or change alerts. Only a new linked Monitor/document match enters the frozen
 Step 26 content-alert path.
 
-## Intelligence Calendar Phase 2 Candidate
+## Intelligence Calendar Phase 2
 
 Normal Phase 1 Calendar reads continue to return effective canonical state.
-Machine state, operator state, evidence, attempts, and conflicts are
+Event detail includes a read-only `intelligence_summary` containing effective
+and active authority layers, confidence/method provenance, inference run and
+evidence snapshot, and unresolved-conflict/open-exception counts. Complete
+machine state, operator state, evidence, attempts, and conflicts are
 inspectable through the separate administrative-exception detail without
 making review a prerequisite.
 
@@ -116,6 +119,9 @@ POST /api/v1/calendar/administrative-exceptions/{exception_id}/withdraw
 POST /api/v1/calendar/administrative-exceptions/{exception_id}/close
 POST /api/v1/calendar/administrative-exceptions/{exception_id}/reopen
 POST /api/v1/calendar/administrative-exceptions/{exception_id}/note
+GET  /api/v1/calendar/events/{event_id}/policies/{policy_id}/occurrences/{occurrence_id}
+PUT  /api/v1/calendar/events/{event_id}/policies/{policy_id}/occurrences/{occurrence_id}
+DELETE /api/v1/calendar/events/{event_id}/policies/{policy_id}/occurrences/{occurrence_id}
 ```
 
 The list accepts `state`, `severity`, and `assertion_family` filters plus
@@ -130,6 +136,18 @@ Close records an administrative disposition without changing the underlying
 conflict or canonical state. Reopen records renewed inspection. Withdrawal
 reopens a resolved exception and republishes the preserved machine validation
 state. Notes and operator inaction do not change canonical state.
+
+Occurrence-policy writes require an operator reference and reason, enforce
+that Event, Coverage Profile policy, and Occurrence share the exact scope,
+and append same-transaction history. They change only profile-owned priority,
+expected-news importance, and watch behavior. They cannot create, suppress,
+or resolve installation-global canonical assertions or conflicts.
+
+Administrative resolution currently accepts validation conflicts only.
+Relationship assertions may be autonomously extracted and projected, but an
+administrative relationship conflict is rejected until a transactional
+canonical relationship-conflict projector is introduced; the API cannot
+report a false resolution.
 
 Operator writes append authority history; they do not update or delete
 machine assertions in place. Operator silence has no API side effect.

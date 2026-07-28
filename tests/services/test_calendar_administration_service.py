@@ -3,8 +3,10 @@ from decimal import Decimal
 from sqlalchemy import select
 
 from app.models import (
+    IntelligenceCalendarAdministrativeException,
     IntelligenceCalendarAdministrativeExceptionAction,
     IntelligenceCalendarEvent,
+    IntelligenceCalendarInferenceConflict,
     IntelligenceCalendarOperatorOverride,
 )
 from app.schemas.calendar import (
@@ -93,12 +95,38 @@ async def test_queue_api_exposes_complete_autonomous_history(
         2,
         None,
     ]
+    assert [row["actor_kind"] for row in detail["autonomous_attempts"]] == [
+        "internal_agent",
+        "internal_agent",
+        "external_model",
+    ]
+    assert all(
+        row["strategy_slug"] and row["strategy_version"]
+        for row in detail["autonomous_attempts"]
+    )
+    assert detail["autonomous_attempts"][-1]["router_decision_id"]
+    assert (
+        detail["autonomous_attempts"][-1]["provenance"]["policy_scope"]
+        == "installation"
+    )
     assert {row["evidence_kind"] for row in detail["evidence"]} == {
         "supports",
         "contradicts",
     }
     assert len(detail["authority_assessments"]) == 2
     assert detail["operator_action_history"] == []
+
+    event = await client.get(f"/api/v1/calendar/events/{event_id}")
+    assert event.status_code == 200
+    summary = event.json()["intelligence_summary"]
+    assert summary["effective_validation_state"] == "disputed"
+    assert summary["machine_validation_state"] == "disputed"
+    assert summary["operator_validation_state"] is None
+    assert summary["active_authority_layer"] == "machine"
+    assert summary["unresolved_conflict_count"] == 1
+    assert summary["open_administrative_exception_count"] == 1
+    assert summary["inference_run_id"] is not None
+    assert summary["evidence_snapshot_hash"]
 
 
 async def test_resolution_is_atomic_and_preserves_operator_history(
@@ -148,6 +176,13 @@ async def test_resolution_is_atomic_and_preserves_operator_history(
         assert action.action_kind == "resolve"
         assert action.override_id == override.id
         assert override.action_kind == "select"
+
+    event_response = await client.get(f"/api/v1/calendar/events/{event_id}")
+    summary = event_response.json()["intelligence_summary"]
+    assert summary["active_authority_layer"] == "operator"
+    assert summary["operator_validation_state"] == selected["validation_state"]
+    assert summary["assertion_actor_kind"] == "operator"
+    assert summary["assignment_method"] == "manual"
 
 
 async def test_operator_can_assert_explicit_canonical_validation(
@@ -289,6 +324,46 @@ async def test_withdrawal_reopens_resolution_and_restores_machine_state(
         "affirm",
         "withdraw",
     ]
+
+
+async def test_relationship_conflict_cannot_report_false_resolution(
+    client,
+    database_session_factory,
+) -> None:
+    _, exception_id = await _open_exception(database_session_factory)
+    base = f"/api/v1/calendar/administrative-exceptions/{exception_id}"
+    detail = (await client.get(base)).json()
+    selected = detail["competing_assertions"][0]
+
+    async with database_session_factory() as session, session.begin():
+        exception = await session.get(
+            IntelligenceCalendarAdministrativeException,
+            exception_id,
+        )
+        assert exception is not None
+        conflict = await session.get(
+            IntelligenceCalendarInferenceConflict,
+            exception.conflict_id,
+        )
+        assert conflict is not None
+        conflict.assertion_family = "event_geography"
+
+    response = await client.post(
+        f"{base}/resolve",
+        json={
+            "selected_assertion_id": selected["id"],
+            "actor_ref": "operator:test",
+            "reason": "This must not claim an unprojected resolution.",
+        },
+    )
+    assert response.status_code == 422
+    assert "relationship projector" in response.json()["error"]["message"]
+
+    after = (await client.get(base)).json()
+    assert after["state"] == "open"
+    assert after["conflict_state"] == "unresolved"
+    assert after["selected_assertion_id"] is None
+    assert after["operator_overrides"] == []
 
 
 async def test_advanced_history_ui_is_separate_from_normal_calendar(

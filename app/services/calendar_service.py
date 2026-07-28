@@ -27,6 +27,13 @@ from app.models.calendar import (
     IntelligenceCalendarEventStateTransition,
     IntelligenceCalendarOccurrenceScheduleRevision,
 )
+from app.models.calendar_inference import (
+    IntelligenceCalendarAdministrativeException,
+    IntelligenceCalendarAssertion,
+    IntelligenceCalendarInferenceConflict,
+    IntelligenceCalendarInferenceRun,
+    IntelligenceCalendarOperatorOverride,
+)
 from app.models.classification import Geography
 from app.models.monitor import Monitor
 from app.schemas.calendar import (
@@ -38,6 +45,7 @@ from app.schemas.calendar import (
     CalendarEventRead,
     CalendarEventRevisionCreate,
     CalendarEvidenceCreate,
+    CalendarIntelligenceSummary,
     CalendarMergeInput,
     CalendarMonitorCreate,
     CalendarMonitorLink,
@@ -560,6 +568,10 @@ async def get_event(
             )
         ).all()
     )
+    intelligence_summary = await get_intelligence_summary(
+        session,
+        event=event,
+    )
     return CalendarEventDetail(
         id=event.id,
         public_id=event.public_id,
@@ -577,6 +589,123 @@ async def get_event(
         ],
         coverage_policy_ids=policy_ids,
         monitor_ids=monitor_ids,
+        intelligence_summary=intelligence_summary,
+    )
+
+
+async def get_intelligence_summary(
+    session: AsyncSession,
+    *,
+    event: IntelligenceCalendarEvent,
+) -> CalendarIntelligenceSummary:
+    latest_run = await session.scalar(
+        select(IntelligenceCalendarInferenceRun)
+        .where(
+            IntelligenceCalendarInferenceRun.event_id == event.id,
+            IntelligenceCalendarInferenceRun.occurrence_id.is_(None),
+        )
+        .order_by(
+            IntelligenceCalendarInferenceRun.started_at.desc(),
+            IntelligenceCalendarInferenceRun.id.desc(),
+        )
+        .limit(1)
+    )
+    machine = await session.scalar(
+        select(IntelligenceCalendarAssertion)
+        .where(
+            IntelligenceCalendarAssertion.event_id == event.id,
+            IntelligenceCalendarAssertion.occurrence_id.is_(None),
+            IntelligenceCalendarAssertion.assertion_family
+            == "event_validation",
+            IntelligenceCalendarAssertion.actor_kind != "operator",
+            IntelligenceCalendarAssertion.assertion_action == "affirm",
+        )
+        .order_by(
+            IntelligenceCalendarAssertion.created_at.desc(),
+            IntelligenceCalendarAssertion.id.desc(),
+        )
+        .limit(1)
+    )
+    latest_override = await session.scalar(
+        select(IntelligenceCalendarOperatorOverride)
+        .where(
+            IntelligenceCalendarOperatorOverride.event_id == event.id,
+            IntelligenceCalendarOperatorOverride.occurrence_id.is_(None),
+        )
+        .order_by(
+            IntelligenceCalendarOperatorOverride.created_at.desc(),
+            IntelligenceCalendarOperatorOverride.id.desc(),
+        )
+        .limit(1)
+    )
+    operator = (
+        await session.get(
+            IntelligenceCalendarAssertion,
+            latest_override.assertion_id,
+        )
+        if latest_override is not None
+        and latest_override.action_kind in {"assert", "select"}
+        else None
+    )
+    effective = operator or machine
+    unresolved_count = int(
+        await session.scalar(
+            select(func.count(IntelligenceCalendarInferenceConflict.id)).where(
+                IntelligenceCalendarInferenceConflict.event_id == event.id,
+                IntelligenceCalendarInferenceConflict.state.in_(
+                    {"detected", "resolving", "unresolved"}
+                ),
+            )
+        )
+        or 0
+    )
+    open_exception_count = int(
+        await session.scalar(
+            select(
+                func.count(IntelligenceCalendarAdministrativeException.id)
+            ).where(
+                IntelligenceCalendarAdministrativeException.event_id
+                == event.id,
+                IntelligenceCalendarAdministrativeException.state == "open",
+            )
+        )
+        or 0
+    )
+    return CalendarIntelligenceSummary(
+        effective_validation_state=event.validation_state,
+        machine_validation_state=(
+            machine.validation_state if machine is not None else None
+        ),
+        operator_validation_state=(
+            operator.validation_state if operator is not None else None
+        ),
+        active_authority_layer=(
+            "operator"
+            if operator is not None
+            else "machine"
+            if machine is not None
+            else "phase1"
+        ),
+        assertion_confidence=(
+            effective.confidence if effective is not None else None
+        ),
+        assertion_actor_kind=(
+            effective.actor_kind if effective is not None else None
+        ),
+        assignment_method=(
+            effective.assignment_method if effective is not None else None
+        ),
+        inference_run_id=latest_run.id if latest_run is not None else None,
+        inference_run_status=(
+            latest_run.status if latest_run is not None else None
+        ),
+        evidence_snapshot_hash=(
+            latest_run.evidence_snapshot_hash
+            if latest_run is not None
+            else None
+        ),
+        unresolved_conflict_count=unresolved_count,
+        open_administrative_exception_count=open_exception_count,
     )
 
 

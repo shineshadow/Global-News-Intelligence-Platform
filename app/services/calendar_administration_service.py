@@ -37,6 +37,22 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 
+_ADMINISTRATIVE_PROJECTION_FAMILIES = {
+    "event_validation",
+    "occurrence_validation",
+}
+
+
+def _require_supported_administrative_projection(
+    conflict: IntelligenceCalendarInferenceConflict,
+) -> None:
+    if conflict.assertion_family not in _ADMINISTRATIVE_PROJECTION_FAMILIES:
+        raise InvalidUpdateError(
+            "Administrative resolution currently supports validation conflicts "
+            "only; relationship conflicts require a transactional canonical "
+            "relationship projector."
+        )
+
 
 async def list_administrative_exceptions(
     session: AsyncSession,
@@ -531,6 +547,7 @@ async def resolve_administrative_exception(
 ) -> CalendarAdministrativeActionResult:
     async with session.begin():
         exception, conflict = await _locked_exception(session, exception_id)
+        _require_supported_administrative_projection(conflict)
         if exception.state != "open":
             raise InvalidUpdateError("Only an open exception may be resolved.")
         if conflict.state not in {"unresolved", "resolving", "detected"}:
@@ -558,13 +575,6 @@ async def resolve_administrative_exception(
             if source is None:
                 raise RuntimeError("Conflict assertion is missing.")
         else:
-            if conflict.assertion_family not in {
-                "event_validation",
-                "occurrence_validation",
-            }:
-                raise InvalidUpdateError(
-                    "Explicit validation state applies only to validation conflicts."
-                )
             source = IntelligenceCalendarAssertion(
                 event_id=exception.event_id,
                 occurrence_id=conflict.occurrence_id,
@@ -661,18 +671,13 @@ async def resolve_administrative_exception(
         exception.closed_at = None
         exception.updated_at = now
 
-        effective: str | None = None
-        if conflict.assertion_family in {
-            "event_validation",
-            "occurrence_validation",
-        }:
-            effective = await _publish_effective_validation(
-                session,
-                event_id=exception.event_id,
-                occurrence_id=conflict.occurrence_id,
-                machine_assertion=operator_assertion,
-                reason=data.reason.strip(),
-            )
+        effective = await _publish_effective_validation(
+            session,
+            event_id=exception.event_id,
+            occurrence_id=conflict.occurrence_id,
+            machine_assertion=operator_assertion,
+            reason=data.reason.strip(),
+        )
         return CalendarAdministrativeActionResult(
             exception_id=exception.id,
             exception_state=exception.state,
@@ -690,6 +695,7 @@ async def deny_administrative_proposal(
 ) -> CalendarAdministrativeActionResult:
     async with session.begin():
         exception, conflict = await _locked_exception(session, exception_id)
+        _require_supported_administrative_projection(conflict)
         if exception.state != "open":
             raise InvalidUpdateError("Only an open exception may receive a denial.")
         member = await session.scalar(
@@ -811,6 +817,7 @@ async def withdraw_administrative_override(
 ) -> CalendarAdministrativeActionResult:
     async with session.begin():
         exception, conflict = await _locked_exception(session, exception_id)
+        _require_supported_administrative_projection(conflict)
         prior = await session.scalar(
             select(IntelligenceCalendarOperatorOverride)
             .where(

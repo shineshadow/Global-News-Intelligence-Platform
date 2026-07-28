@@ -5,8 +5,7 @@
 **Phase:** Calendar Phase 2 — Validation Automation and Relationship Enrichment
 **Depends on:** Calendar Phase 1 frozen at `f29b6d8e3c10`
 **Authority:** Owner-approved autonomous-operation directive
-**Implementation status:** CORRECTIVE MIGRATIONS, PERSISTENCE, SERVICES, AND
-WORKERS IMPLEMENTED AS AN UNFROZEN CANDIDATE
+**Implementation status:** FROZEN AFTER FORMAL IMPLEMENTATION REVIEW
 
 ## 1. Purpose and Fixed Requirement
 
@@ -827,7 +826,42 @@ Calendar actor rows and therefore zero existing `ai_job` rows in that
 isolated database; the corrective migration must still retain its ambiguity
 guard for every target deployment.
 
-Calendar Phase 2 architecture is frozen. The next work is the guarded
-actor-kind corrective migration and Phase 2 persistence foundation. Calendar
-Phase 2 implementation remains unfrozen until all 44 proofs and the complete
-regression, migration, operational, and zero-drift review pass.
+Calendar Phase 2 architecture is frozen.
+
+## 17. Formal Implementation Freeze Review
+
+The implementation review found and corrected three freeze blockers:
+
+```text
+the existing occurrence-policy override table lacked the required service,
+API, UI, scope validation, provenance, and same-transaction history controls
+
+normal Calendar detail exposed effective state without the required summary
+provenance and unresolved-conflict/open-exception indicators
+
+administrative relationship selection could claim resolution without a
+transactional canonical relationship-conflict projector
+```
+
+The first two are fully implemented. The third is closed by an explicit
+validation-conflict boundary: Phase 2 relationship extraction and canonical
+projection remain autonomous, while unsupported administrative relationship
+conflicts are rejected instead of silently reporting a false resolution.
+
+The final gate results were:
+
+```text
+44 / 44 architectural proofs directly covered
+49 focused Calendar Phase 2 tests passed
+3 migration-safety tests passed
+243 complete repository tests passed
+scoped Ruff checks passed
+Alembic current: b8d4f0a2c315 (head)
+Alembic check: no new upgrade operations
+provider-routing and Coverage Profile boundary scans passed
+live main-menu UI, API-route registration, and worker smoke checks passed
+```
+
+Calendar Phase 2 is frozen. Future work may add a transactional
+relationship-conflict projector, but it must preserve the frozen assertion,
+evidence, authority, profile, and effective-projection boundaries.

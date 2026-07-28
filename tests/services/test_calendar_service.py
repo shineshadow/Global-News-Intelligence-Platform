@@ -699,6 +699,18 @@ async def test_postponement_without_replacement_and_illegal_transition(
                 ),
             )
 
+    async with database_session_factory() as session:
+        with pytest.raises(InvalidUpdateError, match="Illegal validation transition"):
+            await calendar_service.transition_state(
+                session,
+                event_id,
+                CalendarStateTransitionInput(
+                    dimension="validation",
+                    next_state="unresolved_conflict",
+                    reason="Conflict state is not a validation-state slug.",
+                ),
+            )
+
 
 async def test_database_rejects_illegal_or_unrecorded_state_changes(
     database_session_factory,

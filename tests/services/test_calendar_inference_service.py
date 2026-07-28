@@ -7,6 +7,7 @@ from app.models import (
     IntelligenceCalendarAdministrativeException,
     IntelligenceCalendarAssertion,
     IntelligenceCalendarEvent,
+    IntelligenceCalendarEventStateTransition,
     IntelligenceCalendarInferenceConflict,
     IntelligenceCalendarInferenceRun,
     IntelligenceCalendarResolutionAttempt,
@@ -105,6 +106,24 @@ class _UnavailableInternalAdapter:
         raise ServiceUnavailableError("Internal Calendar adapter unavailable.")
 
 
+class _UnavailableExternalRouter:
+    async def adjudicate(
+        self,
+        context: CalendarResolutionContext,
+    ) -> CalendarExternalRoutingResult:
+        return CalendarExternalRoutingResult(
+            status="unavailable",
+            router_decision_id=f"router-unavailable:{context.conflict_id}",
+            failure_code="provider_unavailable",
+            failure_detail="Test provider is temporarily unavailable.",
+            provenance={
+                "task": "calendar_validation",
+                "policy_scope": "installation",
+                "egress_permitted": True,
+            },
+        )
+
+
 async def test_normal_inference_publishes_without_operator_review(
     database_session_factory,
 ) -> None:
@@ -115,6 +134,8 @@ async def test_normal_inference_publishes_without_operator_review(
             event_id=event_id,
             kind="supports",
             assertion_text="Official schedule publication",
+            confidence="0.8000",
+            authority="0.6000",
         )
         await _add_evidence(
             session,
@@ -147,12 +168,47 @@ async def test_normal_inference_publishes_without_operator_review(
             .where(IntelligenceCalendarAssertion.event_id == event_id)
             .order_by(IntelligenceCalendarAssertion.id.desc())
         )
+        assessment = await session.scalar(
+            select(IntelligenceCalendarSourceAuthorityAssessment)
+            .where(
+                IntelligenceCalendarSourceAuthorityAssessment.event_id
+                == event_id
+            )
+            .order_by(IntelligenceCalendarSourceAuthorityAssessment.id)
+        )
+        transitions = list(
+            (
+                await session.scalars(
+                    select(IntelligenceCalendarEventStateTransition)
+                    .where(
+                        IntelligenceCalendarEventStateTransition.event_id
+                        == event_id,
+                        IntelligenceCalendarEventStateTransition.dimension
+                        == "validation",
+                    )
+                    .order_by(IntelligenceCalendarEventStateTransition.id)
+                )
+            ).all()
+        )
         assert event is not None
         assert event.validation_state == "verified"
         assert assessment_count == 2
         assert assertion is not None
+        assert assessment is not None
         assert assertion.actor_kind == "internal_agent"
         assert assertion.assignment_method == "internal_autonomous_agent"
+        assert assessment.authority_score == Decimal("0.6000")
+        assert assessment.assessment_confidence == Decimal("0.8000")
+        assert assertion.confidence not in {
+            assessment.authority_score,
+            assessment.assessment_confidence,
+        }
+        assert [
+            (row.previous_state, row.next_state) for row in transitions
+        ] == [
+            ("candidate", "probable"),
+            ("probable", "verified"),
+        ]
 
 
 async def test_exact_snapshot_replay_is_idempotent(
@@ -236,6 +292,9 @@ async def test_unresolved_conflict_uses_two_passes_and_opens_exception(
         assert attempts[0].strategy_slug != attempts[1].strategy_slug
         assert attempts[2].actor_kind == "external_model"
         assert attempts[2].status == "ineligible"
+        assert attempts[2].reasoning_ordinal is None
+        assert attempts[2].infrastructure_attempt_number == 1
+        assert attempts[2].provenance["policy_scope"] == "installation"
         assert exception is not None
         assert exception.state == "open"
 
@@ -284,7 +343,73 @@ async def test_eligible_external_route_resolves_as_machine_authority(
         assert external is not None
         assert external.actor_kind == "external_model"
         assert external.provider == "test-provider"
+        assert external.model == "test-model"
+        assert external.model_version == "1"
         assert external.router_decision_id == "router-decision-test"
+        assert external.input_hash == conflict.evidence_snapshot_hash
+        assert external.output_hash is not None
+        assert conflict.selected_assertion_id == external.selected_assertion_id
+
+
+async def test_external_unavailability_is_durable_and_nonblocking(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session:
+        event_id = await _create_event(session, "Unavailable external fallback")
+        await _add_evidence(
+            session,
+            event_id=event_id,
+            kind="supports",
+            assertion_text="Supporting claim",
+        )
+        await _add_evidence(
+            session,
+            event_id=event_id,
+            kind="contradicts",
+            assertion_text="Contradictory claim",
+        )
+
+    result = await run_calendar_validation(
+        event_id,
+        external_router=_UnavailableExternalRouter(),
+        session_factory=database_session_factory,
+    )
+
+    assert result.status == "partial"
+    assert result.effective_validation_state == "disputed"
+    assert result.exception_id is not None
+    async with database_session_factory() as session:
+        external = await session.scalar(
+            select(IntelligenceCalendarResolutionAttempt).where(
+                IntelligenceCalendarResolutionAttempt.conflict_id
+                == result.conflict_id,
+                IntelligenceCalendarResolutionAttempt.actor_kind
+                == "external_model",
+            )
+        )
+        assert external is not None
+        assert external.status == "unavailable"
+        assert external.reasoning_ordinal is None
+        assert external.failure_code == "provider_unavailable"
+        assert external.router_decision_id.startswith("router-unavailable:")
+
+    async with database_session_factory() as session:
+        unrelated_id = await _create_event(
+            session,
+            "Unrelated processing continues",
+        )
+        await _add_evidence(
+            session,
+            event_id=unrelated_id,
+            kind="supports",
+            assertion_text="Independent normal evidence",
+        )
+
+    unrelated = await run_calendar_validation(
+        unrelated_id,
+        session_factory=database_session_factory,
+    )
+    assert unrelated.status == "succeeded"
 
 
 async def test_infrastructure_failure_creates_no_fake_reasoning_pass(

@@ -183,26 +183,78 @@ async def test_assertion_actor_method_rules_and_immutability(
                 )
 
     async with database_session_factory() as session, session.begin():
-        assertion_id = int(
+        assertion_id, series_id = (
+            await session.execute(
+                text(
+                    """
+                        INSERT INTO intelligence_calendar_assertion_ledger (
+                            event_id, assertion_family, validation_state,
+                            assertion_action, confidence,
+                            assignment_method, actor_kind, actor_ref
+                        ) VALUES (
+                            :event_id, 'event_validation', 'probable',
+                            'affirm', 0.7, 'manual', 'operator', 'test'
+                        )
+                        RETURNING id, series_id
+                        """
+                ),
+                {"event_id": event_id},
+            )
+        ).one()
+
+    async with database_session_factory() as session, session.begin():
+        successor_id = int(
             (
                 await session.execute(
                     text(
                         """
-                            INSERT INTO intelligence_calendar_assertion_ledger (
-                                event_id, assertion_family, validation_state,
-                                assertion_action, confidence,
-                                assignment_method, actor_kind, actor_ref
-                            ) VALUES (
-                                :event_id, 'event_validation', 'probable',
-                                'affirm', 0.7, 'manual', 'operator', 'test'
-                            )
-                            RETURNING id
-                            """
+                        INSERT INTO intelligence_calendar_assertion_ledger (
+                            series_id, event_id, assertion_family,
+                            validation_state, assertion_action, confidence,
+                            assignment_method, supersedes_assertion_id,
+                            actor_kind, actor_ref
+                        ) VALUES (
+                            :series_id, :event_id, 'event_validation',
+                            'verified', 'affirm', 0.9, 'manual',
+                            :assertion_id, 'operator', 'test'
+                        )
+                        RETURNING id
+                        """
                     ),
-                    {"event_id": event_id},
+                    {
+                        "series_id": series_id,
+                        "event_id": event_id,
+                        "assertion_id": assertion_id,
+                    },
                 )
             ).scalar_one()
         )
+        assert successor_id > assertion_id
+
+    async with database_session_factory() as session:
+        with pytest.raises(IntegrityError):
+            async with session.begin():
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO intelligence_calendar_assertion_ledger (
+                            series_id, event_id, assertion_family,
+                            validation_state, assertion_action, confidence,
+                            assignment_method, supersedes_assertion_id,
+                            actor_kind, actor_ref
+                        ) VALUES (
+                            :series_id, :event_id, 'event_validation',
+                            'confirmed', 'affirm', 1, 'manual',
+                            :assertion_id, 'operator', 'test'
+                        )
+                        """
+                    ),
+                    {
+                        "series_id": series_id,
+                        "event_id": event_id,
+                        "assertion_id": assertion_id,
+                    },
+                )
 
     async with database_session_factory() as session:
         with pytest.raises(DBAPIError, match="append-only"):

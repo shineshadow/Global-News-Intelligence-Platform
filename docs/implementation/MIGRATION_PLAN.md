@@ -56,13 +56,14 @@ post-deploy monitoring
 9. Run AI backfill only after benchmark thresholds are approved.
 10. Retire legacy classification fields only after usage audit.
 
-## Calendar Phase 2 Migration Candidate
+## Calendar Phase 2 Frozen Migrations
 
 **Candidate revisions:** `a7c3e9f1b204`, `b8d4f0a2c315`
 
-The corrective and persistence migrations are implemented and remain
-unfrozen pending the Calendar Phase 2 service/worker implementation and
-formal freeze review.
+The corrective and persistence migrations are frozen with Calendar Phase 2.
+Clean downgrade/re-upgrade, guarded downgrade, ambiguous historical
+`ai_job` refusal, regression, head, and zero-drift checks passed the formal
+freeze review.
 
 Calendar Phase 2 begins with the actor-kind correction defined in
 `../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.

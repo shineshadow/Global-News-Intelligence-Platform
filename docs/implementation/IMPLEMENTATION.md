@@ -66,17 +66,25 @@ Current Calendar implementation sequence:
 Calendar Foundation Audit                           frozen
 Calendar Phase 1 — Manual Calendar                  frozen
 Calendar Phase 2 architecture                       frozen
-Calendar Phase 2 corrective/persistence migrations  implemented candidate
-Calendar Phase 2 autonomous services/workers        implemented candidate
-Calendar Phase 2 structured extraction adapter      implemented candidate
-Calendar Phase 2 Administrative Queue/API/UI         implemented candidate
-Calendar Phase 2 formal freeze review                 next
+Calendar Phase 2 corrective/persistence migrations  frozen
+Calendar Phase 2 autonomous services/workers        frozen
+Calendar Phase 2 structured extraction adapter      frozen
+Calendar Phase 2 Administrative Queue/API/UI         frozen
+Calendar Phase 2 occurrence-policy controls          frozen
+Calendar Phase 2 formal freeze review                 passed
 ```
 
 Calendar Phase 2 is governed by
 `../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`. Normal
 validation and enrichment must be autonomous; administrative review is an
 exception path only.
+
+The formal review passed all 44 required proofs, 49 focused Calendar tests,
+three migration-safety tests, all 243 repository tests, Alembic head and
+zero-drift checks, scoped lint, and live operational smoke checks. Normal
+Event detail exposes read-only effective-state provenance; advanced evidence,
+attempt history, and operator decisions remain in the separate
+Administrative Queue.
 
 ---
 

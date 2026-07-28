@@ -21,7 +21,12 @@ from app.schemas.calendar import (
     CalendarRescheduleInput,
     CalendarStateTransitionInput,
 )
-from app.services import calendar_service
+from app.schemas.calendar_policy import (
+    CalendarOccurrencePolicyOverrideDelete,
+    CalendarOccurrencePolicyOverrideInput,
+    CalendarOccurrencePolicyRead,
+)
+from app.services import calendar_policy_service, calendar_service
 
 router = APIRouter(
     prefix="/calendar/events",
@@ -70,6 +75,67 @@ async def get_event(
     session: DatabaseSession,
 ) -> CalendarEventDetail:
     return await calendar_service.get_event(session, event_id)
+
+
+@router.get(
+    "/{event_id}/policies/{policy_id}/occurrences/{occurrence_id}",
+    response_model=CalendarOccurrencePolicyRead,
+    responses=MANAGEMENT_ERROR_RESPONSES,
+)
+async def get_occurrence_policy(
+    event_id: Annotated[int, Path(gt=0)],
+    policy_id: Annotated[int, Path(gt=0)],
+    occurrence_id: Annotated[int, Path(gt=0)],
+    session: DatabaseSession,
+) -> CalendarOccurrencePolicyRead:
+    return await calendar_policy_service.get_occurrence_policy(
+        session,
+        event_id=event_id,
+        policy_id=policy_id,
+        occurrence_id=occurrence_id,
+    )
+
+
+@router.put(
+    "/{event_id}/policies/{policy_id}/occurrences/{occurrence_id}",
+    response_model=CalendarOccurrencePolicyRead,
+    responses=MANAGEMENT_ERROR_RESPONSES,
+)
+async def set_occurrence_policy(
+    event_id: Annotated[int, Path(gt=0)],
+    policy_id: Annotated[int, Path(gt=0)],
+    occurrence_id: Annotated[int, Path(gt=0)],
+    data: CalendarOccurrencePolicyOverrideInput,
+    session: DatabaseSession,
+) -> CalendarOccurrencePolicyRead:
+    return await calendar_policy_service.set_occurrence_policy(
+        session,
+        event_id=event_id,
+        policy_id=policy_id,
+        occurrence_id=occurrence_id,
+        data=data,
+    )
+
+
+@router.delete(
+    "/{event_id}/policies/{policy_id}/occurrences/{occurrence_id}",
+    response_model=CalendarOccurrencePolicyRead,
+    responses=MANAGEMENT_ERROR_RESPONSES,
+)
+async def delete_occurrence_policy(
+    event_id: Annotated[int, Path(gt=0)],
+    policy_id: Annotated[int, Path(gt=0)],
+    occurrence_id: Annotated[int, Path(gt=0)],
+    data: CalendarOccurrencePolicyOverrideDelete,
+    session: DatabaseSession,
+) -> CalendarOccurrencePolicyRead:
+    return await calendar_policy_service.delete_occurrence_policy(
+        session,
+        event_id=event_id,
+        policy_id=policy_id,
+        occurrence_id=occurrence_id,
+        data=data,
+    )
 
 
 @router.post(

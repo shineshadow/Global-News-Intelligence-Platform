@@ -6,12 +6,12 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
-## 2026-07-28 — Intelligence Calendar Phase 2 Persistence Candidate
+## 2026-07-28 — Intelligence Calendar Phase 2 Frozen
 
 **Persistence revision:** `b8d4f0a2c315`
 **Actor correction:** `a7c3e9f1b204`
 **Revises:** `f29b6d8e3c10`
-**Status:** Candidate; not frozen
+**Status:** Frozen
 
 Corrected Calendar actor provenance to distinguish `internal_agent` from
 `external_model`. The guarded upgrade refuses ambiguous historical `ai_job`
@@ -25,9 +25,13 @@ completed internal passes with distinct strategies before an optional third
 external pass. Administrative exceptions require those internal passes plus
 completed or explicitly unavailable/ineligible external adjudication.
 
-The candidate has passed focused migration, constraint, immutability, and
-Alembic zero-drift tests. Calendar Phase 2 runtime inference and its formal
-freeze review remain future work.
+The formal implementation review passed all 44 architectural proofs,
+49 focused Calendar tests, three migration-safety tests, all 243 repository
+tests, and Alembic head/zero-drift checks. The frozen runtime includes
+autonomous validation, structured relationship extraction, bounded
+internal/external resolution, effective projection, administrative
+exceptions, complete evidence/history inspection, and audited
+occurrence-policy controls.
 
 ---
 

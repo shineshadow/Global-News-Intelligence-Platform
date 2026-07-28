@@ -154,3 +154,15 @@ Available actions are explicit assertion or selection, denial, withdrawal,
 close, reopen, note, or no action. Every write requires an operator reference
 and reason. Merely viewing or leaving an exception creates no acceptance,
 rejection, deferral, or confirmation.
+
+Normal Event detail also shows a compact, read-only inference summary:
+effective and machine validation, active operator state when present,
+confidence/method, run and evidence snapshot, and unresolved/open counts.
+This does not add an approval step.
+
+The Event detail occurrence-policy table provides profile-scoped controls for
+priority, expected-news importance, and watch state. Blank values inherit the
+Event/Profile policy. Set, edit, and remove operations require operator
+identity and reason, display audited history, and are explicitly labeled as
+operational policy that cannot alter canonical Event truth or model-egress
+authority.

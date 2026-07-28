@@ -441,6 +441,53 @@ async def test_stale_snapshot_and_incomplete_external_provenance_are_rejected(
                     candidates=(external_candidate,),
                 )
 
+    complete_external_candidate = CalendarRelationshipCandidate(
+        family="event_geography",
+        target_id=geography_id,
+        role="venue",
+        confidence=Decimal("0.8000"),
+        assignment_method="external_ai_model",
+        actor_kind="external_model",
+        evidence_uses=external_candidate.evidence_uses,
+        provenance={
+            "provider": "test-provider",
+            "model": "test-model",
+            "model_version": "1",
+            "router_decision_id": "relationship-route-test",
+            "egress_policy": "test-only",
+        },
+    )
+    async with database_session_factory() as session, session.begin():
+        appended = await apply_relationship_candidates(
+            session,
+            context=context,
+            candidates=(complete_external_candidate,),
+        )
+        assert appended == 1
+
+    async with database_session_factory() as session:
+        external_assertion = await session.scalar(
+            select(IntelligenceCalendarAssertion).where(
+                IntelligenceCalendarAssertion.event_id == event_id,
+                IntelligenceCalendarAssertion.actor_kind == "external_model",
+            )
+        )
+        projection = await session.scalar(
+            select(IntelligenceCalendarEventGeography).where(
+                IntelligenceCalendarEventGeography.event_id == event_id,
+                IntelligenceCalendarEventGeography.geography_id == geography_id,
+            )
+        )
+        assert external_assertion is not None
+        assert external_assertion.assignment_method == "external_ai_model"
+        assert external_assertion.provenance["provider"] == "test-provider"
+        assert external_assertion.provenance["router_decision_id"] == (
+            "relationship-route-test"
+        )
+        assert projection is not None
+        assert projection.actor_kind == "external_model"
+        assert projection.method == "external_ai_model"
+
     async with database_session_factory() as session:
         await calendar_service.add_evidence(
             session,

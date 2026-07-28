@@ -250,10 +250,26 @@ class CalendarEventRead(BaseModel):
     created_at: datetime
 
 
+class CalendarIntelligenceSummary(BaseModel):
+    effective_validation_state: str
+    machine_validation_state: str | None
+    operator_validation_state: str | None
+    active_authority_layer: Literal["operator", "machine", "phase1"]
+    assertion_confidence: Decimal | None
+    assertion_actor_kind: str | None
+    assignment_method: str | None
+    inference_run_id: int | None
+    inference_run_status: str | None
+    evidence_snapshot_hash: str | None
+    unresolved_conflict_count: int
+    open_administrative_exception_count: int
+
+
 class CalendarEventDetail(CalendarEventRead):
     occurrences: list[CalendarOccurrenceRead]
     coverage_policy_ids: list[int]
     monitor_ids: list[int]
+    intelligence_summary: CalendarIntelligenceSummary
 
 
 class CalendarEvidenceRead(BaseModel):

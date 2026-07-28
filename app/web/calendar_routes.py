@@ -19,7 +19,15 @@ from app.schemas.calendar_administration import (
     CalendarAdministrativeDenial,
     CalendarAdministrativeResolution,
 )
-from app.services import calendar_administration_service, calendar_service
+from app.schemas.calendar_policy import (
+    CalendarOccurrencePolicyOverrideDelete,
+    CalendarOccurrencePolicyOverrideInput,
+)
+from app.services import (
+    calendar_administration_service,
+    calendar_policy_service,
+    calendar_service,
+)
 from app.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
@@ -302,11 +310,83 @@ async def calendar_detail_page(
     session: DatabaseSession,
 ) -> HTMLResponse:
     detail = await calendar_service.get_event(session, event_id)
+    occurrence_policies = (
+        await calendar_policy_service.list_event_occurrence_policies(
+            session,
+            event_id,
+        )
+    )
     return templates.TemplateResponse(
         request=request,
         name="calendar_detail.html",
-        context={"active_page": "calendar", "detail": detail},
+        context={
+            "active_page": "calendar",
+            "detail": detail,
+            "occurrence_policies": occurrence_policies,
+        },
     )
+
+
+@router.post(
+    "/web/calendar/{event_id}/policies/{policy_id}/occurrences/"
+    "{occurrence_id}",
+    name="web_calendar_occurrence_policy_set",
+)
+async def calendar_occurrence_policy_set(
+    event_id: int,
+    policy_id: int,
+    occurrence_id: int,
+    session: DatabaseSession,
+    actor_ref: str = Form(),
+    reason: str = Form(),
+    monitoring_priority: str | None = Form(default=None),
+    expected_news_importance: str | None = Form(default=None),
+    watch_state: str | None = Form(default=None),
+) -> RedirectResponse:
+    await calendar_policy_service.set_occurrence_policy(
+        session,
+        event_id=event_id,
+        policy_id=policy_id,
+        occurrence_id=occurrence_id,
+        data=CalendarOccurrencePolicyOverrideInput(
+            actor_ref=actor_ref,
+            reason=reason,
+            monitoring_priority=monitoring_priority or None,
+            expected_news_importance=expected_news_importance or None,
+            is_watched=(
+                watch_state == "watch"
+                if watch_state in {"watch", "ignore"}
+                else None
+            ),
+        ),
+    )
+    return _event_redirect(event_id)
+
+
+@router.post(
+    "/web/calendar/{event_id}/policies/{policy_id}/occurrences/"
+    "{occurrence_id}/delete",
+    name="web_calendar_occurrence_policy_delete",
+)
+async def calendar_occurrence_policy_delete(
+    event_id: int,
+    policy_id: int,
+    occurrence_id: int,
+    session: DatabaseSession,
+    actor_ref: str = Form(),
+    reason: str = Form(),
+) -> RedirectResponse:
+    await calendar_policy_service.delete_occurrence_policy(
+        session,
+        event_id=event_id,
+        policy_id=policy_id,
+        occurrence_id=occurrence_id,
+        data=CalendarOccurrencePolicyOverrideDelete(
+            actor_ref=actor_ref,
+            reason=reason,
+        ),
+    )
+    return _event_redirect(event_id)
 
 
 @router.post(

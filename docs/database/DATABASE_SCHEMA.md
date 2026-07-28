@@ -2,7 +2,7 @@
 
 **Document type:** Living implementation reference  
 **Snapshot date:** 2026-07-28
-**Platform phase:** Intelligence Calendar Phase 2 persistence candidate
+**Platform phase:** Intelligence Calendar Phase 2 frozen
 **Alembic revision:** `b8d4f0a2c315`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
@@ -2092,7 +2092,7 @@ The upgrade refuses any existing `ai_job` row because its truthful
 classification cannot be inferred. The downgrade likewise refuses
 `internal_agent` or `external_model` rows rather than collapsing provenance.
 
-### Calendar Phase 2 persistence candidate
+### Calendar Phase 2 frozen persistence
 
 Revision `b8d4f0a2c315` adds normalized inference runs, an immutable assertion
 ledger and evidence links, source-authority assessments, conflicts and
@@ -2101,5 +2101,5 @@ operator overrides, and occurrence-policy override history. Database
 constraints enforce actor/method separation, two distinct internal reasoning
 passes before optional external adjudication, exception eligibility only
 after autonomous exhaustion, normalized same-scope references, append-only
-history, and guarded downgrade. This is an implementation candidate, not a
-Calendar Phase 2 freeze.
+history, and guarded downgrade. The persistence and its runtime consumers
+passed the formal Calendar Phase 2 freeze review.

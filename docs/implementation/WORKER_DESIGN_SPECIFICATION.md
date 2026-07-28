@@ -104,7 +104,7 @@ Celery transport retries do not own the business retry policy. Destination
 authentication tokens are resolved from the configured environment-variable
 name inside the alerts worker and are never Celery arguments.
 
-## Calendar Phase 2 Validation Worker Candidate
+## Calendar Phase 2 Validation Worker
 
 `calendar-validation-worker` owns autonomous Calendar corroboration,
 source-authority assessment, validation inference, structured relationship
@@ -141,7 +141,7 @@ continues to use the separate GFA-C `internal_autonomous_agent` or
 The frozen architecture contract is in
 `../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
 
-The implementation candidate uses the Celery queue `calendar-validation` and
+The frozen implementation uses the Celery queue `calendar-validation` and
 the systemd unit `gni-celery-calendar-validation.service`. Celery Beat
 discovers Event/Occurrence evidence snapshots that do not have a current
 completed run and queues stable database identifiers only.
