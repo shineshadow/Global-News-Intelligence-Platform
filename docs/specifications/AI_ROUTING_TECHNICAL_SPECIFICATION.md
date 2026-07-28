@@ -54,6 +54,10 @@ Embedding and ASR may use the same provider abstraction principles even when imp
 implemented as a Phase 2 candidate; production provider routing remains
 unconfigured.
 
+The Calendar candidate also defines a provider-neutral structured
+relationship extraction contract. Direct external-model candidates require
+provider, model, and router-decision provenance before persistence.
+
 Calendar Phase 2 owns a provider-neutral `calendar_validation` orchestration
 contract with two materially distinct internal-agent strategies. Calendar
 services and workers must not call OpenAI, ChatGPT, or another model provider

@@ -23,6 +23,17 @@ from app.services.calendar_inference_service import (
     set_operator_validation_override,
     withdraw_operator_validation_override,
 )
+from app.services.calendar_relationship_extraction import (
+    CalendarRelationshipCandidate,
+    CalendarRelationshipEvidenceUse,
+    CalendarRelationshipExtractionAdapter,
+    CalendarRelationshipExtractionContext,
+    RepositoryCalendarRelationshipExtractionAdapter,
+)
+from app.services.calendar_relationship_service import (
+    apply_relationship_candidates,
+    build_relationship_extraction_context,
+)
 from app.services.classification_service import (
     DeterministicClassificationSummary,
     classify_document_by_id,
@@ -71,6 +82,10 @@ from app.services.monitor_service import (
 
 __all__ = [
     "CalendarOperatorOverrideResult",
+    "CalendarRelationshipCandidate",
+    "CalendarRelationshipEvidenceUse",
+    "CalendarRelationshipExtractionAdapter",
+    "CalendarRelationshipExtractionContext",
     "CalendarValidationResult",
     "DeterministicClassificationSummary",
     "DocumentMatchPlan",
@@ -78,16 +93,19 @@ __all__ = [
     "InvalidUpdateError",
     "MonitorDetail",
     "MonitorEvaluationSummary",
+    "RepositoryCalendarRelationshipExtractionAdapter",
     "ResolvedCoverageProfileScope",
     "ResourceConflictError",
     "ResourceNotFoundError",
     "ServiceError",
     "activate_monitor",
     "add_monitor_revision",
+    "apply_relationship_candidates",
     "archive_monitor",
     "assert_entity_geography",
     "assign_entity_type",
     "build_document_match_plan",
+    "build_relationship_extraction_context",
     "classify_document_by_id",
     "classify_document_deterministically",
     "create_alert_for_match",

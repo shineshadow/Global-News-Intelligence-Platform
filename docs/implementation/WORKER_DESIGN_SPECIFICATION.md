@@ -107,11 +107,8 @@ name inside the alerts worker and are never Celery arguments.
 ## Calendar Phase 2 Validation Worker Candidate
 
 `calendar-validation-worker` owns autonomous Calendar corroboration,
-source-authority assessment, validation inference, and conflict resolution.
-Canonical relationship enrichment remains in the same worker boundary but
-requires structured relationship candidates from a later extraction adapter;
-this candidate does not infer geography from Source country or Entity
-ancestry.
+source-authority assessment, validation inference, structured relationship
+enrichment, and conflict resolution.
 
 The task carries stable Event/Occurrence and evidence-snapshot identifiers.
 It does not carry embedded evidence or model output. The worker commits before
@@ -160,3 +157,34 @@ The default external router records an installation-level ineligible result
 because no production external provider is configured. It performs no direct
 provider call. A future LLM Router implementation may be injected through the
 same contract.
+
+### Structured relationship extraction
+
+The provider-neutral extraction adapter returns controlled candidates for:
+
+```text
+Event → Geography
+Event → Topic
+Event → Entity
+Event → Source
+```
+
+Every candidate carries a canonical target ID, frozen per-family role,
+confidence, actor kind, semantic assignment method, normalized evidence
+uses, strategy/adapter provenance, and full router provenance for direct
+external-model output. The relationship service rejects missing or inactive
+targets, invalid roles, actor/method mismatches, evidence outside the exact
+snapshot, duplicate logical candidates, and stale results.
+
+The repository adapter promotes only relationships already supported by
+normalized records:
+
+```text
+Calendar evidence Source      → Event Source / reference
+active Document Topic         → Event Topic / secondary
+```
+
+It deliberately does not promote publisher country, Document Geography,
+Entity ancestry, or a merely mentioned Document Entity into an Event
+relationship. Geography and Entity relationships require an adapter to
+return an explicit canonical target and frozen Calendar role.

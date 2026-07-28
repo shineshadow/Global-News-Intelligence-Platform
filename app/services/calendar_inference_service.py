@@ -28,6 +28,14 @@ from app.models import (
     IntelligenceCalendarSourceAuthorityAssessment,
     IntelligenceCalendarSourceAuthorityEvidence,
 )
+from app.services.calendar_relationship_extraction import (
+    CalendarRelationshipExtractionAdapter,
+    RepositoryCalendarRelationshipExtractionAdapter,
+)
+from app.services.calendar_relationship_service import (
+    apply_relationship_candidates,
+    build_relationship_extraction_context,
+)
 from app.services.calendar_validation_adapter import (
     INTERNAL_ADVERSARIAL_STRATEGY,
     INTERNAL_ADVERSARIAL_STRATEGY_VERSION,
@@ -1100,12 +1108,17 @@ async def run_calendar_validation(
     trigger: str = "evidence_changed",
     adapter: CalendarValidationAdapter | None = None,
     external_router: CalendarExternalRouter | None = None,
+    relationship_adapter: CalendarRelationshipExtractionAdapter | None = None,
     session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
 ) -> CalendarValidationResult:
     """Run one idempotent autonomous Calendar validation pipeline."""
 
     internal = adapter or DeterministicCalendarValidationAdapter()
     router = external_router or DisabledCalendarExternalRouter()
+    extractor = (
+        relationship_adapter
+        or RepositoryCalendarRelationshipExtractionAdapter()
+    )
 
     async with session_factory() as session, session.begin():
         prepared = await _prepare_inference(
@@ -1115,50 +1128,70 @@ async def run_calendar_validation(
             trigger=trigger,
         )
     if prepared.result is not None:
-        return prepared.result
-    if prepared.conflict_id is None:
-        raise RuntimeError("Prepared Calendar inference has no outcome.")
+        result = prepared.result
+    else:
+        if prepared.conflict_id is None:
+            raise RuntimeError("Prepared Calendar inference has no outcome.")
 
-    async with session_factory() as session:
-        context = await _resolution_context(session, prepared.conflict_id)
+        async with session_factory() as session:
+            context = await _resolution_context(
+                session,
+                prepared.conflict_id,
+            )
 
-    first = await _record_internal_attempt(
-        session_factory,
-        context=context,
-        ordinal=1,
-        strategy=INTERNAL_EVIDENCE_STRATEGY,
-        strategy_version=INTERNAL_EVIDENCE_STRATEGY_VERSION,
-        adapter=internal,
-    )
-    decision = first
-    external: CalendarExternalRoutingResult | None = None
-    if first.outcome == "unresolved":
-        second = await _record_internal_attempt(
+        first = await _record_internal_attempt(
             session_factory,
             context=context,
-            ordinal=2,
-            strategy=INTERNAL_ADVERSARIAL_STRATEGY,
-            strategy_version=INTERNAL_ADVERSARIAL_STRATEGY_VERSION,
+            ordinal=1,
+            strategy=INTERNAL_EVIDENCE_STRATEGY,
+            strategy_version=INTERNAL_EVIDENCE_STRATEGY_VERSION,
             adapter=internal,
         )
-        decision = second
-        if second.outcome == "unresolved":
-            external = await _record_external_attempt(
+        decision = first
+        external: CalendarExternalRoutingResult | None = None
+        if first.outcome == "unresolved":
+            second = await _record_internal_attempt(
                 session_factory,
                 context=context,
-                router=router,
+                ordinal=2,
+                strategy=INTERNAL_ADVERSARIAL_STRATEGY,
+                strategy_version=INTERNAL_ADVERSARIAL_STRATEGY_VERSION,
+                adapter=internal,
             )
-            if external.decision is not None:
-                decision = external.decision
+            decision = second
+            if second.outcome == "unresolved":
+                external = await _record_external_attempt(
+                    session_factory,
+                    context=context,
+                    router=router,
+                )
+                if external.decision is not None:
+                    decision = external.decision
 
-    async with session_factory() as session, session.begin():
-        return await _finalize_resolution(
+        async with session_factory() as session, session.begin():
+            result = await _finalize_resolution(
+                session,
+                run_id=prepared.run_id,
+                context=context,
+                decision=decision,
+                external=external,
+            )
+
+    async with session_factory() as session:
+        extraction_context = await build_relationship_extraction_context(
             session,
-            run_id=prepared.run_id,
-            context=context,
-            decision=decision,
-            external=external,
+            event_id=result.event_id,
+            occurrence_id=result.occurrence_id,
+            inference_run_id=result.inference_run_id,
         )
+    candidates = await extractor.extract(extraction_context)
+    async with session_factory() as session, session.begin():
+        await apply_relationship_candidates(
+            session,
+            context=extraction_context,
+            candidates=candidates,
+        )
+    return result
 
 
 async def set_operator_validation_override(
