@@ -100,28 +100,43 @@ Step 26 content-alert path.
 
 ## Intelligence Calendar Phase 2 Candidate
 
-Normal Calendar reads return effective state with summary provenance. Machine
-state, operator state, evidence, attempts, and conflicts remain inspectable
-without making review a prerequisite.
+Normal Phase 1 Calendar reads continue to return effective canonical state.
+Machine state, operator state, evidence, attempts, and conflicts are
+inspectable through the separate administrative-exception detail without
+making review a prerequisite.
 
-Candidate resource surface:
+Implemented resource surface:
 
 ```text
-GET  /api/v1/calendar/events/{event_id}/intelligence-state
-GET  /api/v1/calendar/events/{event_id}/inference-history
 GET  /api/v1/calendar/administrative-exceptions
 GET  /api/v1/calendar/administrative-exceptions/{exception_id}
-POST /api/v1/calendar/administrative-exceptions/{exception_id}/overrides
-POST /api/v1/calendar/operator-overrides/{override_id}/withdrawals
-PUT  /api/v1/calendar/policies/{policy_id}/occurrences/{occurrence_id}
+POST /api/v1/calendar/administrative-exceptions/{exception_id}/resolve
+POST /api/v1/calendar/administrative-exceptions/{exception_id}/deny
+POST /api/v1/calendar/administrative-exceptions/{exception_id}/withdraw
+POST /api/v1/calendar/administrative-exceptions/{exception_id}/close
+POST /api/v1/calendar/administrative-exceptions/{exception_id}/reopen
+POST /api/v1/calendar/administrative-exceptions/{exception_id}/note
 ```
+
+The list accepts `state`, `severity`, and `assertion_family` filters plus
+bounded `offset` and `limit`. Detail returns competing and proposed
+assertions, linked evidence, source-authority assessments, every autonomous
+attempt with process/model provenance, operator overrides, the operator
+assertion ledger, and exception action history.
+
+Resolution accepts exactly one selected competing assertion or an explicit
+canonical validation state. Denial leaves the exception unresolved.
+Close records an administrative disposition without changing the underlying
+conflict or canonical state. Reopen records renewed inspection. Withdrawal
+reopens a resolved exception and republishes the preserved machine validation
+state. Notes and operator inaction do not change canonical state.
 
 Operator writes append authority history; they do not update or delete
 machine assertions in place. Operator silence has no API side effect.
 Worker/internal inference endpoints, if needed, must not be exposed as a
 normal public approval workflow.
 
-The final route and schema contract must remain subordinate to
+The route and schema contract remains subordinate to
 `../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
 
 ---

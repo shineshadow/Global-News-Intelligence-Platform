@@ -14,7 +14,12 @@ from app.schemas.calendar import (
     CalendarMonitorLink,
     CalendarScheduleInput,
 )
-from app.services import calendar_service
+from app.schemas.calendar_administration import (
+    CalendarAdministrativeActor,
+    CalendarAdministrativeDenial,
+    CalendarAdministrativeResolution,
+)
+from app.services import calendar_administration_service, calendar_service
 from app.web.templating import templates
 
 router = APIRouter(include_in_schema=False)
@@ -141,6 +146,149 @@ async def create_calendar_event(
         ),
     )
     return _event_redirect(created.event.id)
+
+
+def _administrative_redirect(exception_id: int) -> RedirectResponse:
+    return RedirectResponse(
+        url=f"/web/calendar/administrative/{exception_id}",
+        status_code=303,
+    )
+
+
+@router.get(
+    "/web/calendar/administrative",
+    response_class=HTMLResponse,
+    name="web_calendar_administrative",
+)
+async def calendar_administrative_page(
+    request: Request,
+    session: DatabaseSession,
+    state: str | None = None,
+    severity: str | None = None,
+    assertion_family: str | None = None,
+) -> HTMLResponse:
+    exceptions = (
+        await calendar_administration_service.list_administrative_exceptions(
+            session,
+            state=state,
+            severity=severity,
+            assertion_family=assertion_family,
+            limit=500,
+        )
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="calendar_administrative.html",
+        context={
+            "active_page": "calendar_administrative",
+            "exceptions": exceptions,
+            "selected_state": state or "",
+            "selected_severity": severity or "",
+            "selected_family": assertion_family or "",
+        },
+    )
+
+
+@router.get(
+    "/web/calendar/administrative/{exception_id}",
+    response_class=HTMLResponse,
+    name="web_calendar_administrative_detail",
+)
+async def calendar_administrative_detail_page(
+    request: Request,
+    exception_id: int,
+    session: DatabaseSession,
+) -> HTMLResponse:
+    detail = await calendar_administration_service.get_administrative_exception(
+        session,
+        exception_id,
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="calendar_administrative_detail.html",
+        context={
+            "active_page": "calendar_administrative",
+            "detail": detail,
+        },
+    )
+
+
+@router.post(
+    "/web/calendar/administrative/{exception_id}/resolve",
+    name="web_calendar_administrative_resolve",
+)
+async def calendar_administrative_resolve(
+    exception_id: int,
+    session: DatabaseSession,
+    actor_ref: str = Form(),
+    reason: str = Form(),
+    selected_assertion_id: str | None = Form(default=None),
+    validation_state: str | None = Form(default=None),
+) -> RedirectResponse:
+    await calendar_administration_service.resolve_administrative_exception(
+        session,
+        exception_id,
+        CalendarAdministrativeResolution(
+            actor_ref=actor_ref,
+            reason=reason,
+            selected_assertion_id=(
+                int(selected_assertion_id) if selected_assertion_id else None
+            ),
+            validation_state=validation_state or None,
+        ),
+    )
+    return _administrative_redirect(exception_id)
+
+
+@router.post(
+    "/web/calendar/administrative/{exception_id}/deny",
+    name="web_calendar_administrative_deny",
+)
+async def calendar_administrative_deny(
+    exception_id: int,
+    session: DatabaseSession,
+    actor_ref: str = Form(),
+    reason: str = Form(),
+    assertion_id: int = Form(),
+) -> RedirectResponse:
+    await calendar_administration_service.deny_administrative_proposal(
+        session,
+        exception_id,
+        CalendarAdministrativeDenial(
+            actor_ref=actor_ref,
+            reason=reason,
+            assertion_id=assertion_id,
+        ),
+    )
+    return _administrative_redirect(exception_id)
+
+
+@router.post(
+    "/web/calendar/administrative/{exception_id}/{action_kind}",
+    name="web_calendar_administrative_action",
+)
+async def calendar_administrative_action(
+    exception_id: int,
+    action_kind: str,
+    session: DatabaseSession,
+    actor_ref: str = Form(),
+    reason: str = Form(),
+) -> RedirectResponse:
+    data = CalendarAdministrativeActor(actor_ref=actor_ref, reason=reason)
+    if action_kind == "withdraw":
+        await calendar_administration_service.withdraw_administrative_override(
+            session,
+            exception_id,
+            data,
+        )
+    else:
+        await calendar_administration_service.record_administrative_action(
+            session,
+            exception_id,
+            action_kind=action_kind,
+            data=data,
+        )
+    return _administrative_redirect(exception_id)
 
 
 @router.get(

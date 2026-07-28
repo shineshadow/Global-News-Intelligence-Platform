@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar Administrative Exceptions{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Exceptional unresolved inference only</div>
+        <h2 class="page-title">Calendar Administrative Queue</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="alert alert-info">
+    Queue entries document exhausted autonomous resolution. Their presence does
+    not imply that operator action is required, and Calendar processing remains
+    nonblocking.
+</div>
+<form class="card mb-3" method="get"
+    action="{{ url_for('web_calendar_administrative') }}">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label">State</label>
+                <select class="form-select" name="state">
+                    <option value="">All states</option>
+                    {% for value in ["open", "resolved", "closed"] %}
+                    <option value="{{ value }}"
+                        {% if selected_state == value %}selected{% endif %}>
+                        {{ value|title }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Severity</label>
+                <select class="form-select" name="severity">
+                    <option value="">All severities</option>
+                    {% for value in ["critical", "high"] %}
+                    <option value="{{ value }}"
+                        {% if selected_severity == value %}selected{% endif %}>
+                        {{ value|title }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Assertion family</label>
+                <input class="form-control" name="assertion_family"
+                    value="{{ selected_family }}"
+                    placeholder="event_validation">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-primary w-100" type="submit">Filter</button>
+            </div>
+        </div>
+    </div>
+</form>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-vcenter">
+            <thead>
+                <tr>
+                    <th>Severity</th>
+                    <th>Event / exception</th>
+                    <th>Family</th>
+                    <th>State</th>
+                    <th>Attempts</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in exceptions %}
+                <tr>
+                    <td><span class="badge">{{ item.severity }}</span></td>
+                    <td>
+                        <div>{{ item.event_title }}</div>
+                        <div class="text-secondary">{{ item.exception_type }}</div>
+                    </td>
+                    <td>{{ item.assertion_family }}</td>
+                    <td>{{ item.state }} / {{ item.conflict_state }}</td>
+                    <td>{{ item.autonomous_attempt_count }}</td>
+                    <td>
+                        <a class="btn btn-sm"
+                            href="{{ url_for(
+                                'web_calendar_administrative_detail',
+                                exception_id=item.id
+                            ) }}">
+                            Inspect history
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-secondary py-5">
+                        No exceptions match these filters.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -69,7 +69,8 @@ Calendar Phase 2 architecture                       frozen
 Calendar Phase 2 corrective/persistence migrations  implemented candidate
 Calendar Phase 2 autonomous services/workers        implemented candidate
 Calendar Phase 2 structured extraction adapter      implemented candidate
-Calendar Phase 2 APIs, advanced UI, and freeze       next
+Calendar Phase 2 Administrative Queue/API/UI         implemented candidate
+Calendar Phase 2 formal freeze review                 next
 ```
 
 Calendar Phase 2 is governed by

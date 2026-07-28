@@ -133,9 +133,10 @@ Normal Calendar views show effective validation and relationships directly;
 they do not wait for approval. Detail views may disclose machine state,
 operator state, confidence, evidence, and unresolved-conflict indicators.
 
-The Administrative Queue is a separate exception view limited to unresolved
-high/critical conflicts after autonomous resolution is exhausted. Each detail
-view should show:
+The Administrative Queue is implemented as a separate exception view limited
+to high/critical conflicts admitted only after autonomous resolution is
+exhausted. It supports state, severity, and assertion-family filters without
+presenting each row as required work. Each detail view shows:
 
 ```text
 affected Event and optional Occurrence
@@ -149,6 +150,7 @@ proposed resolution when available
 operator action history
 ```
 
-Available actions are explicit override, selection, denial, withdrawal, or no
-action. Merely viewing or leaving an exception must not create acceptance,
+Available actions are explicit assertion or selection, denial, withdrawal,
+close, reopen, note, or no action. Every write requires an operator reference
+and reason. Merely viewing or leaving an exception creates no acceptance,
 rejection, deferral, or confirmation.
