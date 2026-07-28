@@ -80,10 +80,14 @@ Recommended migration order:
 3. add inference-run, assertion-ledger, evidence-link, authority-assessment,
    authority-evidence, conflict, attempt, exception, operator-override, and
    occurrence-policy-history tables;
-4. add effective-projection enforcement;
-5. deploy compatible read paths before activating the validation worker;
-6. activate autonomous inference only after verification;
-7. enable the Administrative Queue after exception invariants pass.
+4. require assertion and assessment derivation methods to reference the
+   frozen `semantic_assignment_methods` table;
+5. add immutable same-scope assertion supersession and normalized resolution
+   references;
+6. add effective-projection and legal-transition enforcement;
+7. deploy compatible read paths before activating the validation worker;
+8. activate autonomous inference only after verification;
+9. enable the Administrative Queue after exception invariants pass.
 
 Downgrade must refuse to collapse `internal_agent` or `external_model` history
 back into `ai_job`. Phase 2-owned intelligence state must be empty or

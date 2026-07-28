@@ -129,5 +129,14 @@ tasks with the same conflict, evidence hash, actor, model, and strategy are
 idempotent. An unresolved exception does not block unrelated Calendar or
 platform work.
 
-The complete candidate contract is in
+The worker uses a provider-neutral `calendar_validation` adapter. It never
+calls a model provider directly. Missing internal-agent infrastructure
+creates an operational failure and bounded retry, not a fabricated completed
+reasoning pass.
+
+`actor_kind` records `internal_agent` or `external_model`; semantic derivation
+continues to use the separate GFA-C `internal_autonomous_agent` or
+`external_ai_model` assignment method.
+
+The frozen architecture contract is in
 `../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.

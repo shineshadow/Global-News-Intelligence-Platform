@@ -2295,7 +2295,10 @@ conflict receives two materially distinct `internal_agent` attempts and, when
 eligible, a third `external_model` adjudication before a high/critical
 administrative exception may be created. Infrastructure retries do not count
 as reasoning attempts, and unresolved exceptions do not block unrelated
-processing. See `INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+processing. Actor kind remains separate from the frozen GFA-C semantic
+derivation method. All model work uses the LLM Router or its provider-neutral
+service abstraction; Calendar does not call a provider directly. See
+`INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
 
 ### 31.4 Event Scheduler Worker
 
@@ -2910,12 +2913,16 @@ one implicitly.
 
 ### Calendar Phase 2 — Validation Automation and Relationship Enrichment
 
+**Architecture status:** FROZEN. Implementation not started.
+
 Build on the normalized manual foundation with:
 
 ```text
 automated corroboration and source-authority assessment
 autonomous machine-derived validation and relationship assertions
+actor provenance separate from semantic derivation method
 multi-pass conflict resolution
+provider-neutral Calendar validation routing
 exception-only Administrative Queue
 immutable operator overrides and effective-state resolution
 occurrence-specific policy overrides

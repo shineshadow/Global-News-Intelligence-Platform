@@ -2759,14 +2759,18 @@ Add:
 
 #### Calendar Phase 2 — Validation Automation and Relationship Enrichment
 
+**Architecture status:** FROZEN. Implementation not started.
+
 Align with Monitoring, Topic, and Entity capabilities.
 
 Add:
 
 - automated corroboration and source-authority assessment
 - autonomous machine-derived validation and relationship assertions
+- actor provenance separate from GFA-C semantic derivation method
 - two-pass internal conflict resolution
 - eligible third-pass external-model adjudication
+- provider-neutral Calendar validation routing
 - exception-only Administrative Queue
 - immutable operator overrides and effective-state resolution
 - occurrence-specific policy overrides
@@ -2775,6 +2779,12 @@ Add:
 Operator participation is never a normal-path dependency. The approved
 architecture and Phase 1 actor-kind erratum are defined in
 `INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+
+Calendar Phase 2 does not bypass the main AI roadmap. It may implement the
+provider-neutral `calendar_validation` orchestration contract and internal
+resolution adapter, but provider/model deployment, general budgets, and
+production external-provider rollout remain owned by the Local AI, AI
+Routing, and OpenAI Integration phases.
 
 #### Calendar Phase 3 — Official and Recurring Calendar Ingestion
 

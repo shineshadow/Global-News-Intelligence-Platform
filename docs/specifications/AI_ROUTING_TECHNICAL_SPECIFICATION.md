@@ -48,6 +48,37 @@ question_answering
 
 Embedding and ASR may use the same provider abstraction principles even when implemented by dedicated services.
 
+### 3.1 Calendar Phase 2 Routing Contract
+
+**Calendar contract status:** FROZEN. Implementation not started.
+
+Calendar Phase 2 owns a provider-neutral `calendar_validation` orchestration
+contract with two materially distinct internal-agent strategies. Calendar
+services and workers must not call OpenAI, ChatGPT, or another model provider
+directly.
+
+An eligible third external-model pass is dispatched only when the router
+reports that an external provider is configured, permitted by
+installation-level privacy/egress policy, within budget, and healthy.
+Coverage Profile monitoring priority does not authorize transmission of
+installation-global Calendar evidence.
+
+Calendar `actor_kind` records the executor:
+
+```text
+internal_agent | external_model
+```
+
+The semantic derivation method remains the separate frozen GFA-C value:
+
+```text
+internal_autonomous_agent | external_ai_model
+```
+
+Provider unavailability is auditable and does not block unrelated platform
+processing. Infrastructure retries do not count as completed Calendar
+reasoning attempts.
+
 ---
 
 ## 4. Routing Request Contract

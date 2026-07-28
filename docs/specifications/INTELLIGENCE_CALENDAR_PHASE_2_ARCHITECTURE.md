@@ -1,10 +1,11 @@
 # Intelligence Calendar Phase 2 Architecture
 
-**Status:** ARCHITECTURE CANDIDATE
+**Status:** ARCHITECTURE FROZEN
 **Date:** 2026-07-28
 **Phase:** Calendar Phase 2 — Validation Automation and Relationship Enrichment
 **Depends on:** Calendar Phase 1 frozen at `f29b6d8e3c10`
 **Authority:** Owner-approved autonomous-operation directive
+**Implementation status:** NOT STARTED
 
 ## 1. Purpose and Fixed Requirement
 
@@ -84,6 +85,51 @@ Generic `ai_jobs` infrastructure may continue to exist in AI-routing or other
 subsystems. This erratum concerns the Calendar `actor_kind` vocabulary, not
 the name of a generic job table.
 
+### 2.1 Actor Kind Versus Semantic Derivation Method
+
+`actor_kind` answers **who or what executed the Calendar action**. It must not
+replace GFA-C's frozen `semantic_assignment_methods` vocabulary, which answers
+**how the semantic conclusion was derived**.
+
+Phase 2 assertion and authority-assessment rows reuse:
+
+```text
+manual
+rule
+external_mapping
+internal_autonomous_agent
+external_ai_model
+import
+```
+
+as their semantic derivation method through a foreign key to
+`semantic_assignment_methods.slug`.
+
+Examples:
+
+```text
+actor_kind = system
+assignment_method = rule
+    deterministic Calendar constraints produced the decision
+
+actor_kind = internal_agent
+assignment_method = external_mapping
+    the agent applied an explicit stored ontology crosswalk
+
+actor_kind = internal_agent
+assignment_method = internal_autonomous_agent
+    the GNI agent evaluated evidence and owned the semantic decision,
+    even if it called a model as one tool
+
+actor_kind = external_model
+assignment_method = external_ai_model
+    an external model directly produced the accepted machine conclusion
+```
+
+An external provider call made and independently adjudicated by a GNI agent
+does not automatically change the derivation method to `external_ai_model`.
+Provider/model provenance remains mandatory regardless of the method.
+
 ## 3. Machine State, Operator State, and Effective State
 
 Phase 2 separates:
@@ -96,6 +142,21 @@ effective state
 
 Machine-derived state is maintained autonomously from evidence. Operator state
 exists only after an explicit operator action.
+
+Authority layer is derived without a second mutable source of truth:
+
+```text
+actor_kind = operator
+    → operator-controlled
+
+actor_kind = system | import | internal_agent | external_model
+    → machine-controlled
+```
+
+Operator-controlled semantic assertions use
+`assignment_method = manual`. Database enforcement must reject an operator
+override that points to a non-operator assertion or a machine assertion
+misrepresented as manual authority.
 
 The resolver is:
 
@@ -153,8 +214,8 @@ Every machine assertion retains:
 
 ```text
 actor_kind
+assignment_method
 confidence
-method
 inference run
 resolution decision
 supporting and contradictory evidence
@@ -195,6 +256,21 @@ Phase 1 `intelligence_calendar_event_evidence.authority_score` remains the
 immutable assessment snapshot recorded with that evidence item. Phase 2
 assessment history explains and versions authority decisions; it does not
 rewrite the Phase 1 evidence row.
+
+An authority assessment stores two distinct numeric values:
+
+```text
+authority_score
+    assessed authority of the source for the specific claim and context
+
+assessment_confidence
+    confidence in that authority assessment
+```
+
+Neither value is assertion confidence. Confidence fusion and validation-state
+mapping use a versioned policy; they must not be implemented as an
+installation-global unversioned threshold or a naive maximum/average that
+discards contradictory evidence.
 
 ## 6. Autonomous Conflict Resolution
 
@@ -279,6 +355,49 @@ process/run identity
 The same conflict, evidence hash, actor, model, and strategy is idempotent.
 Worker replay must not consume the resolution budget twice.
 
+### 6.5 Resolver and Roadmap Dependency Boundary
+
+Calendar Phase 2 owns the `calendar_validation` orchestration contract, not a
+provider-specific model client. It requires a provider-neutral internal-agent
+adapter capable of completing the two distinct strategies:
+
+```text
+evidence reconciliation
+adversarial canonical-constraint review
+```
+
+The internal agent may orchestrate deterministic tools, retrieval, and a
+locally routed model. Any model request passes through the LLM Router or its
+provider-neutral service abstraction.
+
+The later main-roadmap Local AI phase still owns general vLLM deployment,
+model selection, batching, and broad AI workloads. The later OpenAI
+Integration phase still owns production provider rollout, budgets, and
+general fallback policy. Calendar Phase 2 must not call ChatGPT, OpenAI, or
+another provider directly to bypass those owners.
+
+Phase 2 implementation may proceed in layers:
+
+```text
+persistence and deterministic normal inference
+        ↓
+provider-neutral internal resolution adapter
+        ↓
+optional external provider activated only when the LLM Router reports it
+configured, eligible, within budget, and healthy
+```
+
+Formal Phase 2 freeze requires direct proof of two real, materially distinct
+internal-agent strategies. A test provider may prove external routing and
+failure behavior; production external escalation remains inactive until a
+real provider is explicitly configured.
+
+If internal-agent infrastructure is temporarily unavailable, GNI records an
+operational failure and retries under a bounded infrastructure policy. It
+does not fabricate a completed reasoning pass. The conflict remains
+unresolved without blocking unrelated processing, and no administrative
+inference exception is created until the required internal attempts complete.
+
 ## 7. Conflict and Exception State Machines
 
 A machine conflict uses:
@@ -308,9 +427,20 @@ closed
 There is deliberately no implicit `accepted`, `rejected`, or `deferred`
 state. Operator inaction does not create an action.
 
+`open → resolved` requires a recorded machine or operator resolution of the
+underlying conflict. `open → closed` requires an explicit operator action and
+does not itself resolve the conflict or change effective canonical state.
+Later evidence may supersede a conflict and its exception, but no exception,
+attempt, evidence, or action history is deleted.
+
 Only genuinely exceptional high-risk or critical conflicts enter the
 Administrative Queue. Low or normal ambiguity remains machine-managed and
 may result in lower confidence or no effective assertion.
+
+Queue admission uses installation-global, versioned epistemic/integrity risk,
+not Coverage Profile monitoring priority or expected news importance.
+Profile-specific policy may rank or filter an exception for operational
+attention, but it cannot create, suppress, or resolve the canonical conflict.
 
 An exception may be created only after:
 
@@ -354,8 +484,8 @@ profile-specific operational configuration.
 Coverage Profile policy may govern:
 
 ```text
-whether a conflict is operationally high or critical for that profile
-whether external-model escalation is permitted for profile-owned processing
+profile-specific display or operational urgency for an existing conflict
+whether external-model escalation is permitted for separately profile-owned processing
 monitoring and expected-news-importance policy
 watch behavior and occurrence-specific policy
 polling or YouTube escalation permission in later phases
@@ -364,6 +494,11 @@ polling or YouTube escalation permission in later phases
 It may not change an installation-global machine or operator assertion merely
 because one profile values the Event differently. Any policy-dependent
 effective result must be explicitly profile-scoped.
+
+Installation-global Calendar inference uses installation-level LLM Router
+egress, privacy, provider, health, and budget policy. Coverage Profile policy
+does not authorize external transmission of installation-global evidence and
+does not select which canonical assertion is true.
 
 Phase 1 already created
 `intelligence_calendar_occurrence_policy_overrides`. Phase 2 adds the
@@ -405,9 +540,24 @@ Event → Source and role
 ```
 
 Controlled columns hold target foreign keys, role, state, polarity,
-confidence, method, actor kind, validity, inference run, and an optional
+confidence, assignment method, actor kind, validity, inference run, immutable
+assertion action, and an optional
 `supersedes_assertion_id` carried by the newer row. Database checks require
 the exact fields appropriate to the assertion family.
+
+Assertion actions use:
+
+```text
+affirm
+deny
+withdraw
+```
+
+Supersession must remain within the same normalized logical assertion scope
+and authority layer. A unique forward-only supersession edge makes each
+machine or operator history linear and acyclic. The current head is derived
+from the immutable chain; an old assertion row is never updated merely to mark
+it non-current.
 
 ### 10.3 `intelligence_calendar_assertion_evidence`
 
@@ -418,8 +568,8 @@ evidence into JSON.
 ### 10.4 `intelligence_calendar_source_authority_assessments`
 
 Contextual, versioned source/document authority assessments linked to the
-Event, optional Occurrence, inference run, method, confidence, validity, and
-provenance.
+Event, optional Occurrence, inference run, `authority_score`,
+`assessment_confidence`, assignment method, validity, and provenance.
 
 ### 10.5 `intelligence_calendar_source_authority_evidence`
 
@@ -430,8 +580,9 @@ it does not replace earlier evidence.
 ### 10.6 `intelligence_calendar_inference_conflicts`
 
 One durable conflict identity with affected assertion scope, severity,
-reason, state, evidence snapshot, detection run, resolution decision, and
-timestamps.
+reason, state, evidence snapshot, detection run, normalized selected-assertion
+reference when resolved, decision provenance, and timestamps. A selected
+canonical assertion must not exist only in diagnostic JSON.
 
 ### 10.7 `intelligence_calendar_conflict_assertions`
 
@@ -441,14 +592,16 @@ No competing conclusion is discarded when a winner is selected.
 ### 10.8 `intelligence_calendar_resolution_attempts`
 
 Append-only attempts with ordinal, actor kind, strategy, model/router
-provenance, hashes, structured decision, outcome, timing, and failure data.
-A uniqueness key enforces idempotency for a substantive attempt.
+provenance, hashes, normalized selected-assertion reference when one is
+chosen, structured rationale, outcome, timing, and failure data. A uniqueness
+key enforces idempotency for a substantive attempt.
 
 ### 10.9 `intelligence_calendar_administrative_exceptions`
 
 At most one active exception per unresolved conflict. It stores high/critical
 severity, reason autonomous resolution failed, proposed resolution when one
-exists, queue state, and timestamps.
+exists, a normalized proposed-assertion reference, queue state, and
+timestamps.
 
 ### 10.10 `intelligence_calendar_operator_overrides`
 
@@ -475,6 +628,11 @@ The implementation must not create two competing effective read paths.
 Projection changes and their Phase 1 state/relationship histories commit in
 the same transaction.
 
+Validation projection must traverse the legal Phase 1 validation state
+machine. When the effective result requires more than one legal edge, every
+intermediate transition is explicit and historied; Phase 2 may not bypass the
+frozen state machine with a direct column update.
+
 ## 11. Worker and Transaction Boundaries
 
 `calendar-validation-worker` owns Phase 2 autonomous processing.
@@ -500,6 +658,7 @@ The worker must tolerate:
 duplicate tasks
 late evidence
 model timeout or invalid output
+internal-agent infrastructure unavailable
 external provider unavailability
 operator override arriving during inference
 conflict supersession while a pass is running
@@ -589,6 +748,17 @@ The Phase 2 freeze candidate must directly prove:
 | 31 | Model, router, strategy, run, confidence, evidence, and provenance survive. |
 | 32 | The current Phase 1 Calendar API remains compatible through effective projection. |
 | 33 | Clean migration, guarded downgrade, regression, and zero-drift checks pass. |
+| 34 | Actor kind and semantic assignment method remain separate controlled dimensions. |
+| 35 | Internal-agent model/tool use retains `internal_autonomous_agent` when the agent owns the decision. |
+| 36 | Direct external-model acceptance uses `external_ai_model` and full provider provenance. |
+| 37 | Missing internal infrastructure creates no fake completed resolution attempt. |
+| 38 | Calendar code performs no direct provider call outside the routing abstraction. |
+| 39 | Installation-level egress policy, not Coverage Profile policy, controls global evidence transmission. |
+| 40 | Profile priority cannot create, suppress, or resolve a canonical conflict. |
+| 41 | Source authority score, assessment confidence, and assertion confidence remain distinct. |
+| 42 | Supersession is forward-only, same-scope, linear, and leaves immutable rows unchanged. |
+| 43 | Resolved decisions and proposed resolutions reference normalized assertions. |
+| 44 | Effective validation changes preserve every legal intermediate Phase 1 transition. |
 
 ## 15. Implementation Sequence
 
@@ -599,7 +769,7 @@ actor-kind corrective migration
         ↓
 inference, assertion, authority, and conflict persistence
         ↓
-autonomous resolution service and worker
+provider-neutral internal resolution adapter, service, and worker
         ↓
 effective-state and operator-override service
         ↓
@@ -611,3 +781,52 @@ formal Calendar Phase 2 freeze review
 No Calendar Phase 2 implementation is frozen by this document alone. The
 schema, services, worker, APIs, UI, operations, migration safety, and complete
 proof matrix must pass formal review.
+
+## 16. Formal Architecture Freeze Review
+
+The formal architecture review found and corrected three blockers:
+
+```text
+Calendar actor kinds were not explicitly separated from GFA-C's frozen
+semantic derivation methods
+
+the two-pass internal-agent and third-pass external-model contract did not
+define an implementable boundary with the later Local AI, AI Routing, and
+OpenAI Integration roadmap phases
+
+Coverage Profile operational priority could be misread as controlling
+installation-global conflict severity or external evidence egress
+```
+
+Review hardening also requires distinct authority/assessment/assertion
+confidence, immutable same-scope assertion chains, normalized selected and
+proposed assertion references, provider-neutral model routing, bounded
+operational failure handling, and legal Phase 1 transition paths for every
+effective validation change.
+
+The reconciled architecture:
+
+```text
+preserves autonomous normal operation
+requires two materially distinct internal-agent attempts
+uses an eligible third external-model pass without direct provider coupling
+keeps operator participation optional and authoritative when exercised
+keeps Administrative Queue exceptions rare and nonblocking
+preserves all machine, operator, evidence, attempt, and decision history
+reuses GFA-C semantic methods and canonical relationship vocabularies
+preserves the GFA-E canonical-versus-profile boundary
+```
+
+All 44 required implementation proofs are explicit. Documentation
+consistency, Markdown structure, obsolete review-gate wording, whitespace,
+and repository-scope checks passed. The local isolated project database was
+confirmed at Calendar Phase 1 head `f29b6d8e3c10`; no migration or runtime
+change was made during this review. A read-only actor preflight found zero
+Calendar actor rows and therefore zero existing `ai_job` rows in that
+isolated database; the corrective migration must still retain its ambiguity
+guard for every target deployment.
+
+Calendar Phase 2 architecture is frozen. The next work is the guarded
+actor-kind corrective migration and Phase 2 persistence foundation. Calendar
+Phase 2 implementation remains unfrozen until all 44 proofs and the complete
+regression, migration, operational, and zero-drift review pass.

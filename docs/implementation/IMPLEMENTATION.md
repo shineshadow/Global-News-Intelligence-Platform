@@ -65,7 +65,7 @@ Current Calendar implementation sequence:
 ```text
 Calendar Foundation Audit                           frozen
 Calendar Phase 1 — Manual Calendar                  frozen
-Calendar Phase 2 architecture                       candidate
+Calendar Phase 2 architecture                       frozen
 Calendar Phase 2 implementation and freeze          next
 ```
 

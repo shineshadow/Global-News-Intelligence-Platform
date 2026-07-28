@@ -372,6 +372,10 @@ not be mapped silently when their durable provenance cannot prove whether
 autonomous inference contract, and required proofs are defined in
 `INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
 
+These are actor-provenance values. They do not replace GFA-C's frozen
+`semantic_assignment_methods` slugs `internal_autonomous_agent` and
+`external_ai_model`, which describe how a semantic conclusion was derived.
+
 ## 9. Canonical Relationship Assertions
 
 Calendar relationships reference the existing canonical tables:
