@@ -98,6 +98,32 @@ Calendar creation, rescheduling, and linking do not create Calendar reminder
 or change alerts. Only a new linked Monitor/document match enters the frozen
 Step 26 content-alert path.
 
+## Intelligence Calendar Phase 2 Candidate
+
+Normal Calendar reads return effective state with summary provenance. Machine
+state, operator state, evidence, attempts, and conflicts remain inspectable
+without making review a prerequisite.
+
+Candidate resource surface:
+
+```text
+GET  /api/v1/calendar/events/{event_id}/intelligence-state
+GET  /api/v1/calendar/events/{event_id}/inference-history
+GET  /api/v1/calendar/administrative-exceptions
+GET  /api/v1/calendar/administrative-exceptions/{exception_id}
+POST /api/v1/calendar/administrative-exceptions/{exception_id}/overrides
+POST /api/v1/calendar/operator-overrides/{override_id}/withdrawals
+PUT  /api/v1/calendar/policies/{policy_id}/occurrences/{occurrence_id}
+```
+
+Operator writes append authority history; they do not update or delete
+machine assertions in place. Operator silence has no API side effect.
+Worker/internal inference endpoints, if needed, must not be exposed as a
+normal public approval workflow.
+
+The final route and schema contract must remain subordinate to
+`../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+
 ---
 
 ## Endpoint Documentation Template

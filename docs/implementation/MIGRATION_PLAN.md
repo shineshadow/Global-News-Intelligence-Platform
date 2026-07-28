@@ -55,3 +55,37 @@ post-deploy monitoring
 8. Introduce UI/API filters.
 9. Run AI backfill only after benchmark thresholds are approved.
 10. Retire legacy classification fields only after usage audit.
+
+## Calendar Phase 2 Migration Candidate
+
+Calendar Phase 2 begins with the actor-kind correction defined in
+`../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+
+Preflight must enumerate `actor_kind` counts across every Calendar table.
+The current unapproved `ai_job` value may be replaced only when durable
+provenance proves the truthful target:
+
+```text
+internal_agent
+external_model
+```
+
+Any ambiguous historical `ai_job` row blocks automatic upgrade. The migration
+must never guess or collapse both meanings into one value.
+
+Recommended migration order:
+
+1. preflight actor-kind data and refuse ambiguity;
+2. replace Calendar actor constraints and schemas;
+3. add inference-run, assertion-ledger, evidence-link, authority-assessment,
+   authority-evidence, conflict, attempt, exception, operator-override, and
+   occurrence-policy-history tables;
+4. add effective-projection enforcement;
+5. deploy compatible read paths before activating the validation worker;
+6. activate autonomous inference only after verification;
+7. enable the Administrative Queue after exception invariants pass.
+
+Downgrade must refuse to collapse `internal_agent` or `external_model` history
+back into `ai_job`. Phase 2-owned intelligence state must be empty or
+explicitly preserved by an approved forward recovery before destructive
+schema removal.

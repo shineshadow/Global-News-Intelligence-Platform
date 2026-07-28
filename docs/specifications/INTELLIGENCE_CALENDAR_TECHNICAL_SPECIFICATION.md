@@ -132,6 +132,12 @@ in `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`. The field sketches later in
 this document describe product intent; they are not migration blueprints where
 they conflict with that audit.
 
+Calendar Phase 2 autonomy, actor kinds, multi-pass conflict resolution,
+operator precedence, exception handling, persistence boundaries, and freeze
+proofs are defined in
+`INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`. That Phase 2 architecture
+governs older suggestion/review wording in this document.
+
 ---
 
 ## 3. Core Intelligence Model
@@ -1198,7 +1204,7 @@ source_document_id
 source_endpoint_id
 
 created_by_user_id
-discovered_by_ai_job_id
+discovered_by_inference_run_id
 
 first_seen_at
 last_seen_at
@@ -2283,6 +2289,14 @@ update confidence
 change validation status
 ```
 
+Calendar Phase 2 refines this worker into an autonomous, auditable pipeline.
+Normal machine-derived assertions require no operator approval. A detected
+conflict receives two materially distinct `internal_agent` attempts and, when
+eligible, a third `external_model` adjudication before a high/critical
+administrative exception may be created. Infrastructure retries do not count
+as reasoning attempts, and unresolved exceptions do not block unrelated
+processing. See `INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+
 ### 31.4 Event Scheduler Worker
 
 ```text
@@ -2900,10 +2914,20 @@ Build on the normalized manual foundation with:
 
 ```text
 automated corroboration and source-authority assessment
-relationship suggestions and review workflow
+autonomous machine-derived validation and relationship assertions
+multi-pass conflict resolution
+exception-only Administrative Queue
+immutable operator overrides and effective-state resolution
 occurrence-specific policy overrides
 advanced evidence and history UI
 ```
+
+Normal inference requires no operator approval. At least two materially
+distinct `internal_agent` attempts precede exception escalation; eligible
+unresolved high/critical conflicts receive a third `external_model`
+adjudication when configured and available. The normative architecture,
+actor-kind correction, persistence boundaries, and proof matrix are defined
+in `INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
 
 ### Calendar Phase 3 — Official and Recurring Calendar Ingestion
 

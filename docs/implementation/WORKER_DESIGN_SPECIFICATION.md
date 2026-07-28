@@ -103,3 +103,31 @@ simultaneous active attempts. Retry scheduling is durable in PostgreSQL;
 Celery transport retries do not own the business retry policy. Destination
 authentication tokens are resolved from the configured environment-variable
 name inside the alerts worker and are never Celery arguments.
+
+## Calendar Phase 2 Validation Worker Candidate
+
+`calendar-validation-worker` will own autonomous Calendar corroboration,
+source-authority assessment, validation inference, relationship enrichment,
+and conflict resolution.
+
+The task carries stable Event/Occurrence and evidence-snapshot identifiers.
+It does not carry embedded evidence or model output. The worker commits before
+model or network I/O and records each substantive reasoning attempt
+independently.
+
+Conflict resolution uses:
+
+```text
+Pass 1  internal_agent resolution
+Pass 2  materially distinct internal_agent critical review
+Pass 3  external_model adjudication for eligible unresolved high/critical
+        conflicts when configured and available
+```
+
+Infrastructure retries do not consume reasoning-attempt ordinals. Duplicate
+tasks with the same conflict, evidence hash, actor, model, and strategy are
+idempotent. An unresolved exception does not block unrelated Calendar or
+platform work.
+
+The complete candidate contract is in
+`../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.

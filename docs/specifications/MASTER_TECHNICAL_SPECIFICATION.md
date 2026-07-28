@@ -2764,9 +2764,17 @@ Align with Monitoring, Topic, and Entity capabilities.
 Add:
 
 - automated corroboration and source-authority assessment
-- relationship suggestions and review workflow
+- autonomous machine-derived validation and relationship assertions
+- two-pass internal conflict resolution
+- eligible third-pass external-model adjudication
+- exception-only Administrative Queue
+- immutable operator overrides and effective-state resolution
 - occurrence-specific policy overrides
 - advanced evidence and history UI
+
+Operator participation is never a normal-path dependency. The approved
+architecture and Phase 1 actor-kind erratum are defined in
+`INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
 
 #### Calendar Phase 3 — Official and Recurring Calendar Ingestion
 
@@ -3265,6 +3273,7 @@ Detailed subsystem specifications complement this Master without replacing its a
 ```text
 DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md
 INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md
+INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md
 STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md
 SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md
 AI_ROUTING_TECHNICAL_SPECIFICATION.md

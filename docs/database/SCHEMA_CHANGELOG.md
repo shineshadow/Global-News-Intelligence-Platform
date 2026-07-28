@@ -37,6 +37,12 @@ downgrade/re-upgrade, destructive-downgrade refusal, live HTTP smoke checks,
 and zero-drift Alembic comparison passed. Calendar Phase 1 is frozen at
 `f29b6d8e3c10`.
 
+**Post-freeze erratum, not yet migrated:** Phase 1 permits the unapproved
+Calendar actor kind `ai_job`. Calendar Phase 2 must replace it with
+`internal_agent` and `external_model` through a guarded migration that refuses
+to guess when historical provenance is ambiguous. This note does not claim a
+schema change has already occurred.
+
 ---
 
 ## 2026-07-27 — Step 25 Monitor Rule Engine Frozen

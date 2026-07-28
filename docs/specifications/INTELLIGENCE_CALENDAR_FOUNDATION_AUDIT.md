@@ -354,6 +354,24 @@ actor_label
 Calendar Phase 1 does not invent a user foreign key before identity and
 authorization are frozen.
 
+### 8.1 Actor-Kind Erratum
+
+The Phase 1 implementation and this frozen audit used `ai_job`, but that slug
+was not approved. It does not distinguish GNI-controlled local inference from
+an externally hosted fallback model.
+
+Calendar Phase 2 must correct the implemented vocabulary to:
+
+```text
+operator | system | import | internal_agent | external_model
+```
+
+The correction requires an explicit migration. Historical `ai_job` rows may
+not be mapped silently when their durable provenance cannot prove whether
+`internal_agent` or `external_model` is truthful. The normative correction,
+autonomous inference contract, and required proofs are defined in
+`INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+
 ## 9. Canonical Relationship Assertions
 
 Calendar relationships reference the existing canonical tables:

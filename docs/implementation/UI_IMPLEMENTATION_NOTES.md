@@ -126,3 +126,29 @@ failed schema outputs
 escalation rate
 benchmark results
 ```
+
+## Calendar Phase 2 Administrative Exceptions
+
+Normal Calendar views show effective validation and relationships directly;
+they do not wait for approval. Detail views may disclose machine state,
+operator state, confidence, evidence, and unresolved-conflict indicators.
+
+The Administrative Queue is a separate exception view limited to unresolved
+high/critical conflicts after autonomous resolution is exhausted. Each detail
+view should show:
+
+```text
+affected Event and optional Occurrence
+competing assertions
+source-authority assessments
+supporting and contradictory evidence
+two internal-agent attempts
+external-model attempt or recorded ineligibility/unavailability
+reason resolution failed
+proposed resolution when available
+operator action history
+```
+
+Available actions are explicit override, selection, denial, withdrawal, or no
+action. Merely viewing or leaving an exception must not create acceptance,
+rejection, deferral, or confirmation.

@@ -60,6 +60,20 @@ Intelligence Calendar
 Advanced novelty/event intelligence
 ```
 
+Current Calendar implementation sequence:
+
+```text
+Calendar Foundation Audit                           frozen
+Calendar Phase 1 — Manual Calendar                  frozen
+Calendar Phase 2 architecture                       candidate
+Calendar Phase 2 implementation and freeze          next
+```
+
+Calendar Phase 2 is governed by
+`../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`. Normal
+validation and enrichment must be autonomous; administrative review is an
+exception path only.
+
 ---
 
 ## Implementation Guardrails

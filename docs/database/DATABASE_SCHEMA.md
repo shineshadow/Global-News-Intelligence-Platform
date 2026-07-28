@@ -2075,3 +2075,24 @@ revision. Unknown schedules require unknown date and time precision, timed
 schedules cannot use `not_applicable` time precision, and all-day recurrence
 duration uses complete local days. Calendar Monitor creation and linking now
 commit or roll back together.
+
+### Pending Calendar actor-kind correction
+
+The current Phase 1 schema truthfully still permits:
+
+```text
+operator | system | import | ai_job
+```
+
+`ai_job` was not approved because it cannot distinguish local GNI inference
+from an externally hosted fallback model. The first Calendar Phase 2
+migration must replace it with:
+
+```text
+operator | system | import | internal_agent | external_model
+```
+
+This section records a pending correction, not an already-applied schema
+change. Ambiguous historical `ai_job` rows must block automatic migration
+rather than being mapped silently. The normative design is
+`INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.

@@ -7,6 +7,17 @@
 **Revises:** `d26e5b8c1a40`
 **Authority:** `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`
 
+## Post-Freeze Actor-Kind Erratum
+
+Phase 1 implemented the unapproved Calendar actor kind `ai_job`. Calendar
+Phase 2 must replace it through an explicit, guarded migration with the
+approved distinction `internal_agent` versus `external_model`. Until that
+migration is applied, this document continues to describe the actual frozen
+Phase 1 database state. No existing ambiguous row may be mapped silently.
+
+The corrective contract is defined in
+`INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+
 ## Delivered Boundary
 
 Calendar Phase 1 implements the frozen distinction among:
