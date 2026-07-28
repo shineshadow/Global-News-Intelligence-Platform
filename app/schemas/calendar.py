@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.monitor import MonitorCreate
 
-ActorKind = Literal["operator", "system", "import", "ai_job"]
+ActorKind = Literal["operator", "system", "import", "internal_agent", "external_model"]
 TemporalMode = Literal["timed", "date", "unknown"]
 DatePrecision = Literal[
     "exact", "range", "month", "quarter", "year", "approximate", "unknown"

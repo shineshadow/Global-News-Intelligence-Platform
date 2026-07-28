@@ -58,6 +58,12 @@ post-deploy monitoring
 
 ## Calendar Phase 2 Migration Candidate
 
+**Candidate revisions:** `a7c3e9f1b204`, `b8d4f0a2c315`
+
+The corrective and persistence migrations are implemented and remain
+unfrozen pending the Calendar Phase 2 service/worker implementation and
+formal freeze review.
+
 Calendar Phase 2 begins with the actor-kind correction defined in
 `../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
 

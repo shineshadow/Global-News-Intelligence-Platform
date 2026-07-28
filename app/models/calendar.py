@@ -43,7 +43,13 @@ SCHEDULE_STATES = (
     "cancelled",
 )
 IDENTITY_STATES = ("active", "archived", "merged")
-ACTOR_KINDS = ("operator", "system", "import", "ai_job")
+ACTOR_KINDS = (
+    "operator",
+    "system",
+    "import",
+    "internal_agent",
+    "external_model",
+)
 PRIORITIES = ("low", "normal", "high", "critical")
 
 
@@ -76,7 +82,7 @@ class IntelligenceCalendarEvent(Base, ActorMixin):
             name="validation_state",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         CheckConstraint(
@@ -176,7 +182,7 @@ class IntelligenceCalendarEventRevision(Base, ActorMixin):
             name="discovery_method",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -245,7 +251,7 @@ class IntelligenceCalendarEventAlias(Base, ActorMixin):
             name="valid_interval",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -321,7 +327,7 @@ class IntelligenceCalendarEventRecurrenceRule(Base, ActorMixin):
             name="horizon",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -396,7 +402,7 @@ class IntelligenceCalendarEventRecurrenceException(Base, ActorMixin):
         ),
         CheckConstraint("btrim(recurrence_key) <> ''", name="key_nonempty"),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -440,7 +446,7 @@ class IntelligenceCalendarEventOccurrence(Base, ActorMixin):
             name="validation_state",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -594,7 +600,7 @@ class IntelligenceCalendarOccurrenceScheduleRevision(Base, ActorMixin):
             name="timed_time_precision",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -714,13 +720,18 @@ class IntelligenceCalendarEventEvidence(Base, ActorMixin):
             name="reference_present",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
             "event_id",
             "fingerprint",
             name="uq_calendar_event_evidence_fingerprint",
+        ),
+        UniqueConstraint(
+            "event_id",
+            "id",
+            name="uq_calendar_event_evidence_event_id",
         ),
         ForeignKeyConstraint(
             ["event_id", "occurrence_id"],
@@ -865,7 +876,7 @@ class IntelligenceCalendarEventStateTransition(Base, ActorMixin):
             name="legal_transition",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         ForeignKeyConstraint(
@@ -963,7 +974,7 @@ def _assertion_constraints() -> tuple[CheckConstraint, ...]:
             name="valid_interval",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
     )
@@ -1085,7 +1096,7 @@ class IntelligenceCalendarEventDocument(Base, ActorMixin):
             name="confidence",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         ForeignKeyConstraint(
@@ -1170,7 +1181,7 @@ class IntelligenceCalendarEventCoveragePolicy(Base, ActorMixin):
             name="windows_nonnegative",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -1289,7 +1300,7 @@ class IntelligenceCalendarOccurrencePolicyOverride(Base, ActorMixin):
             name="expected_news_importance",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -1357,7 +1368,7 @@ class IntelligenceCalendarPolicyWatchSource(Base, ActorMixin):
             name="activation_interval",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         Index(
@@ -1428,7 +1439,7 @@ class IntelligenceCalendarPolicySearchTerm(Base, ActorMixin):
         ),
         CheckConstraint("weight > 0 AND weight <= 10", name="weight"),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(
@@ -1473,7 +1484,7 @@ class IntelligenceCalendarPolicyDocumentType(Base, ActorMixin):
     __tablename__ = "intelligence_calendar_policy_document_types"
     __table_args__ = (
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
     )
@@ -1508,7 +1519,7 @@ class IntelligenceCalendarPolicyContentFormat(Base, ActorMixin):
     __tablename__ = "intelligence_calendar_policy_content_formats"
     __table_args__ = (
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
     )
@@ -1549,7 +1560,7 @@ class IntelligenceCalendarEventMonitor(Base, ActorMixin):
             name="activation_interval",
         ),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         ForeignKeyConstraint(
@@ -1637,7 +1648,7 @@ class IntelligenceCalendarEventMergeHistory(Base, ActorMixin):
         ),
         CheckConstraint("btrim(reason) <> ''", name="reason_nonempty"),
         CheckConstraint(
-            "actor_kind IN ('operator', 'system', 'import', 'ai_job')",
+            "actor_kind IN ('operator', 'system', 'import', 'internal_agent', 'external_model')",
             name="actor_kind",
         ),
         UniqueConstraint(

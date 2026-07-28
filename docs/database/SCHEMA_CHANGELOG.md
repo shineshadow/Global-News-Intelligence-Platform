@@ -6,6 +6,31 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-28 — Intelligence Calendar Phase 2 Persistence Candidate
+
+**Persistence revision:** `b8d4f0a2c315`
+**Actor correction:** `a7c3e9f1b204`
+**Revises:** `f29b6d8e3c10`
+**Status:** Candidate; not frozen
+
+Corrected Calendar actor provenance to distinguish `internal_agent` from
+`external_model`. The guarded upgrade refuses ambiguous historical `ai_job`
+rows, and downgrade refuses to collapse the corrected meanings.
+
+Added 12 normalized Phase 2 persistence tables for inference runs, immutable
+assertions and evidence, source-authority assessment, conflict resolution,
+administrative exceptions and their action history, operator overrides, and
+occurrence-policy override history. Resolution persistence requires two
+completed internal passes with distinct strategies before an optional third
+external pass. Administrative exceptions require those internal passes plus
+completed or explicitly unavailable/ineligible external adjudication.
+
+The candidate has passed focused migration, constraint, immutability, and
+Alembic zero-drift tests. Calendar Phase 2 runtime inference and its formal
+freeze review remain future work.
+
+---
+
 ## 2026-07-27 — Intelligence Calendar Phase 1 Frozen
 
 **Freeze revision:** `f29b6d8e3c10`

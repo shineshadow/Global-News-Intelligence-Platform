@@ -1,9 +1,9 @@
 # Global News Intelligence Platform — Current Database Schema
 
 **Document type:** Living implementation reference  
-**Snapshot date:** 2026-07-27
-**Platform phase:** Intelligence Calendar Phase 1 frozen
-**Alembic revision:** `f29b6d8e3c10`
+**Snapshot date:** 2026-07-28
+**Platform phase:** Intelligence Calendar Phase 2 persistence candidate
+**Alembic revision:** `b8d4f0a2c315`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -28,7 +28,7 @@ Future database design work should consult this document before adding or changi
 
 ## 2. Current Schema Summary
 
-The current schema contains **60 tables**:
+The current schema contains **99 tables**:
 
 1 Alembic infrastructure table
 15 pre-GFA application/classification tables
@@ -38,6 +38,9 @@ The current schema contains **60 tables**:
 1 GFA-D content-format catalog table
 10 GFA-E coverage-profile tables
 13 Step 25 Monitor Rule Engine tables
+5 Step 26 alert-delivery tables
+22 Calendar Phase 1 tables
+12 Calendar Phase 2 inference-persistence tables
 
 | Table | Purpose |
 |---|---|
@@ -2076,23 +2079,27 @@ schedules cannot use `not_applicable` time precision, and all-day recurrence
 duration uses complete local days. Calendar Monitor creation and linking now
 commit or roll back together.
 
-### Pending Calendar actor-kind correction
+### Applied Calendar actor-kind correction
 
-The current Phase 1 schema truthfully still permits:
-
-```text
-operator | system | import | ai_job
-```
-
-`ai_job` was not approved because it cannot distinguish local GNI inference
-from an externally hosted fallback model. The first Calendar Phase 2
-migration must replace it with:
+Corrective revision `a7c3e9f1b204` replaces the unapproved `ai_job` actor
+kind. Calendar actor provenance now permits:
 
 ```text
 operator | system | import | internal_agent | external_model
 ```
 
-This section records a pending correction, not an already-applied schema
-change. Ambiguous historical `ai_job` rows must block automatic migration
-rather than being mapped silently. The normative design is
-`INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+The upgrade refuses any existing `ai_job` row because its truthful
+classification cannot be inferred. The downgrade likewise refuses
+`internal_agent` or `external_model` rows rather than collapsing provenance.
+
+### Calendar Phase 2 persistence candidate
+
+Revision `b8d4f0a2c315` adds normalized inference runs, an immutable assertion
+ledger and evidence links, source-authority assessments, conflicts and
+ordered resolution attempts, administrative exceptions with action history,
+operator overrides, and occurrence-policy override history. Database
+constraints enforce actor/method separation, two distinct internal reasoning
+passes before optional external adjudication, exception eligibility only
+after autonomous exhaustion, normalized same-scope references, append-only
+history, and guarded downgrade. This is an implementation candidate, not a
+Calendar Phase 2 freeze.

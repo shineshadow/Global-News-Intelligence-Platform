@@ -109,6 +109,18 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            intelligence_calendar_administrative_exception_actions,
+            intelligence_calendar_occurrence_policy_override_history,
+            intelligence_calendar_operator_overrides,
+            intelligence_calendar_administrative_exceptions,
+            intelligence_calendar_resolution_attempts,
+            intelligence_calendar_conflict_assertions,
+            intelligence_calendar_inference_conflicts,
+            intelligence_calendar_source_authority_evidence,
+            intelligence_calendar_source_authority_assessments,
+            intelligence_calendar_assertion_evidence,
+            intelligence_calendar_assertion_ledger,
+            intelligence_calendar_inference_runs,
             intelligence_calendar_event_merge_history,
             intelligence_calendar_event_monitors,
             intelligence_calendar_policy_content_formats,
