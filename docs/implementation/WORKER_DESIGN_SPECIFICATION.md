@@ -106,9 +106,12 @@ name inside the alerts worker and are never Celery arguments.
 
 ## Calendar Phase 2 Validation Worker Candidate
 
-`calendar-validation-worker` will own autonomous Calendar corroboration,
-source-authority assessment, validation inference, relationship enrichment,
-and conflict resolution.
+`calendar-validation-worker` owns autonomous Calendar corroboration,
+source-authority assessment, validation inference, and conflict resolution.
+Canonical relationship enrichment remains in the same worker boundary but
+requires structured relationship candidates from a later extraction adapter;
+this candidate does not infer geography from Source country or Entity
+ancestry.
 
 The task carries stable Event/Occurrence and evidence-snapshot identifiers.
 It does not carry embedded evidence or model output. The worker commits before
@@ -140,3 +143,20 @@ continues to use the separate GFA-C `internal_autonomous_agent` or
 
 The frozen architecture contract is in
 `../specifications/INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+
+The implementation candidate uses the Celery queue `calendar-validation` and
+the systemd unit `gni-celery-calendar-validation.service`. Celery Beat
+discovers Event/Occurrence evidence snapshots that do not have a current
+completed run and queues stable database identifiers only.
+
+The provider-neutral internal adapter implements two versioned strategies:
+
+```text
+evidence-reconciliation:1
+adversarial-canonical-review:1
+```
+
+The default external router records an installation-level ineligible result
+because no production external provider is configured. It performs no direct
+provider call. A future LLM Router implementation may be injected through the
+same contract.

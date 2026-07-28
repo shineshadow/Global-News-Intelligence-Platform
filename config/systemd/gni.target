@@ -4,6 +4,7 @@ Wants=gni-api.service
 Wants=gni-celery-ingestion.service
 Wants=gni-celery-scheduler.service
 Wants=gni-celery-alerts.service
+Wants=gni-celery-calendar-validation.service
 Wants=gni-celery-beat.service
 
 After=gni-migrate.service

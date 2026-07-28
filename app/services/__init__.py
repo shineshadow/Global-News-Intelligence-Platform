@@ -14,6 +14,15 @@ from app.services.alert_service import (
     set_monitor_destination,
     update_destination,
 )
+from app.services.calendar_inference_service import (
+    CalendarOperatorOverrideResult,
+    CalendarValidationResult,
+    list_pending_calendar_validation_scopes,
+    mark_calendar_validation_infrastructure_failure,
+    run_calendar_validation,
+    set_operator_validation_override,
+    withdraw_operator_validation_override,
+)
 from app.services.classification_service import (
     DeterministicClassificationSummary,
     classify_document_by_id,
@@ -61,6 +70,8 @@ from app.services.monitor_service import (
 )
 
 __all__ = [
+    "CalendarOperatorOverrideResult",
+    "CalendarValidationResult",
     "DeterministicClassificationSummary",
     "DocumentMatchPlan",
     "EndpointPollSummary",
@@ -97,13 +108,18 @@ __all__ = [
     "list_destinations",
     "list_due_delivery_ids",
     "list_monitor_destinations",
+    "list_pending_calendar_validation_scopes",
+    "mark_calendar_validation_infrastructure_failure",
     "pause_monitor",
     "poll_source_endpoint",
     "replace_coverage_profile_scope",
     "resolve_coverage_profile_scope",
     "retry_delivery",
+    "run_calendar_validation",
     "set_monitor_destination",
+    "set_operator_validation_override",
     "set_source_polling_priority",
     "supersede_entity_geography",
     "update_destination",
+    "withdraw_operator_validation_override",
 ]

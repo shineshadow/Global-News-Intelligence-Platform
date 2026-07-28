@@ -7,6 +7,7 @@ celery_app = Celery(
     broker=settings.celery_broker_url,
     include=[
         "workers.alerts.tasks",
+        "workers.calendar.tasks",
         "workers.ingestion.tasks",
         "workers.scheduler.tasks",
     ],
@@ -46,8 +47,14 @@ celery_app.conf.update(
         "scheduler.dispatch_due_alert_deliveries": {
             "queue": "scheduler",
         },
+        "scheduler.dispatch_pending_calendar_validations": {
+            "queue": "scheduler",
+        },
         "alerts.deliver": {
             "queue": "alerts",
+        },
+        "calendar.validate": {
+            "queue": "calendar-validation",
         },
     },
     beat_schedule={
@@ -69,6 +76,15 @@ celery_app.conf.update(
             "task": "scheduler.dispatch_due_alert_deliveries",
             "schedule": float(
                 settings.celery_alert_dispatch_interval_seconds
+            ),
+            "options": {
+                "queue": "scheduler",
+            },
+        },
+        "dispatch-pending-calendar-validations": {
+            "task": "scheduler.dispatch_pending_calendar_validations",
+            "schedule": float(
+                settings.celery_calendar_dispatch_interval_seconds
             ),
             "options": {
                 "queue": "scheduler",

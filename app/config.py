@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     celery_dispatch_limit: int = 500
     celery_alert_dispatch_interval_seconds: int = 15
     celery_alert_dispatch_limit: int = 500
+    celery_calendar_dispatch_interval_seconds: int = 30
+    celery_calendar_dispatch_limit: int = 500
 
     model_config = SettingsConfigDict(
         env_file=".env",

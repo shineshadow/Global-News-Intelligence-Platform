@@ -67,7 +67,8 @@ Calendar Foundation Audit                           frozen
 Calendar Phase 1 — Manual Calendar                  frozen
 Calendar Phase 2 architecture                       frozen
 Calendar Phase 2 corrective/persistence migrations  implemented candidate
-Calendar Phase 2 autonomous services and freeze     next
+Calendar Phase 2 autonomous services/workers        implemented candidate
+Calendar Phase 2 APIs, advanced UI, and freeze       next
 ```
 
 Calendar Phase 2 is governed by

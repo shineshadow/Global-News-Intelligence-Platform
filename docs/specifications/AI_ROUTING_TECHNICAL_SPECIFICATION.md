@@ -50,7 +50,9 @@ Embedding and ASR may use the same provider abstraction principles even when imp
 
 ### 3.1 Calendar Phase 2 Routing Contract
 
-**Calendar contract status:** FROZEN. Implementation not started.
+**Calendar contract status:** FROZEN. Provider-neutral Calendar adapter
+implemented as a Phase 2 candidate; production provider routing remains
+unconfigured.
 
 Calendar Phase 2 owns a provider-neutral `calendar_validation` orchestration
 contract with two materially distinct internal-agent strategies. Calendar
