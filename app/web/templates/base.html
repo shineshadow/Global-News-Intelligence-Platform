@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 
 <head>
     <meta charset="utf-8">
@@ -22,6 +22,11 @@
             path='css/app.css'
         ) }}">
 
+    <link rel="stylesheet" href="{{ url_for(
+            'themes',
+            path='dark_operations/theme.css'
+        ) }}">
+
     <script defer src="{{ url_for(
             'static',
             path='vendor/htmx.min.js'
@@ -33,25 +38,12 @@
         ) }}"></script>
 </head>
 
-<body>
+<body class="gni-theme-dark-operations">
     <div class="page">
 
-        <header class="navbar navbar-expand-md d-print-none">
-            <div class="container-xl">
+        {% include "dark_operations/header.html" %}
 
-                <a class="navbar-brand navbar-brand-autodark" href="{{ url_for('web_dashboard') }}">
-                    Global News Intelligence
-                </a>
-
-                <div class="navbar-nav flex-row order-md-last">
-                    <span class="nav-link text-secondary">
-                        Operations
-                    </span>
-                </div>
-            </div>
-        </header>
-
-        <header class="navbar-expand-md">
+        <header class="navbar-expand-md gni-primary-nav">
             <div class="collapse navbar-collapse show">
                 <div class="navbar">
                     <div class="container-xl">

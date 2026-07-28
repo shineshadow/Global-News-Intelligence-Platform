@@ -1,22 +1,18 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from pathlib import Path
 
 from fastapi import FastAPI, Response, status
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.database import async_session_factory, engine
-from app.redis_client import redis_client
-
 from app.api.exception_handlers import register_exception_handlers
 from app.api.router import api_router
-
-from pathlib import Path
-
-from fastapi.staticfiles import StaticFiles
-
+from app.database import async_session_factory, engine
+from app.redis_client import redis_client
 from app.web.routes import router as web_router
 
 
@@ -89,4 +85,12 @@ app.mount(
         directory=WEB_DIR / "static",
     ),
     name="static",
+)
+
+app.mount(
+    "/themes",
+    StaticFiles(
+        directory=WEB_DIR / "themes",
+    ),
+    name="themes",
 )
