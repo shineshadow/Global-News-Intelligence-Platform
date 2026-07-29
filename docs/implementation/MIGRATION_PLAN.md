@@ -100,3 +100,26 @@ Downgrade must refuse to collapse `internal_agent` or `external_model` history
 back into `ai_job`. Phase 2-owned intelligence state must be empty or
 explicitly preserved by an approved forward recovery before destructive
 schema removal.
+
+## Phase 3 Source Acquisition Migration Candidate
+
+No Phase 3 migration is approved before formal freeze of
+`../specifications/PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`.
+
+The anticipated additive/corrective package includes:
+
+```text
+versioned endpoint-type, acquisition-method, and platform catalog additions
+guarded prospective inactivation of podcast/IMAP/POP3/FTP/SFTP values
+adapter registry and exact compatibility declarations
+authority-backed Artifact Format catalogs and external mappings
+versioned signature releases and identification metadata
+accepted Acquisition Artifacts and post-deletion Artifact Rejections
+durable endpoint acquisition leases and idempotency identities
+secret references without secret material
+hierarchical rate-limit policy and durable quota state
+expanded endpoint health and history
+```
+
+Historical catalog references must remain valid. Security-rejected bytes are
+never migration inputs, stored Artifacts, or Documents.

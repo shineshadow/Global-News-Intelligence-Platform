@@ -1460,19 +1460,19 @@ Substantive document geography must be represented through normalized `document_
 
 Document semantic type must be classified independently through the canonical document-type system. Examples include `news_report`, `press_release`, `court_decision`, `legislation`, `regulation`, `research_paper`, `transcript`, and `procurement_notice`.
 
-Source types:
+Source and acquisition classification must not be collapsed into a single
+`source_type` list. The frozen GFA-A dimensions are:
+
+```text
+Source.source_type             publisher/issuer identity class
+SourceEndpoint.endpoint_type   access-surface class
+SourceEndpoint.endpoint_format primary acquisition envelope
+SourceEndpoint.acquisition_method
+SourceEndpoint.platform
 ```
-rss
-website
-youtube
-social
-government
-military
-court
-newsletter
-podcast
-manual
-```
+
+RSS is an endpoint/Artifact format, YouTube is a platform, and podcast is a
+program/content layer. Government, military, and court are Source types.
 ---
 
 
@@ -2579,7 +2579,20 @@ continuously evaluates new or enriched documents. Step 26 performs delivery.
 
 ### Phase 3 — Expanded Sources
 
-Add:
+Begin with the shared Source Acquisition Foundation Audit defined in
+`PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`.
+
+Foundation:
+
+- authority-backed Acquisition Artifact Format catalog
+- versioned PRONOM/DROID signatures
+- security-critical deletion-first identification
+- adapter registry and exact compatibility declarations
+- durable acquisition leases and replay protection
+- secret-reference and hierarchical rate-limit policy
+- Source Acquisition and Health UI
+
+Adapters:
 
 - RSSHub
 - RSS-Bridge
@@ -2589,7 +2602,13 @@ Add:
 
 Success criterion:
 
-Monitor several hundred mixed source types.
+Monitor several hundred mixed source types without weakening Source identity,
+format provenance, idempotency, rate limits, credential boundaries, or
+deletion-first artifact security.
+
+The security rejection boundary is non-configurable. Suspicious or
+unverifiable payloads are deleted immediately before rejection metadata is
+recorded.
 
 ---
 
@@ -2759,7 +2778,7 @@ Add:
 
 #### Calendar Phase 2 — Validation Automation and Relationship Enrichment
 
-**Architecture status:** FROZEN. Implementation not started.
+**Architecture and implementation status:** FROZEN.
 
 Align with Monitoring, Topic, and Entity capabilities.
 
@@ -2789,6 +2808,11 @@ Routing, and OpenAI Integration phases.
 #### Calendar Phase 3 — Official and Recurring Calendar Ingestion
 
 Align with Expanded Sources.
+
+Calendar Phase 3 consumes the shared Phase 3 adapter and Artifact contracts.
+It does not create a `calendar_feed` endpoint type: official calendars arrive
+through feed, API, website, file-repository, or email surfaces with exact
+Artifact formats such as iCalendar, JSON, HTML, PDF, or email message.
 
 Add:
 

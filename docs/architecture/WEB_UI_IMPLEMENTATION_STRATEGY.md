@@ -995,7 +995,12 @@ ETag / Last-Modified status
 acquisition fallback
 selector configuration
 preview extracted items
-rate-limit notes
+rate-limit policy and effective precedence
+provider reset / Retry-After observations
+accepted Artifact counts
+read-only security-rejection outcomes
+adapter and configuration version
+secret configured/state indicator without secret values
 ```
 
 Future non-RSS endpoint configuration may require specialized forms for:
@@ -1011,6 +1016,17 @@ Playwright fallback
 ```
 
 These are operator workflows and should not be relegated solely to raw SQLAdmin CRUD.
+
+Rate-limit forms distinguish installation, adapter, provider/robots,
+credential/platform, Source, and endpoint policy. They show the effective
+strictest policy, quota/reset state, concurrency, polling, retry, jitter, and
+budget without permitting a manual poll to bypass the effective limit.
+
+Artifact identification, signature enforcement, suspicious-payload deletion,
+and rejection retention are security-critical. The Web UI and REST API expose
+no configuration, disable switch, exception, quarantine, restore, or override
+for those rules. An authorized operator may inspect a read-only rejection
+outcome and correct the Source/adapter configuration before reacquisition.
 
 ---
 
