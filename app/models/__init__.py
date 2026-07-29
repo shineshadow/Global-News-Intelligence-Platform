@@ -1,3 +1,17 @@
+from app.models.acquisition_artifact import (
+    AcquisitionArtifact,
+    AcquisitionArtifactObservation,
+    ArtifactFormat,
+    ArtifactFormatAlias,
+    ArtifactFormatExtension,
+    ArtifactFormatExternalIdentifier,
+    ArtifactFormatMediaType,
+    ArtifactFormatRelationship,
+    ArtifactFormatSignature,
+    ArtifactPayload,
+    ArtifactRejection,
+    ArtifactSignatureRelease,
+)
 from app.models.alert import (
     Alert,
     AlertDelivery,
@@ -114,11 +128,23 @@ from app.models.source_reference import (
 )
 
 __all__ = [
+    "AcquisitionArtifact",
+    "AcquisitionArtifactObservation",
     "AcquisitionMethod",
     "Alert",
     "AlertDelivery",
     "AlertDeliveryAttempt",
     "AlertDestination",
+    "ArtifactFormat",
+    "ArtifactFormatAlias",
+    "ArtifactFormatExtension",
+    "ArtifactFormatExternalIdentifier",
+    "ArtifactFormatMediaType",
+    "ArtifactFormatRelationship",
+    "ArtifactFormatSignature",
+    "ArtifactPayload",
+    "ArtifactRejection",
+    "ArtifactSignatureRelease",
     "Base",
     "ClassificationRun",
     "ContentFormat",

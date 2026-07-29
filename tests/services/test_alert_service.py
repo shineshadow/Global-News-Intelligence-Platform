@@ -164,10 +164,15 @@ async def test_new_match_creates_one_alert_and_snapshotted_delivery(
 async def test_successful_ntfy_delivery_has_stable_shape_and_no_secret_history(
     database_session_factory,
 ) -> None:
-    _, _, delivery_id = await _create_alert_fixture(
+    _, destination_id, delivery_id = await _create_alert_fixture(
         database_session_factory,
         slug="success",
         auth_token_env_var="STEP26_TEST_TOKEN",
+    )
+    async with database_session_factory() as session:
+        delivery = await session.get(AlertDelivery, delivery_id)
+    expected_sequence_id = (
+        f"gni-alert-{delivery.alert_id}-destination-{destination_id}"
     )
     requests: list[httpx.Request] = []
 
@@ -197,7 +202,7 @@ async def test_successful_ntfy_delivery_has_stable_shape_and_no_secret_history(
         "message": "A concise alert summary.",
         "priority": 4,
         "tags": ["newspaper"],
-        "sequence_id": "gni-alert-1-destination-1",
+        "sequence_id": expected_sequence_id,
         "click": "https://success.example/story",
     }
     async with database_session_factory() as session:

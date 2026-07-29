@@ -108,16 +108,38 @@ The governing architecture in
 frozen. The migration package remains an implementation candidate until its
 schema, data, downgrade, and zero-drift proofs pass review.
 
-The anticipated additive/corrective package includes:
+**Candidate revisions:** `c9a2f4e6b801`, `d1b3e5f7a902`
+
+The corrective and Artifact-foundation package now includes:
 
 ```text
 versioned endpoint-type, acquisition-method, and platform catalog additions
 guarded prospective inactivation of podcast/IMAP/POP3/FTP/SFTP values
-adapter registry and exact compatibility declarations
 authority-backed Artifact Format catalogs and external mappings
-versioned signature releases, mandatory scanner, and identification metadata
+empty versioned signature-release and signature persistence
 content-addressed payloads, immutable Acquisition Artifact versions,
 observations, and post-deletion Artifact Rejections
+```
+
+The seed installs 74 canonical format identities with authority labels. Broad
+family and fallback values are non-terminal and cannot back an accepted
+payload. Exact external identifiers, media types, extensions, aliases,
+relationships, and detector signatures are deliberately empty until the
+repository-pinned authority importer populates them; the migration does not
+invent mappings or imply that extensions establish identity.
+
+No existing Document becomes an Artifact. A referenced legacy endpoint value
+blocks prospective inactivation, and any accepted/rejected Artifact,
+signature/mapping history, custom format, or changed seed blocks destructive
+downgrade. Accepted payloads, logical resource versions, and repeated
+observations are separate immutable records.
+
+Later Phase 3 packages add:
+
+```text
+repository-pinned signature release importer and detection corpus
+mandatory scanner and deletion-first identification runtime
+adapter registry and exact compatibility declarations
 durable endpoint acquisition leases and idempotency identities
 global secret references and acquisition bindings without secret material
 hierarchical rate-limit policy and durable quota state

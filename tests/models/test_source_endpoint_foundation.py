@@ -34,10 +34,10 @@ async def test_global_source_reference_vocabularies_are_seeded(
 
     assert counts == {
         "source_types": 41,
-        "endpoint_types": 10,
+        "endpoint_types": 15,
         "endpoint_formats": 16,
-        "acquisition_methods": 14,
-        "platforms": 20,
+        "acquisition_methods": 24,
+        "platforms": 47,
     }
 
 

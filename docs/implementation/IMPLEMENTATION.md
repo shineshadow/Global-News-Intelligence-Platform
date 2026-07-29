@@ -92,7 +92,8 @@ Current main-track sequence:
 Steps 24 through 26                                  frozen
 Calendar Foundation through Phase 2                  frozen
 Phase 3.1 shared Source Acquisition architecture     frozen
-Phase 3 corrective/Artifact foundation               after architecture freeze
+Phase 3 corrective/Artifact foundation               freeze candidate
+Phase 3 signature importer/security runtime          next
 Phase 3 adapters and acquisition-health UI           after foundation
 Phase 3 formal implementation review                 final gate
 ```

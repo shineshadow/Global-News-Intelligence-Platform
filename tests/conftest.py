@@ -109,6 +109,17 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            artifact_rejections,
+            acquisition_artifact_observations,
+            acquisition_artifacts,
+            artifact_payloads,
+            artifact_format_signatures,
+            artifact_signature_releases,
+            artifact_format_relationships,
+            artifact_format_aliases,
+            artifact_format_extensions,
+            artifact_format_media_types,
+            artifact_format_external_identifiers,
             intelligence_calendar_administrative_exception_actions,
             intelligence_calendar_occurrence_policy_override_history,
             intelligence_calendar_operator_overrides,
@@ -179,7 +190,7 @@ async def truncate_test_tables() -> None:
             ingestion_runs,
             source_endpoints,
             sources
-        RESTART IDENTITY CASCADE
+        CONTINUE IDENTITY CASCADE
         """
     )
 
@@ -260,16 +271,15 @@ async def dispose_test_engine(
 @pytest_asyncio.fixture(autouse=True)
 async def clean_test_database(
     apply_test_migrations: None,
-) -> AsyncIterator[None]:
+) -> None:
     """
-    Start and finish every test with empty application tables.
+    Start every test with empty application tables.
 
-    Alembic's version table is intentionally preserved.
+    Cleaning before the next test is sufficient even when the preceding test
+    fails. Avoiding duplicate post-test truncation and sequence restarts keeps
+    PostgreSQL relation-file and inode churn bounded. Alembic's version table
+    and seeded reference rows are intentionally preserved.
     """
-
-    await truncate_test_tables()
-
-    yield
 
     await truncate_test_tables()
 

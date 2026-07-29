@@ -37,3 +37,43 @@ JavaScript packages
     ↓
 package.json
 ```
+
+---
+
+## Repository Test Procedure
+
+Use the guarded test runner:
+
+```bash
+scripts/run-test-suite.sh
+```
+
+The runner deliberately executes:
+
+```text
+migration safety tests
+        ↓
+/var inode guard
+        ↓
+all non-migration regression tests
+        ↓
+/var inode guard
+```
+
+The test fixture cleans application tables only before each test and uses
+`CONTINUE IDENTITY`. It does not repeat the cleanup after each test or reset
+the 79 owned sequences. This bounds PostgreSQL relation-file churn while
+still ensuring every test begins from empty application state.
+
+The runner stops at 65% `/var` inode use by default. A non-migration
+regression pass can consume roughly 20 percentage points of the current
+inode pool, so this preserves headroom below filesystem exhaustion.
+Override the threshold only for a deliberately provisioned test host:
+
+```bash
+GNI_TEST_INODE_LIMIT_PERCENT=75 scripts/run-test-suite.sh
+```
+
+Do not treat free bytes from `df -h` as sufficient. Check `df -i /var`;
+PostgreSQL returns `No space left on device` when the filesystem exhausts
+inodes even if gigabytes remain free.

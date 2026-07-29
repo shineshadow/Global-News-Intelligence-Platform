@@ -2579,7 +2579,8 @@ continuously evaluates new or enriched documents. Step 26 performs delivery.
 
 ### Phase 3 — Expanded Sources
 
-**Architecture status:** FROZEN. Implementation not started.
+**Architecture status:** FROZEN. Corrective and Artifact-foundation
+migrations are an implementation freeze candidate.
 
 Begin with the shared Source Acquisition Foundation Audit defined in
 `PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`.

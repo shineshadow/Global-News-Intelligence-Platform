@@ -1541,7 +1541,8 @@ Update SQLAlchemy models
     ↓
 Create/review Alembic migration
     ↓
-Run migration tests
+Run `scripts/run-test-suite.sh` so migration and regression tests execute in
+separate groups with `/var` inode guards
     ↓
 Apply migration
     ↓
