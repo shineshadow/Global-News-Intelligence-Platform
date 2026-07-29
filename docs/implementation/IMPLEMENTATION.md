@@ -91,7 +91,7 @@ Current main-track sequence:
 ```text
 Steps 24 through 26                                  frozen
 Calendar Foundation through Phase 2                  frozen
-Phase 3.1 shared Source Acquisition architecture     candidate
+Phase 3.1 shared Source Acquisition architecture     frozen
 Phase 3 corrective/Artifact foundation               after architecture freeze
 Phase 3 adapters and acquisition-health UI           after foundation
 Phase 3 formal implementation review                 final gate
@@ -113,6 +113,8 @@ Phase 3.1 is governed by
 - New endpoint types should reuse Source/SourceEndpoint architecture.
 - Acquisition adapters must use the shared registry, Artifact catalog,
   deletion-first security boundary, secret references, and rate policy.
+- Untrusted retrieval and inspection must use the shared outbound egress
+  guard, bounded staging, mandatory scanner, and credential-free sandbox.
 - AI output must retain provenance.
 - UI should call the service layer directly in server-rendered workflows.
 - No major dependency should be introduced without an explicit architecture decision or benchmark.

@@ -79,6 +79,48 @@ high-priority real-time
 bulk/backfill
 ```
 
+## Phase 3 Shared Acquisition Worker Architecture
+
+The frozen Phase 3 architecture defines an acquisition orchestrator and a
+separate disposable inspection sandbox. The acquisition task carries stable
+SourceEndpoint, configuration-version, schedule-window/manual-idempotency,
+and lease identifiers only.
+
+The orchestrator owns:
+
+```text
+durable PostgreSQL lease and IngestionRun
+exact adapter configuration
+outbound SSRF/egress validation
+atomic hierarchical rate reservation
+just-in-time secret resolution
+bounded isolated staging
+accepted-byte promotion
+Artifact/Document ownership transactions
+health, metrics, and finalization
+```
+
+The inspection sandbox owns:
+
+```text
+authority-backed format/signature detection
+mandatory malware/security scan
+container and archive inspection
+exact safe-parser verification
+bounded structured verdict
+```
+
+The sandbox has no network, secrets, database, Redis, canonical-storage
+write, or downstream authority. A crash, timeout, invalid verdict, or policy
+violation deletes staged bytes. Suspicious payloads are deleted before
+rejection metadata is appended, and no security bypass is exposed through
+UI, API, SQLAdmin, environment, or adapter configuration.
+
+No transaction remains open during retrieval, browser execution, scanning,
+parsing, extraction, or promotion I/O. The frozen contract and its complete
+proof matrix live in
+`../specifications/PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`.
+
 ---
 
 ## Active Step 26 Alert Worker

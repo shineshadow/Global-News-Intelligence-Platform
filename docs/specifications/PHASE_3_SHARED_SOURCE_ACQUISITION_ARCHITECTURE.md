@@ -1,6 +1,6 @@
 # Phase 3 — Shared Source Acquisition Architecture
 
-**Status:** ARCHITECTURE CANDIDATE — NOT FROZEN
+**Status:** ARCHITECTURE FROZEN
 **Date:** 2026-07-28
 **Phase:** Main Track Phase 3 — Expanded Sources
 **First gate:** Phase 3.1 — Source Acquisition Foundation Audit
@@ -508,23 +508,49 @@ mov             → candidate evidence for QuickTime
 
 ## 8. Acquisition Artifacts
 
-An Artifact is one acquired byte object, not a normalized Document.
+An Artifact is one immutable logical endpoint-resource version backed by one
+accepted byte payload, not a normalized Document.
 
 Proposed persistence:
 
 ```text
+artifact_payloads
+  immutable content-addressed accepted bytes
+  cryptographic hash and byte length
+  storage reference and verified format
+
 acquisition_artifacts
-  SourceEndpoint and IngestionRun
+  immutable accepted logical SourceEndpoint resource version
+  stable adapter/provider resource identity
+  payload reference
   parent Artifact for nested containers
-  canonical Artifact Format
-  declared and observed media type
-  original filename and observed extension chain
-  storage reference
-  byte length and cryptographic content hash
+  optional forward same-resource supersession
+  canonical Artifact Format and member path
   detector, version, signature release, confidence, and evidence
   adapter and retrieval provenance
   acceptance time
+
+acquisition_artifact_observations
+  one append-only observation per IngestionRun/retrieval identity
+  Artifact reference
+  declared/observed media type, filename, extension chain, and locator
+  HTTP/provider retrieval evidence and observation time
+
+artifact_rejections
+  post-deletion metadata for one rejected retrieval
 ```
+
+`artifact_payloads` has one content-addressed identity by approved
+cryptographic hash and byte length. A matching hash never bypasses staging,
+scanner, detector, or parser checks; reuse occurs only after the newly
+received bytes independently pass.
+
+`acquisition_artifacts` is immutable. Changed accepted bytes append a new
+same-resource Artifact version that points forward through a constrained
+`supersedes_artifact_id`; the older row and payload remain unchanged.
+Identical reacquisition reuses the accepted Artifact/payload and appends a new
+observation, preserving the new IngestionRun without duplicating stored
+bytes.
 
 Nested containers append child Artifacts:
 
@@ -565,7 +591,82 @@ Untrusted bytes enter only:
 Staging is outside web, application asset, canonical Artifact, Document,
 export, backup, and downstream-worker paths.
 
-### 9.2 Mandatory Immediate Deletion
+Retrieval streams under a hard installation byte ceiling and an
+adapter-specific lower ceiling. Oversized declared content is rejected before
+body retrieval. A stream that crosses its limit is terminated and its staged
+bytes are deleted. Unbounded buffering, decompression, archive expansion, and
+parser output are prohibited.
+
+### 9.2 Outbound Retrieval Boundary
+
+All endpoint and redirect destinations pass a non-bypassable SSRF/egress
+validator before connection:
+
+```text
+approved scheme for the exact adapter
+normalized hostname and port
+no user-info credentials in the URL
+DNS resolution through the controlled resolver
+rejection of loopback, link-local, multicast, unspecified, private,
+carrier-grade NAT, and cloud-metadata destinations
+revalidation of every redirect and resolved address
+bounded redirect count, header bytes, response bytes, and duration
+TLS verification and approved certificate policy
+```
+
+DNS rebinding protection validates the address actually used for the
+connection, not only a preliminary hostname lookup. Redirects never inherit
+authorization headers or query credentials across origins.
+
+GNI-owned local RSSHub, RSS-Bridge, changedetection, object-storage, or other
+infrastructure cannot be enabled through an endpoint-level bypass. It uses an
+installation-registered internal-service identity with exact adapter,
+scheme, host/address range, port, TLS policy, and purpose. Arbitrary Sources
+cannot target that internal range, and the registration does not weaken
+public endpoint validation.
+
+Browser automation runs in a disposable browser context with no host mounts,
+no ambient credentials, restricted download paths, bounded child-resource
+egress, and the same destination policy. An adapter receives only the exact
+secret slots explicitly bound to its request.
+
+### 9.3 Inspection Sandbox
+
+Mount flags do not protect a worker from a vulnerable detector, archive
+reader, media probe, or document parser. All untrusted inspection runs in a
+separate, disposable sandbox identity with:
+
+```text
+unprivileged user and group
+no network
+no database or Redis credentials
+no acquisition secrets
+no canonical Artifact or Document write access
+read-only detector, scanner, parser, and signature-release inputs
+an isolated mount and process namespace
+syscall restrictions
+CPU, memory, process, output, file-count, byte, and wall-clock limits
+no shell interpolation or provider-controlled command arguments
+one bounded structured result channel
+```
+
+The implementation may use namespaces, seccomp, cgroups, a locked-down
+container, or an equivalently reviewed isolation mechanism. The selected
+mechanism and every parser invocation are implementation freeze gates.
+
+At least one versioned malware/security scanner is mandatory for Artifact
+acceptance. Detector and scanner engine versions and signature releases are
+recorded. If the sandbox, required detector, scanner, or active signatures
+cannot be verified before retrieval, GNI does not make the request. If the
+failure occurs after bytes enter staging, those bytes are deleted
+immediately.
+
+A timeout, crash, signal, excessive output, invalid structured response, or
+attempted sandbox violation is a security rejection. No preview, thumbnail,
+text extraction, metadata enrichment, or downstream callback occurs before
+the complete payload tree is accepted.
+
+### 9.4 Mandatory Immediate Deletion
 
 Deletion is required for:
 
@@ -594,14 +695,15 @@ closed, unlinked, and verified absent. Extracted children are removed,
 multipart uploads are aborted, and ephemeral encryption keys are destroyed.
 Only after deletion is verified may GNI write the rejection record.
 
-### 9.3 Identification Flow
+### 9.5 Identification Flow
 
 ```text
 receive into isolated staging
         ↓
-calculate bounded hash and structural evidence
+calculate bounded hash and structural evidence in the inspection sandbox
         ↓
-        identify through active signature release and exact safe parser
+identify through active signature release, mandatory scanner, and exact
+safe parser
         ├─ identification infrastructure unavailable
         │      → delete immediately
         │      → record operational/security rejection afterward
@@ -626,7 +728,7 @@ generic ZIP. An extensionless payload is rejected by default. A narrowly
 declared adapter may accept extensionless output only with exact signature,
 allowlist, media-type, parser, and security agreement.
 
-### 9.4 Rejection Persistence
+### 9.6 Rejection Persistence
 
 Rejected bytes never receive a stored Artifact row. After verified deletion,
 GNI appends an `artifact_rejections` row containing identifiers, declared and
@@ -644,9 +746,57 @@ deletion_verified = true
 No suspicious bytes, excerpts, thumbnails, archive members, or samples enter
 logs.
 
+If PostgreSQL or structured logging is unavailable, deletion still occurs.
+The worker then emits a redacted post-deletion event through every available
+local operational channel and retries metadata-only persistence. Rejection
+logging failure can never retain or reconstruct the payload.
+
+### 9.7 Accepted-Artifact Promotion
+
+All members of a nested payload tree must pass before any member becomes
+visible as accepted. Promotion means atomic visibility, not an unsafe
+assumption that a filesystem rename is always available.
+
+For filesystem storage:
+
+1. copy or move verified bytes into an anonymous temporary object on the
+   destination filesystem;
+2. recalculate and compare the complete cryptographic hash;
+3. apply immutable ownership and permission policy;
+4. atomically link/rename the object to its content-addressed location; and
+5. commit the Artifact tree and canonical visibility pointer transactionally.
+
+For object storage:
+
+1. upload to an opaque, unreadable staging key or multipart upload;
+2. verify provider checksum, byte length, and GNI cryptographic hash;
+3. complete an immutable content-addressed object;
+4. expose it only through the committed PostgreSQL Artifact pointer; and
+5. abort/delete incomplete or unreferenced objects.
+
+No public URL, web route, downstream task, parser preview, or canonical
+storage reference exists before successful promotion. A database failure
+leaves no visible Artifact; an idempotent garbage collector removes
+unreferenced accepted-byte objects without ever inspecting or preserving
+rejected content.
+
 ## 10. Signature and Catalog Release Lifecycle
 
 Authority updates never mutate active meaning silently.
+
+The initial trusted release is a reviewed, repository-pinned bootstrap
+snapshot with authority origin, release identifier, byte length, and
+cryptographic digest. Installation verifies that pinned digest before the
+Artifact path can activate. GNI does not bootstrap by downloading an
+unreviewed "latest" release at first start.
+
+Every later authority payload is itself untrusted acquisition input. It uses
+the outbound guard, bounded staging, active detector/scanner, and inspection
+sandbox. When an authority does not publish a cryptographic signature or
+digest, GNI records that fact: TLS and exact origin establish transport,
+while GNI's locally calculated digest establishes immutable candidate
+identity. GNI never labels an unsigned authority release as cryptographically
+signed.
 
 ```text
 retrieve candidate authority release
@@ -705,6 +855,10 @@ Removed or deprecated external identifiers remain historically referenceable.
 A changed external meaning creates a new validity interval or mapping; it
 never rewrites historical evidence.
 
+Rollback changes only the release used for new identification. Existing
+accepted/rejected records retain the exact release and detector provenance
+that produced their decision.
+
 ## 11. Idempotency
 
 ### 11.1 Execution
@@ -728,10 +882,12 @@ stable provider identifier when available
 deterministic generated identity otherwise
 canonicalized URL retained beside original URL
 cryptographic payload hash
-one logical Artifact for the same run/resource/hash identity
+one immutable Artifact version for endpoint/resource/hash identity
+one append-only observation for every logical retrieval
+one content-addressed payload for accepted identical bytes
 container member identity includes parent and normalized member path
-identical reacquisition is unchanged
-changed accepted content appends history
+identical reacquisition reuses bytes but preserves observation history
+changed accepted content appends a forward same-resource Artifact version
 rejected content never becomes a duplicate stored Artifact
 ```
 
@@ -742,9 +898,34 @@ Conditional HTTP 304 creates no Document or Artifact. Partial processing does
 not advance fetch validators. Classification, Monitor matches, alerts, and
 Calendar evidence retain their independent idempotency contracts.
 
-## 12. Secret Boundary
+## 12. Secret-Reference Contract
 
-Database rows and endpoint configuration store references only.
+GNI persists the identity, purpose, scope, and backend location of a secret,
+but never persists the secret value in ordinary application storage.
+
+### 12.1 Adapter Requirements and Slots
+
+Each versioned adapter declares named secret slots, whether each is required,
+permitted authentication types, and permitted binding scopes. Common slots
+include:
+
+```text
+username
+password
+bearer_token
+api_key
+client_id
+client_secret
+cookie_session
+ssh_private_key
+ssh_key_passphrase
+webhook_signing_secret
+database_dsn
+```
+
+Adapters cannot invent secret-bearing metadata keys at runtime. `custom`
+authentication requires a registered, versioned adapter schema and is not an
+escape hatch.
 
 Authentication types:
 
@@ -760,6 +941,32 @@ ssh_key
 custom
 ```
 
+### 12.2 Global References and Acquisition Bindings
+
+Secret references are a cross-cutting platform concern. Phase 3 creates a
+global `secret_references` identity rather than an acquisition-only secret
+store. Acquisition owns its binding table; later Alert, AI, storage, and
+other consumers may adopt the same reference without sharing domain policy.
+
+```text
+secret_references
+  stable identity and display name
+  backend
+  non-secret backend reference
+  operational state
+  rotation due time
+  last resolution time/status
+  immutable change history
+
+acquisition_secret_bindings
+  secret reference
+  adapter and declared secret slot
+  exact endpoint/source/platform-account/installation scope
+  active validity
+  actor and reason
+  immutable change history
+```
+
 Secret backends:
 
 ```text
@@ -768,7 +975,7 @@ systemd_credential
 external_secret_store
 ```
 
-Secret scopes:
+Binding scopes:
 
 ```text
 endpoint
@@ -776,6 +983,46 @@ source
 platform_account
 installation
 ```
+
+Scope checks require exactly the owning resource. Sharing is explicit; the
+mere existence of a Source-, platform-, or installation-level reference does
+not grant an endpoint access. An adapter slot can bind only a compatible
+authentication type and permitted scope.
+
+The existing Step 26 `auth_token_env_var` remains a compatibility reference
+until a later guarded migration adopts the global secret identity. Phase 3
+does not create a second secret value or silently rewrite Alert history.
+
+### 12.3 Resolution and Failure
+
+```text
+worker receives stable SourceEndpoint ID
+        ↓
+load endpoint and versioned adapter configuration
+        ↓
+load exact required bindings
+        ├─ missing binding
+        │      → make no provider request
+        │      → record authentication/configuration failure
+        └─ binding present
+                ↓
+        resolve through configured backend immediately before use
+                ├─ backend unavailable
+                ├─ reference missing
+                ├─ permission denied
+                ├─ expired/disabled
+                └─ invalid value
+                       → make no provider request
+                       → never fall back to unauthenticated access
+                ↓
+        supply value only to the adapter request boundary
+                ↓
+        discard the in-memory reference as soon as practical
+```
+
+Python does not promise physical zeroing of immutable strings. The
+implementation minimizes lifetime, copies, subprocess exposure, and process
+scope rather than making an unverifiable memory-erasure claim.
 
 Secret states exposed operationally:
 
@@ -788,15 +1035,45 @@ rotation_required
 disabled
 ```
 
-Secret values never appear in URLs, ordinary metadata, provenance, logs,
-errors, Celery arguments, API responses, HTML, exports, or source-control.
-The worker resolves the value immediately before use and supplies it only to
-the assigned adapter. Query-string credentials require an adapter-declared
-provider necessity. Missing/invalid credentials fail closed.
+### 12.4 Non-Leakage and Rotation
 
-## 13. Rate-Limit Contract
+Secret values never appear in:
 
-Rate-limit modes:
+```text
+PostgreSQL values or ordinary metadata
+stored URLs
+logs, errors, tracebacks, or metrics labels
+telemetry attributes
+Celery arguments/results
+Redis keys/values
+API responses or HTML
+form redisplay or exports
+source control
+Artifact, rejection, or IngestionRun provenance
+rate-limit identities
+command-line arguments
+```
+
+Query-string credentials require an adapter-declared provider necessity. The
+URL is constructed only at the request boundary, logs retain a redacted base
+URL, and redirects never forward a credential to another origin.
+
+The UI displays backend, masked reference identity, state, and last resolution
+time, never the value. Rotation changes the backend value or explicit binding
+without changing Source, SourceEndpoint, adapter, rate, or ingestion history.
+A failed replacement does not silently destroy a still-valid old binding;
+explicit revocation remains authoritative.
+
+## 13. Hierarchical Rate-Limit Contract
+
+Configuration inheritance and runtime enforcement are separate. A more
+specific configured value may replace an inherited default within hard
+bounds, but every runtime request must receive permission from every
+applicable bucket.
+
+### 13.1 Modes, Scopes, and Values
+
+Modes:
 
 ```text
 provider_defined
@@ -808,33 +1085,158 @@ custom
 Scopes:
 
 ```text
-endpoint
-origin
+installation
+adapter
 platform
 credential
-installation
+origin
+source
+endpoint
+```
+
+Policy fields:
+
+```text
+requests_per_period
+period_seconds
+burst_size
+max_concurrency
+minimum_request_spacing_seconds
+poll_interval_seconds
+daily_request_budget
+retry_base_seconds
+retry_max_seconds
+retry_jitter_percent
+exhaustion_action
+validity interval
 ```
 
 Initial constrained values:
 
-| Field | Constraint/default |
-|---|---|
-| requests per period | `1..10000`, default `6` |
-| period seconds | `1..86400`, default `60` |
-| burst size | `1..100`, default `1` |
-| endpoint concurrency | fixed maximum `1` |
-| origin concurrency | `1..16`, default `2` |
-| poll interval | minimum `60`, default `900` seconds |
-| retry base | `1..86400`, default `60` seconds |
-| retry maximum | base through `604800`, default `86400` seconds |
-| retry jitter | `0..50`, default `20` percent |
-| daily budget | null or positive integer |
-| exhaustion action | `delay`, `disable`, `operational_exception`; default `delay` |
+| Field | Constraint | Default |
+|---|---:|---:|
+| Requests per period | `1..10000` | `6` |
+| Period seconds | `1..86400` | `60` |
+| Burst size | `1..100` | `1` |
+| Endpoint concurrency | exactly `1` | `1` |
+| Origin concurrency | `1..16` | `2` |
+| Poll interval | minimum `60` seconds | `900` seconds |
+| Retry base | `1..86400` seconds | `60` seconds |
+| Retry maximum | base through `604800` seconds | `86400` seconds |
+| Retry jitter | `0..50` percent | `20` percent |
+| Daily request budget | null or positive integer | null |
+| Exhaustion action | `delay`, `disable`, `operational_exception` | `delay` |
 
-The strictest applicable provider reset/Retry-After, robots rule,
-credential/platform quota, endpoint override, and installation default wins.
-Rate-limit waiting occurs outside transactions and is not counted as a
-structural parsing failure.
+Adapter defaults may be stricter. No adapter, endpoint, Source, manual poll,
+or operator action may exceed an installation hard maximum.
+
+`delay` preserves lifecycle state and schedules the next eligible attempt.
+`disable` is an explicit policy-selected system-actor transition to the
+endpoint's disabled lifecycle state and appends the same actor, reason, and
+before/after history required of an operator transition. It is never an
+implicit side effect of an exhausted bucket. `operational_exception` appends
+an acquisition-scoped operational record for authorized review; it is not a
+Calendar administrative exception and grants no bypass.
+
+### 13.2 Persistence
+
+```text
+acquisition_rate_limit_policies
+  versioned constrained values and validity
+
+acquisition_rate_limit_bindings
+  exact installation/adapter/platform/credential/origin/source/endpoint scope
+  actor, reason, and immutable change history
+
+acquisition_rate_limit_buckets
+  durable window, request, daily-budget, provider-reset, and blocked state
+
+acquisition_rate_limit_reservations
+  one expiring reservation per outbound request and IngestionRun
+
+acquisition_rate_limit_observations
+  append-only status, Retry-After, provider quota/reset, and robots evidence
+```
+
+Scope checks require only the resource appropriate to the binding. Credential
+buckets reference `secret_reference_id`, never a secret value. Multiple
+endpoints explicitly sharing a provider account therefore share its quota
+without revealing the credential.
+
+### 13.3 Atomic Enforcement
+
+PostgreSQL is authoritative. Redis may accelerate lookup but Redis loss,
+restart, or eviction cannot permit a prohibited request.
+
+```text
+begin short transaction
+        ↓
+lock all applicable buckets in deterministic order
+        ↓
+expire abandoned reservations
+        ↓
+evaluate provider/robots holds and every installation, adapter, platform,
+credential, origin, Source, and endpoint bucket
+        ├─ any denial
+        │      → create no partial reservation
+        │      → persist next eligible time and controlling policy
+        └─ all permit
+                ↓
+        atomically reserve one request against every bucket
+commit
+        ↓
+perform request outside the transaction
+        ↓
+begin short finalization transaction
+release concurrency reservation
+update counters and provider observations
+commit
+```
+
+Reservation expiry recovers crashed workers. Stable lock ordering prevents
+deadlock. A request is sent only after the reservation transaction commits.
+PostgreSQL or required-policy unavailability fails closed and sends nothing.
+
+### 13.4 Precedence and HTTP Behavior
+
+The strictest applicable limit wins:
+
+```text
+provider Retry-After or reset
+robots access/crawl policy
+credential/platform quota
+origin bucket
+adapter and installation policy
+Source and endpoint policy
+```
+
+HTTP 429 honors valid Retry-After. A missing/malformed value uses conservative
+exponential backoff with jitter. HTTP 503 honors Retry-After when present.
+Jitter changes scheduling only and never shortens `blocked_until`.
+
+A delayed/rate-limited request does not count as a parsing, structural,
+security, or Source-health failure. Manual polls use the same buckets and
+cannot bypass them.
+
+### 13.5 Operator UI
+
+The effective-policy view shows:
+
+```text
+installation and adapter defaults
+platform and credential quota
+origin policy
+Source policy
+endpoint override
+provider/robots temporary hold
+effective controlling policy and next eligible time
+```
+
+Authorized controls may create Source/endpoint policies and configure bounded
+rate, burst, concurrency, polling, retry, and budget values with actor and
+reason. They cannot ignore Retry-After or robots restrictions, exceed hard
+limits, edit live counters, bypass a manual poll, or reuse a secret outside
+its binding.
 
 ## 14. UI and Authorization
 
@@ -872,26 +1274,47 @@ attribution. Hiding controls in HTML is never authorization.
 
 ## 15. Health and Failure States
 
-Endpoint health distinguishes:
+Lifecycle, verification, health, and temporary gates are separate controlled
+dimensions. The existing lifecycle field remains:
+
+```text
+SourceEndpoint.status = active | disabled
+```
+
+Verification state:
 
 ```text
 never_checked
 verified
 verified_empty
+verification_failed
+```
+
+Health state:
+
+```text
+unknown
+healthy
 degraded
 failing
 stale
-disabled
-verification_failed
+```
+
+Temporary operational gates:
+
+```text
 rate_limited
 authentication_failed
 adapter_unavailable
-security_rejection
+security_blocked
 ```
 
 Transport, rate, authentication, parsing, extraction, security, and
-downstream-enrichment failures remain separate dimensions. A valid empty
-official feed is not structurally broken.
+downstream-enrichment failures remain separate reason dimensions with
+history. One rejected payload appends a security event; it does not silently
+rewrite lifecycle or general health. Policy may place an endpoint under a
+`security_blocked` gate after a defined security condition. A valid empty
+official feed may be `verified_empty` and `healthy`.
 
 ## 16. Worker and Transaction Boundary
 
@@ -900,17 +1323,20 @@ The acquisition worker:
 1. claims a durable endpoint lease;
 2. commits the logical run and configuration snapshot;
 3. resolves rate and secret policy;
-4. retrieves outside database transactions into isolated staging;
-5. performs mandatory identification and security checks;
-6. deletes rejected bytes before appending rejection metadata;
-7. atomically promotes accepted Artifacts;
-8. normalizes accepted content through the owning adapter;
-9. commits Document/Calendar ownership changes in bounded transactions;
-10. triggers idempotent downstream work;
-11. finalizes health, rate, metrics, and lease state.
+4. validates outbound destination and reserves every applicable rate bucket;
+5. retrieves outside database transactions into bounded isolated staging;
+6. invokes the credential-free inspection sandbox;
+7. deletes rejected bytes before appending rejection metadata;
+8. establishes atomic visibility for the fully accepted Artifact tree;
+9. normalizes accepted content through the owning adapter;
+10. commits Document/Calendar ownership changes in bounded transactions;
+11. triggers idempotent downstream work;
+12. finalizes health, rate, metrics, reservations, and lease state.
 
 No database transaction remains open during network, browser, model, media,
 signature-scanning, archive extraction, or other untrusted/long-running I/O.
+The inspection sandbox has no acquisition secret, database, Redis, or
+canonical-storage authority.
 
 ## 17. Roadmap Ownership
 
@@ -943,9 +1369,55 @@ full multi-user authentication                  later security/auth track
 
 Catalog recognition is not an implementation claim.
 
+### 17.1 Migration and Cutover
+
+The architecture review read-only preflight found 143 SourceEndpoints:
+
+```text
+141  feed / rss  / feed_parser
+  2  feed / atom / feed_parser
+  0  IMAP, POP3, FTP, or SFTP acquisition methods
+  0  duplicate endpoint URLs
+  0  URLs containing user-info credentials
+  0  URLs with recognized secret query keys
+```
+
+Five metadata documents contain secret-like words only inside existing
+`healthcheck_error` or `healthcheck_parse_warning` strings; no top-level
+secret-named metadata key was found. Migration must scan without printing
+values, apply the redaction policy prospectively, and block rather than guess
+if an actual credential-like value is discovered. It never converts error
+text into a secret reference.
+
+Migration and activation rules:
+
+```text
+do not fabricate historical Artifact rows for existing Documents
+do not infer old exact formats from endpoint envelopes
+do not auto-extract secrets from URLs, metadata, errors, or environment
+retain historical catalog references
+install global secret identities before acquisition bindings
+install detector, scanner, sandbox, and deletion path before Artifact intake
+activate no new adapter until its exact capability/security proofs pass
+keep existing RSS/Atom compatibility until the shared path proves parity
+cut over through a versioned worker/configuration gate
+never advertise deletion-first protection for work that bypasses it
+```
+
+Existing accepted Document text is not retroactively treated as a suspicious
+file merely because no historical Artifact/signature evidence exists.
+Prospective Artifact acceptance begins only at the explicit cutover.
+
+Downgrade is lossless-only. It refuses while any Phase 3 Artifact payload,
+Artifact version, observation, rejection, adapter configuration, secret
+binding, rate policy/state, lease, signature release, or dependent custom
+catalog mapping exists. Seeded catalog additions may be removed only when
+unreferenced and exactly equal to the migration-owned seed. Downgrade never
+deletes accepted bytes or audit history merely to make schema removal pass.
+
 ## 18. Required Proof Matrix
 
-The Phase 3 foundation freeze candidate must directly prove:
+Phase 3 implementation must directly prove:
 
 1. Source identity survives endpoint replacement and retirement.
 2. Every executable adapter tuple is explicitly registered and compatible.
@@ -995,19 +1467,54 @@ The Phase 3 foundation freeze candidate must directly prove:
 41. Existing RSS/Atom ingestion remains compatible.
 42. Clean migration, guarded downgrade, complete regression, live operation,
     and zero Alembic drift pass.
+43. The inspection sandbox has no network, secret, database, Redis, or
+    canonical-storage authority.
+44. Sandbox crash, timeout, invalid output, or policy violation deletes staged
+    bytes and cannot produce a preview or accepted Artifact.
+45. Outbound validation rejects forbidden address ranges and revalidates DNS
+    and every redirect destination.
+46. GNI-owned internal services require exact installation registration and
+    cannot become an arbitrary endpoint bypass.
+47. Declared and streaming byte limits terminate acquisition and delete
+    partial staged content.
+48. Accepted promotion re-verifies hashes and provides atomic visibility
+    across filesystem and object-storage backends.
+49. Adapter secret slots, authentication types, and binding scopes are exact
+    and database-enforced.
+50. Missing/invalid secret resolution sends no request and never falls back
+    to unauthenticated access.
+51. Rate permission reserves every applicable bucket atomically; denial
+    consumes no partial reservation.
+52. Rate-authority or PostgreSQL unavailability sends no request.
+53. Lifecycle, verification, health, temporary gates, and failure reasons
+    remain separate.
+54. Migration does not fabricate historical Artifacts, formats, or secret
+    references from ambiguous legacy data.
+55. Stored URL, error, metadata, telemetry, and redirect handling cannot leak
+    secret values.
+56. Installation starts only from the exact reviewed, repository-pinned
+    signature/catalog bootstrap release.
+57. Every later authority release is treated as untrusted input and cannot
+    replace the active release unless verification and regression pass.
+58. A known payload hash never bypasses staging, scanning, detection, parsing,
+    or complete-tree acceptance.
+59. Identical reacquisition appends an observation, while changed accepted
+    bytes append an immutable forward same-resource Artifact version.
+60. Downgrade refuses Phase 3-owned state and never deletes accepted bytes or
+    audit history to make schema removal succeed.
 
 ## 19. Implementation Sequence
 
 ```text
-Phase 3.1 architecture candidate
-        ↓
-formal architecture review and freeze
+Phase 3.1 architecture frozen
         ↓
 corrective/additive catalog and Artifact migrations
         ↓
 signature release importer and deletion-first detector
         ↓
-durable lease, adapter registry, secret references, rate policy
+inspection sandbox, mandatory scanner, and outbound egress guard
+        ↓
+durable lease, adapter registry, global secret references, rate policy
         ↓
 shared acquisition worker
         ↓
@@ -1022,5 +1529,63 @@ Source Acquisition and Health UI
 formal Phase 3 implementation freeze review
 ```
 
-No migration, worker, adapter, security runtime, or UI behavior is frozen by
-this architecture candidate alone.
+This freeze governs the architecture and mandatory proof obligations. It does
+not claim that its migrations, worker, adapters, security runtime, or UI have
+been implemented or operationally frozen.
+
+## 20. Formal Architecture Freeze Review
+
+**Review date:** 2026-07-28
+**Outcome:** PASS — ARCHITECTURE FROZEN
+**Implementation status:** NOT STARTED
+
+The formal review found and corrected these freeze blockers:
+
+1. secret references and hierarchical rate limits lacked implementable
+   persistence, resolution, atomicity, failure, and non-leakage contracts;
+2. mount-isolated staging did not isolate vulnerable inspection processes;
+3. outbound retrieval lacked a non-bypassable SSRF, redirect, and internal
+   service boundary;
+4. accepted promotion did not define atomic visibility across filesystem and
+   object-storage backends;
+5. Artifact storage did not distinguish immutable payload bytes, logical
+   resource versions, and repeated acquisition observations;
+6. signature-catalog bootstrap trust and later untrusted authority updates
+   were incomplete;
+7. lifecycle, verification, health, and temporary operational gates were
+   conflated; and
+8. migration cutover, legacy preflight, and lossless downgrade were
+   underspecified.
+
+The corrected architecture now defines a credential-free inspection sandbox,
+mandatory scanning, bounded retrieval, deletion-first failure handling,
+content-addressed payloads, immutable Artifact history, append-only
+observations, global secret identities with acquisition bindings,
+PostgreSQL-authoritative all-bucket rate reservations, explicit health
+dimensions, and a prospective cutover.
+
+Read-only legacy preflight recorded:
+
+```text
+SourceEndpoints                                      143
+distinct endpoint URLs                              143
+active endpoints                                    118
+feed/rss/feed_parser tuples                         141
+feed/atom/feed_parser tuples                          2
+IMAP/POP3/FTP/SFTP methods                            0
+URLs containing user-info credentials                0
+URLs containing recognized secret query keys          0
+metadata rows with top-level secret-named keys         0
+metadata documents with secret-like health text        5
+```
+
+The five metadata matches are four `healthcheck_error` strings and one
+`healthcheck_parse_warning` string. Migration must scan and sanitize these
+without printing their values and must block rather than infer a secret
+reference. No historical Artifact, detected format, or secret binding may be
+fabricated from the legacy rows.
+
+Freeze is conditioned on all 60 proofs in Section 18. Implementation must
+demonstrate those proofs directly before the Phase 3 implementation freeze;
+this documentation review does not substitute for runtime, migration,
+security-isolation, or live operational evidence.

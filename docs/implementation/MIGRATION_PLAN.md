@@ -103,8 +103,10 @@ schema removal.
 
 ## Phase 3 Source Acquisition Migration Candidate
 
-No Phase 3 migration is approved before formal freeze of
-`../specifications/PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`.
+The governing architecture in
+`../specifications/PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md` is
+frozen. The migration package remains an implementation candidate until its
+schema, data, downgrade, and zero-drift proofs pass review.
 
 The anticipated additive/corrective package includes:
 
@@ -113,13 +115,17 @@ versioned endpoint-type, acquisition-method, and platform catalog additions
 guarded prospective inactivation of podcast/IMAP/POP3/FTP/SFTP values
 adapter registry and exact compatibility declarations
 authority-backed Artifact Format catalogs and external mappings
-versioned signature releases and identification metadata
-accepted Acquisition Artifacts and post-deletion Artifact Rejections
+versioned signature releases, mandatory scanner, and identification metadata
+content-addressed payloads, immutable Acquisition Artifact versions,
+observations, and post-deletion Artifact Rejections
 durable endpoint acquisition leases and idempotency identities
-secret references without secret material
+global secret references and acquisition bindings without secret material
 hierarchical rate-limit policy and durable quota state
+outbound egress/SSRF policy and isolated inspection-sandbox configuration
 expanded endpoint health and history
 ```
 
 Historical catalog references must remain valid. Security-rejected bytes are
-never migration inputs, stored Artifacts, or Documents.
+never migration inputs, stored Artifacts, or Documents. Downgrade is blocked
+while any Phase 3-owned accepted bytes, history, configuration, policy, or
+custom mapping exists.

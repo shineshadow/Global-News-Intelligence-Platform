@@ -2,16 +2,16 @@
 
 **Project:** Global News Intelligence Platform  
 **Document:** `SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md`  
-**Status:** Development reference; Phase 3 architecture candidate in review
-**Version:** 0.2-candidate-reference
+**Status:** Development reference; governing Phase 3 architecture frozen
+**Version:** 0.2-frozen-reference
 
-The governing Phase 3 candidate is
+The governing Phase 3 architecture is
 `PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`. It reconciles this
 earlier seed with frozen GFA-A through GFA-E, the implemented ingestion
 foundation, the Artifact Format catalog, deletion-first security, adapter
 compatibility, idempotency, secrets, rate limits, UI, and current roadmap.
-Where this seed conflicts with that candidate, the candidate controls once
-formally frozen.
+Where this seed conflicts with that architecture, the frozen architecture
+controls.
 
 ---
 
@@ -186,6 +186,9 @@ rate-limit behavior
 - Credentials and API tokens must not be stored in endpoint metadata in plaintext.
 - Untrusted bytes enter isolated non-executable staging and are not canonical
   content until authority-backed identification and security acceptance.
+- Every destination and redirect passes the shared SSRF/egress guard.
+- Detection, scanning, parsing, media probing, and archive inspection run in
+  the credential-free disposable inspection sandbox.
 - Any suspicious, conflicting, ambiguous, unknown, malformed, or
   unverifiable payload is deleted immediately before rejection logging.
 - The deletion-first boundary has no UI, API, SQLAdmin, adapter, environment,
