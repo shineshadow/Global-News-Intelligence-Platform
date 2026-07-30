@@ -20,6 +20,7 @@ Generated files:
 - `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md` — frozen Calendar Foundation audit and normative Phase 1 boundary
 - `MASTER_TECHNICAL_SPECIFICATION.md`
 - `MIGRATION_PLAN.md`
+- `PHASE_3_ARTIFACT_FOUNDATION_FREEZE_REVIEW.md` — formal schema/data/downgrade/zero-drift freeze record for the corrective and Artifact persistence foundation
 - `SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md`
 - `SPECIFICATION_INTEGRATION_CHANGE_REPORT.md`
 - `STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md`

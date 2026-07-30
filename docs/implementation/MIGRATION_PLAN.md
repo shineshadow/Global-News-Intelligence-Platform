@@ -101,14 +101,21 @@ back into `ai_job`. Phase 2-owned intelligence state must be empty or
 explicitly preserved by an approved forward recovery before destructive
 schema removal.
 
-## Phase 3 Source Acquisition Migration Candidate
+## Phase 3 Corrective and Artifact Foundation — Frozen
 
 The governing architecture in
 `../specifications/PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md` is
-frozen. The migration package remains an implementation candidate until its
-schema, data, downgrade, and zero-drift proofs pass review.
+frozen. The migration package is frozen after its schema, data, downgrade, and
+zero-drift proofs passed formal review.
 
-**Candidate revisions:** `c9a2f4e6b801`, `d1b3e5f7a902`
+**Frozen revisions:** `c9a2f4e6b801`, `d1b3e5f7a902`
+
+The formal foundation review passed on 2026-07-30: 11 focused model/schema/data
+tests and three migration-safety tests passed, including clean
+downgrade/re-upgrade, guarded refusal paths, and zero Alembic drift. The
+complete repository regression also passed with 263 tests. The authoritative
+review record is
+`../specifications/PHASE_3_ARTIFACT_FOUNDATION_FREEZE_REVIEW.md`.
 
 The corrective and Artifact-foundation package now includes:
 
