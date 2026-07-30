@@ -21,9 +21,12 @@ feed-worker
 web-listing-worker
 playwright-worker
 youtube-worker
+video-metadata-worker
+subtitle-worker
 asr-worker
 classification-worker
 entity-resolution-worker
+attention-worker
 translation-worker
 embedding-worker
 cluster-worker
@@ -78,6 +81,15 @@ GPU inference
 high-priority real-time
 bulk/backfill
 ```
+
+Attention evaluation is durable derived-state work. High and Critical content
+may use distinct scheduling lanes, but priority-lane failure never discards
+acquired evidence. Story floors are applied transactionally with membership
+changes before optional AI enrichment is dispatched.
+
+Video discovery and subtitle acquisition do not dispatch video download or
+ASR. ASR receives a stable, operator-requested Video Processing job identifier.
+Opening the Video Processing page creates no worker task.
 
 ## Phase 3 Shared Acquisition Worker Architecture
 

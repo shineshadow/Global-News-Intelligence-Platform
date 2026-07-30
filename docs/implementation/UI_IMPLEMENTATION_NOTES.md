@@ -93,6 +93,44 @@ observed Event relationship
 merge/split tools
 ```
 
+Priority presentation:
+
+```text
+[High] +7 [12]
+```
+
+`[High]` is the colored priority rectangle, `+7` is the within-band rank, and
+`[12]` is the translucent, priority-bordered active item count of the
+priority-driving Story. Story and member cards show a Story icon with the item
+count in an upper-right bubble. Standalone items omit the bubble.
+
+The Story icon is grey/outlined when unassigned and green/filled when assigned.
+It has no visible label or tooltip. Activating it opens a quick Story selector
+or existing memberships; complex work continues in the full Story editor.
+
+## Attention UI Placeholder
+
+Content cards and detail views may provide:
+
+```text
+Relevant / Not relevant
+Dismiss
+My Priority: Automatic / Low / Normal / High / Critical
+Watch
+Story membership
+Translate / Summarize / Process when applicable
+```
+
+Priority Inbox sorts by the continuous `0–39` Attention score. Admin exposes
+versioned hard floors, weights, decay, processing actions, and a recent-content
+preview before activation.
+
+## Video UI Placeholder
+
+Video cards show metadata, subtitle/translation/summary status, Watch, Story,
+priority, and Process controls. Missing subtitles are explicit. Process opens
+the Video Processing workbench and does not itself download or transcribe.
+
 ---
 
 ## Source Acquisition UI Placeholder

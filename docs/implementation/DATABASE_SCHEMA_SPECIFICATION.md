@@ -60,7 +60,30 @@ story_geographies
 story_history
 story_claims
 story_claim_evidence
+story_metric_snapshots
+story_score_snapshots
 ```
+
+### Identity, Feedback, and Attention
+
+```text
+actors/users
+attention_profiles
+attention_policy_versions
+attention_policy_weights
+attention_decisions
+attention_decision_reasons
+attention_score_history
+content_feedback_events
+content_priority_overrides
+semantic_watches
+semantic_watch_revisions
+semantic_watch_matches
+```
+
+These are candidate names only until migrations are reviewed. Attention state
+is profile-owned and must not be added as one global mutable priority column on
+Documents or Videos.
 
 ### Observed Events
 
@@ -122,6 +145,11 @@ youtube_channels
 youtube_videos
 transcripts
 transcript_segments
+video_format_observations
+video_subtitle_tracks
+video_processing_jobs
+video_processing_attempts
+video_derived_artifacts
 ```
 
 ### Alerts

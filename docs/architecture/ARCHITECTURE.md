@@ -26,14 +26,14 @@ Sources / Calendars / YouTube / Web
               ▼
     Unified Classification
               │
-       ┌──────┼────────┐
-       ▼      ▼        ▼
- Monitoring  Future   Translation
-            Events
-       │      │        │
-       └──────┼────────┘
+       ┌──────┼──────────────┐
+       ▼      ▼              ▼
+ Monitoring  Future     Attention Decision
+            Events       0–39 per profile
+       │      │              │
+       └──────┼──────────────┘
               ▼
-         Embeddings
+   Selective Enrichment / Embeddings
               │
               ▼
       Story Intelligence
@@ -64,6 +64,8 @@ Filesystem/object storage  future large binary/media artifacts if required
 source_acquisition
 classification
 monitoring
+attention
+preferences
 translation
 embeddings
 story_intelligence
@@ -71,6 +73,7 @@ observed_events
 intelligence_calendar
 ai_routing
 youtube
+video_intelligence
 alerts
 web_ui
 publisher_workspace
@@ -109,7 +112,12 @@ Calendar → canonical classification
 Story Intelligence → canonical classification + embeddings
 Monitoring → canonical classification
 AI Router → no domain ownership; provides model execution service
+Attention → consumes domain signals; owns profile-specific ordering only
 ```
+
+The normative Attention, identity/preference, semantic Watch, and video
+boundaries are defined by the corresponding specifications in
+`../specifications/`.
 
 
 ---

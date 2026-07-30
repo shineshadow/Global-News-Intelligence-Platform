@@ -23,6 +23,11 @@ This document reserves the detailed architecture for provider-agnostic AI task r
 - Every AI result must retain model/provider provenance.
 - Structured tasks must validate output against schemas before persistence.
 - Budget controls must be enforceable before dispatch.
+- Summaries are operator reading aids. Story matching, classification, Watch
+  matching, and claim work must continue to use full authoritative evidence
+  rather than treating a summary as a replacement.
+- Learned preference output contributes to calculated Attention only and
+  cannot breach operator or Story-derived priority floors.
 
 ---
 
@@ -113,6 +118,10 @@ document_id
 story_id
 calendar_event_id
 calendar_occurrence_id
+attention_profile_id
+attention_policy_version
+attention_score
+mandatory_priority_floor
 ```
 
 ---

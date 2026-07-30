@@ -56,6 +56,9 @@ YouTube/transcripts
 Local AI + routing
 Embeddings/search
 Story intelligence
+Identity, feedback, and Attention
+Semantic Watch
+Video intelligence and explicit processing
 Intelligence Calendar
 Advanced novelty/event intelligence
 ```

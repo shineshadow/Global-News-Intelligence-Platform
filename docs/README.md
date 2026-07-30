@@ -3,6 +3,11 @@
 Generated files:
 
 - `AI_ROUTING_TECHNICAL_SPECIFICATION.md`
+- `CONTENT_ATTENTION_AND_ENRICHMENT_POLICY.md` — profile-specific 0–39 attention scoring, Story floors, enrichment gates, operator precedence, and Admin configuration
+- `IDENTITY_PROFILE_AND_PREFERENCE_ARCHITECTURE.md` — future-safe User, Coverage Profile, Attention Profile, feedback, and preference ownership boundary
+- `SEMANTIC_WATCH_TECHNICAL_SPECIFICATION.md` — one-click item-derived semantic monitoring without changing frozen literal Monitor semantics
+- `VIDEO_INTELLIGENCE_TECHNICAL_SPECIFICATION.md` — metadata/subtitle-first video acquisition and explicit Video Processing workflow
+- `change-reports/ATTENTION_SPECIFICATION_CONFLICT_AUDIT.md` — cross-spec conflict results and executable consistency-check scope
 - `API_SPECIFICATION.md`
 - `ARCHITECTURE.md`
 - `BENCHMARK_PROCEDURES.md`

@@ -38,6 +38,10 @@ entities
 document-types
 monitors
 stories
+attention
+watches
+videos
+video-processing
 events
 intelligence-calendar
 youtube
@@ -45,6 +49,12 @@ alerts
 ai-jobs
 operations
 ```
+
+Future Attention APIs should expose effective decisions, reason summaries,
+feedback, manual priority, policy preview/activation, and immutable policy
+history. Future Watch APIs should expose seed revisions and match explanations.
+Video Processing submission must remain separate from read-only video detail;
+opening or fetching detail creates no job.
 
 ---
 

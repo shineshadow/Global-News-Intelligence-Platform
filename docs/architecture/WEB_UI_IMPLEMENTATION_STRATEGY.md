@@ -347,9 +347,11 @@ A conceptual application shell is:
 ├────────────────┬─────────────────────────────────────────────┤
 │ Dashboard      │                                             │
 │ Breaking       │                                             │
+│ Priority Inbox │                                             │
 │ Calendar       │         MAIN APPLICATION AREA               │
 │ Stories        │                                             │
 │ Documents      │                                             │
+│ Videos         │                                             │
 │ Alerts         │                                             │
 │ Sources        │                                             │
 │ Geographies    │                                             │
@@ -360,6 +362,7 @@ A conceptual application shell is:
 │ Publisher      │                                             │
 │ Workspace      │                                             │
 │ AI Analysis    │                                             │
+│ Attention      │                                             │
 │ System         │                                             │
 └────────────────┴─────────────────────────────────────────────┘
 ```
@@ -812,6 +815,21 @@ Original content must remain visually distinguishable from AI-derived classifica
 
 Story Intelligence owns machine-derived story state.
 
+Story and member-item detail displays Attention compactly:
+
+```text
+[High] +7 [12]
+```
+
+The colored rectangle is the priority band, `+7` is the within-band rank, and
+the bordered translucent bubble is the active item count of the
+priority-driving Story. Standalone items show no Story count bubble.
+
+Cards show a Story icon with an upper-right bubble containing the active item
+count of the Story. For multi-Story items, the count and inherited Attention
+score come from the priority-driving Story. The control has no visible label or
+tooltip; activating it opens memberships or the Story selector.
+
 The UI consumes and presents:
 
 ```text
@@ -1050,6 +1068,23 @@ benchmark results
 ```
 
 AI operations screens must not bypass the AI Router by calling providers directly from the browser.
+
+### 22.1 Attention and Priority Administration
+
+Admin exposes versioned Attention configuration for priority bands, Story
+thresholds and metrics, signal weights, manual override rules, merge/split
+behavior, decay, enrichment, and notification thresholds. A proposed
+configuration is previewed against recent content before activation.
+
+All Content remains the broad acquired stream. Priority Inbox is the
+operator-focused ordering by `Critical +9` through `Low +0`.
+
+### 22.2 Video Processing
+
+Videos expose metadata and subtitle status without default media download. The
+Process action opens a workbench for explicit download, audio extraction, ASR,
+translation, summarization, and later operations. Opening the workbench starts
+no job.
 
 Architecture:
 
@@ -1654,7 +1689,7 @@ Suggested progression:
 
 ```text
 Core Platform
-    Dashboard / Sources / Documents / Runs / Failures
+    Dashboard / Sources / All Content / Runs / Failures
         ↓
 Classification + Monitoring
     Geography / Topic / Entity / Document Type filters
@@ -1664,10 +1699,13 @@ Expanded Acquisition
     source extraction/configuration tools
         ↓
 YouTube
-    video/transcript intelligence
+    Videos / transcript intelligence / explicit Video Processing
         ↓
 AI Routing
     AI operations and derived-analysis panels
+        ↓
+Attention
+    Priority Inbox / feedback / Watch / configurable scoring
         ↓
 Story Intelligence
     evolving Story and new-development interfaces
