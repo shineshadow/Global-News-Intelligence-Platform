@@ -146,13 +146,14 @@ Later Phase 3 packages add:
 ```text
 repository-pinned signature release importer and detection corpus
 mandatory scanner and deletion-first identification runtime
-adapter registry and exact compatibility declarations
-durable endpoint acquisition leases and idempotency identities
-global secret references and acquisition bindings without secret material
-hierarchical rate-limit policy and durable quota state
 outbound egress/SSRF policy and isolated inspection-sandbox configuration
 expanded endpoint health and history
 ```
+
+The importer, deletion-first runtime, scanner/sandbox, outbound egress guard,
+adapter registry, durable leases, global secret references, and hierarchical
+rate authority are now implemented candidates. They remain subject to the
+formal Phase 3 implementation review.
 
 Historical catalog references must remain valid. Security-rejected bytes are
 never migration inputs, stored Artifacts, or Documents. Downgrade is blocked

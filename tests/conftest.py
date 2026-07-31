@@ -109,6 +109,23 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            acquisition_rate_limit_reservation_buckets,
+            acquisition_rate_limit_observations,
+            acquisition_lease_events,
+            acquisition_secret_binding_events,
+            acquisition_rate_limit_reservations,
+            acquisition_rate_limit_buckets,
+            acquisition_leases,
+            acquisition_secret_bindings,
+            acquisition_rate_limit_bindings,
+            acquisition_endpoint_configurations,
+            secret_reference_events,
+            acquisition_platform_accounts,
+            acquisition_adapter_secret_slots,
+            acquisition_adapter_compatibilities,
+            acquisition_adapter_artifact_capabilities,
+            secret_references,
+            acquisition_adapters,
             artifact_rejections,
             acquisition_artifact_observations,
             acquisition_artifacts,
@@ -196,6 +213,53 @@ async def truncate_test_tables() -> None:
 
     async with test_engine.begin() as connection:
         await connection.execute(statement)
+        await connection.execute(
+            text(
+                """
+                INSERT INTO acquisition_rate_limit_bindings (
+                    policy_id,
+                    scope,
+                    scope_identity,
+                    actor,
+                    reason
+                )
+                SELECT
+                    id,
+                    'installation',
+                    'installation',
+                    'migration:e4f6a8b0c213',
+                    'Bind frozen installation-wide default'
+                FROM acquisition_rate_limit_policies
+                WHERE slug = 'phase3-installation-default'
+                  AND version = '1'
+                ON CONFLICT DO NOTHING;
+
+                INSERT INTO acquisition_rate_limit_buckets (
+                    binding_id,
+                    scope_identity
+                )
+                SELECT id, 'installation'
+                FROM acquisition_rate_limit_bindings
+                WHERE scope = 'installation'
+                  AND scope_identity = 'installation'
+                  AND valid_to IS NULL
+                ON CONFLICT DO NOTHING;
+
+                UPDATE acquisition_rate_limit_buckets
+                SET window_started_at = now(),
+                    request_count = 0,
+                    daily_window_started_at = now(),
+                    daily_request_count = 0,
+                    active_concurrency = 0,
+                    last_request_at = NULL,
+                    blocked_until = NULL,
+                    provider_reset_at = NULL,
+                    next_eligible_at = NULL,
+                    updated_at = now()
+                WHERE scope_identity = 'installation';
+                """
+            )
+        )
         await connection.execute(
             text(
                 """

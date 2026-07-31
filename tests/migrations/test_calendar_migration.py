@@ -57,7 +57,7 @@ async def test_calendar_state_blocks_destructive_downgrade(
     )
     assert downgrade.returncode != 0
     assert "Calendar" in (downgrade.stdout + downgrade.stderr)
-    assert _alembic("current").stdout.strip().endswith("d1b3e5f7a902 (head)")
+    assert _alembic("current").stdout.strip().endswith("e4f6a8b0c213 (head)")
 
 
 async def test_actor_correction_refuses_ambiguous_ai_job_history(
@@ -94,9 +94,7 @@ async def test_actor_correction_refuses_ambiguous_ai_job_history(
 
     upgrade = _alembic("upgrade", "head", check=False)
     assert upgrade.returncode != 0
-    assert "explicit provenance-based classification" in (
-        upgrade.stdout + upgrade.stderr
-    )
+    assert "explicit provenance-based classification" in (upgrade.stdout + upgrade.stderr)
     assert _alembic("current").stdout.strip().endswith("f29b6d8e3c10")
 
     async with database_session_factory() as session, session.begin():

@@ -205,6 +205,14 @@ RSS/Atom fetcher remains the pre-cutover compatibility path and must not be
 described as using the Phase 3 egress boundary until it is migrated with the
 shared worker.
 
+The acquisition-control candidate now supplies the other mandatory
+pre-request authorities: exact active adapter configuration, durable endpoint
+lease identity, required secret binding resolution, and atomic hierarchical
+rate reservation. The future shared worker must commit lease and rate
+authority before external I/O, pass only in-memory resolved credentials to the
+guarded request boundary, and finalize reservations in a separate short
+transaction.
+
 ---
 
 ## Active Step 26 Alert Worker

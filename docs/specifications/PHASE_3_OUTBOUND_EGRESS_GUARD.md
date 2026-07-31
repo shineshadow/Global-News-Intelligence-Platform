@@ -90,18 +90,16 @@ ordinary public-address rules apply. Initial TLS policies support verified
 public-CA HTTPS and explicitly registered plaintext internal HTTP; no
 certificate-verification bypass exists.
 
-Durable administration of installation registrations belongs with the later
-adapter-registry/secret/rate-policy persistence package. Source and endpoint
-records cannot create registrations.
+Durable administration of installation registrations remains part of later
+operator UI/worker composition. The adapter/secret/rate persistence candidate
+is now implemented separately; Source and endpoint records still cannot
+create trusted internal-service registrations.
 
 ## Deliberate Exclusions
 
 This candidate does not complete:
 
 - browser child-resource routing
-- durable endpoint leases or adapter registry
-- secret backend resolution and binding
-- hierarchical rate reservations
 - shared acquisition worker composition
 - migration of the legacy RSS/Atom compatibility fetcher
 - internal private-CA certificate registration
