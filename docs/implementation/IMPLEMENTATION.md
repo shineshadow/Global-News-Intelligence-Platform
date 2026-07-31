@@ -98,7 +98,8 @@ Phase 3.1 shared Source Acquisition architecture     frozen
 Phase 3 corrective/Artifact foundation               frozen
 Phase 3 signature importer/deletion-first runtime    implemented candidate
 Phase 3 inspection sandbox/mandatory scanner         implemented candidate
-Phase 3 outbound egress guard                         next
+Phase 3 outbound egress guard                         implemented candidate
+Phase 3 leases/adapter registry/secrets/rate policy  next
 Phase 3 adapters and acquisition-health UI           after security boundary
 Phase 3 formal implementation review                 final gate
 ```
@@ -113,6 +114,8 @@ are recorded in
 The Bubblewrap/seccomp inspection boundary and mandatory ClamAV integration
 candidate are recorded in
 `../specifications/PHASE_3_INSPECTION_SANDBOX_AND_MANDATORY_SCANNER.md`.
+The IP-pinned outbound HTTP and SSRF boundary candidate is recorded in
+`../specifications/PHASE_3_OUTBOUND_EGRESS_GUARD.md`.
 
 ---
 

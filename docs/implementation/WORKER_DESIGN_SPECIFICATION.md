@@ -177,6 +177,34 @@ deletion-first runtime; their production commands must use this isolation
 boundary or an equivalently reviewed sandbox before any adapter is activated.
 The current package does not declare archive/container inspection complete.
 
+The outbound egress candidate supplies the mandatory shared HTTP retrieval
+seam for future Phase 3 adapters. It:
+
+```text
+normalizes adapter-approved HTTP/HTTPS destinations
+rejects user-info and local-use names
+resolves through one controlled resolver
+rejects every forbidden or mixed DNS answer
+connects to the selected validated IP, never the hostname
+retains the original Host header and verified TLS SNI
+verifies the connected socket peer equals that pinned IP
+revalidates every redirect and forbids HTTPS downgrade
+strips declared header credentials across origins
+rejects cross-origin forwarding of declared query credentials
+bounds headers, decoded response bytes, redirects, and total duration
+redacts query credentials and standard response secrets from returned metadata
+```
+
+GNI-owned internal services require a trusted installation registration with
+an exact identity, adapter, scheme, normalized hostname, port, address
+network, TLS policy, and purpose. Source or endpoint data cannot create that
+registration or weaken public address rejection.
+
+This guard is the seam for the future shared acquisition worker. The legacy
+RSS/Atom fetcher remains the pre-cutover compatibility path and must not be
+described as using the Phase 3 egress boundary until it is migrated with the
+shared worker.
+
 ---
 
 ## Active Step 26 Alert Worker

@@ -114,3 +114,16 @@ After installation or a signature update, run the real boundary smoke:
 It verifies sandbox readiness, accepts a clean temporary payload, and rejects
 the harmless industry-standard EICAR antivirus test payload. Temporary bytes
 are removed when the smoke exits.
+
+## Outbound Egress Smoke
+
+Run the production DNS, TLS/SNI, IP-pinning, peer-verification, response-limit,
+and loopback-refusal smoke with:
+
+```bash
+.venv/bin/python scripts/smoke_outbound_egress.py
+```
+
+The command makes one bounded request to `https://example.com/`, reports the
+validated connected peer, and proves a direct loopback URL is refused before
+connection.

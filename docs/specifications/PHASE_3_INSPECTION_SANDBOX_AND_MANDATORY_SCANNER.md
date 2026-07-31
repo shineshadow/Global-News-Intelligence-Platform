@@ -98,7 +98,8 @@ This candidate does not complete:
 
 - production exact safe-parser integrations
 - recursive archive/container member inspection
-- the outbound SSRF/egress guard
+- the outbound SSRF/egress guard, now implemented as a separate Phase 3
+  candidate
 - acquisition adapters or workers
 - systemd/cgroup worker composition and operational health UI
 - formal Phase 3 implementation freeze
