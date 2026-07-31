@@ -25,6 +25,33 @@ FullCalendar
 Apache ECharts
 ```
 
+## Date and Time Display
+
+All operator-facing dates and times are governed by
+`../specifications/AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`.
+
+The required display is `M-D h:mm am` during the current owner-local year and
+`M-D-YYYY h:mm am` otherwise. The owner timezone is initially
+`America/New_York`. Seconds, UTC labels, 24-hour time, leading zeros, uppercase
+meridiems, and punctuated meridiems are prohibited in ordinary UI display.
+
+PostgreSQL continues to store timezone-aware instants. Conversion and
+formatting occur through one shared display formatter; templates and
+components must not define feature-specific date formatting.
+
+When User UI development begins, expose date/time display settings on the User
+profile. The shared formatter receives the effective User preference, with
+`America/New_York` and the American display preset as deterministic
+installation defaults. Do not infer these settings from the browser, Source,
+content language, or incoming timestamp. Changing them is a display-only User
+preference and never rewrites database timestamps.
+
+Current corrective target: `app/web/templating.py` still exposes the legacy
+`datetime_utc` filter as `YYYY-MM-DD HH:MM:SS UTC`. The Phase 1 feed reader and
+other templates using that filter are noncompliant with the governing
+standard. Replace it with the shared owner-local formatter and direct
+boundary/DST tests before treating date/time display as complete.
+
 ---
 
 ## Classification-Aware Document Browser

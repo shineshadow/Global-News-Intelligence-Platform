@@ -19,6 +19,13 @@ Broad acquisition serves that objective; profile-specific Attention decisions,
 Story convergence, operator judgment, and selective enrichment reduce the
 resulting noise.
 
+All operator-facing dates and times follow the owner-approved American display
+standard in `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`. Canonical instants remain
+timezone-aware in storage and machine interfaces, but UI display converts them
+to the owner's configured IANA timezone, initially `America/New_York`, and uses
+`M-D h:mm am` for the current local year or `M-D-YYYY h:mm am` otherwise.
+Seconds, UTC labels, and 24-hour time are not shown in ordinary operator UI.
+
 The fundamental unit of the system is not merely an article or feed item. The system will distinguish between:
 
 #### Source
@@ -2305,7 +2312,10 @@ Calendar search should support:
 - expected news importance
 - source
 
-Calendar results should support event-local time, user-local time, and UTC display.
+Calendar results display dates and times only in the owner-local American
+standard. Event-local and UTC instants remain available internally for
+correct scheduling, recurrence, inference, and comparison, but are not
+alternate operator-facing timestamp formats.
 
 ## 23. AI Question Interface
 

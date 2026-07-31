@@ -125,6 +125,10 @@ hierarchical rate-control candidate is recorded in
 ## Implementation Guardrails
 
 - PostgreSQL remains authoritative.
+- Canonical instants remain timezone-aware in storage. Every operator-facing
+  date/time must use the shared owner-local American formatter governed by
+  `../specifications/AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`; features may not
+  introduce private UTC, ISO, 24-hour, or seconds-bearing UI formats.
 - Migrations are additive and reversible where practical.
 - Accepted canonical originals are preserved. Suspicious or unverifiable
   acquisition bytes are deleted immediately and never become Documents,

@@ -19,7 +19,7 @@ Installation / Workspace
     shared Sources, Documents, Videos, Stories, Calendar, and system policy
 
 User
-    identity and operator-authored actions
+    identity, operator-authored actions, and display preferences
 
 Coverage Profile
     operational acquisition and Monitor scope; may later be shared
@@ -49,6 +49,12 @@ anonymous or null-owned personal actions are prohibited.
 
 A future authentication migration links the stable actor to a User without
 rewriting action history.
+
+User-owned display preferences include the effective IANA date/time display
+timezone and an extensible owner-approved display preset. The initial defaults
+are `America/New_York` and the American format governed by
+`AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`. They affect rendering only; shared
+timestamps remain canonical and are never copied or rewritten per User.
 
 This specification does not retrofit user ownership into frozen Step 25
 Monitors or Step 26 destinations. Later shared/personal Monitor and delivery
@@ -159,4 +165,3 @@ manual and Story floors dominate learned negative preference
 future User linkage does not require rewriting actor history
 frozen installation-level Monitor and Alert ownership remains unchanged
 ```
-
