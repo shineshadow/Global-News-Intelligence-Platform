@@ -133,6 +133,26 @@ parsing, extraction, or promotion I/O. The frozen contract and its complete
 proof matrix live in
 `../specifications/PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`.
 
+The implemented security-runtime candidate now supplies:
+
+```text
+manifest-verified repository-pinned signature import
+atomic and idempotent release activation
+exact database-backed byte-sequence detection
+adapter allowlist, extension, and media-type agreement
+bounded isolated staging and unchanged-hash verification
+mandatory scanner and exact safe-parser interfaces
+delete-and-verify before rejection metadata
+verified content-addressed promotion and Artifact persistence
+```
+
+The runtime has no permissive scanner or parser fallback. It refuses work
+before staging unless the exact pinned release is active and the injected
+mandatory scanner reports ready. The scanner process, credential-free
+inspection sandbox, outbound acquisition orchestration, and adapter workers
+remain separate implementation packages and are not implied by this
+candidate.
+
 ---
 
 ## Active Step 26 Alert Worker

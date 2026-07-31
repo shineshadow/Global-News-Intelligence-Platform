@@ -21,6 +21,7 @@ Generated files:
 - `MASTER_TECHNICAL_SPECIFICATION.md`
 - `MIGRATION_PLAN.md`
 - `PHASE_3_ARTIFACT_FOUNDATION_FREEZE_REVIEW.md` — formal schema/data/downgrade/zero-drift freeze record for the corrective and Artifact persistence foundation
+- `PHASE_3_SIGNATURE_IMPORTER_AND_DELETION_RUNTIME.md` — implemented-candidate boundary and proof scope for repository-pinned signatures, exact detection, deletion-first rejection, and accepted-byte promotion
 - `SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md`
 - `SPECIFICATION_INTEGRATION_CHANGE_REPORT.md`
 - `STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md`

@@ -77,3 +77,16 @@ GNI_TEST_INODE_LIMIT_PERCENT=75 scripts/run-test-suite.sh
 Do not treat free bytes from `df -h` as sufficient. Check `df -i /var`;
 PostgreSQL returns `No space left on device` when the filesystem exhausts
 inodes even if gigabytes remain free.
+
+## Artifact Signature Bootstrap
+
+Import and activate the exact repository-pinned signature release with:
+
+```bash
+.venv/bin/python scripts/import_artifact_signatures.py
+```
+
+The importer verifies the separate manifest before opening its transaction,
+then imports or returns the same active release idempotently. It fails closed
+on changed bytes, unknown formats, ambiguous active evidence, or conflicting
+stored release identity.

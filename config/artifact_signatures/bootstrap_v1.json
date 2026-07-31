@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "authority_slug": "gni_reviewed_bootstrap",
+  "release_identifier": "2026-07-30.1",
+  "source_uri": "repository:config/artifact_signatures/bootstrap_v1.json",
+  "authority_signature_verified": false,
+  "formats": [
+    {
+      "format_slug": "pdf",
+      "media_types": ["application/pdf"],
+      "extensions": ["pdf"],
+      "signatures": [
+        {"identifier": "pdf-header", "priority": 100, "offset": 0, "hex": "255044462d"}
+      ]
+    },
+    {
+      "format_slug": "png",
+      "media_types": ["image/png"],
+      "extensions": ["png"],
+      "signatures": [
+        {"identifier": "png-header", "priority": 100, "offset": 0, "hex": "89504e470d0a1a0a"}
+      ]
+    },
+    {
+      "format_slug": "jpeg",
+      "media_types": ["image/jpeg"],
+      "extensions": ["jpg", "jpeg", "jpe"],
+      "signatures": [
+        {"identifier": "jpeg-soi", "priority": 100, "offset": 0, "hex": "ffd8ff"}
+      ]
+    },
+    {
+      "format_slug": "gif",
+      "media_types": ["image/gif"],
+      "extensions": ["gif"],
+      "signatures": [
+        {"identifier": "gif87a-header", "priority": 100, "offset": 0, "hex": "474946383761"},
+        {"identifier": "gif89a-header", "priority": 100, "offset": 0, "hex": "474946383961"}
+      ]
+    },
+    {
+      "format_slug": "webp",
+      "media_types": ["image/webp"],
+      "extensions": ["webp"],
+      "signatures": [
+        {
+          "identifier": "webp-riff",
+          "priority": 100,
+          "all": [
+            {"offset": 0, "hex": "52494646"},
+            {"offset": 8, "hex": "57454250"}
+          ]
+        }
+      ]
+    },
+    {
+      "format_slug": "gzip",
+      "media_types": ["application/gzip"],
+      "extensions": ["gz", "gzip"],
+      "signatures": [
+        {"identifier": "gzip-header", "priority": 100, "offset": 0, "hex": "1f8b08"}
+      ]
+    },
+    {
+      "format_slug": "bzip2",
+      "media_types": ["application/x-bzip2"],
+      "extensions": ["bz2"],
+      "signatures": [
+        {"identifier": "bzip2-header", "priority": 100, "offset": 0, "hex": "425a68"}
+      ]
+    },
+    {
+      "format_slug": "xz",
+      "media_types": ["application/x-xz"],
+      "extensions": ["xz"],
+      "signatures": [
+        {"identifier": "xz-header", "priority": 100, "offset": 0, "hex": "fd377a585a00"}
+      ]
+    },
+    {
+      "format_slug": "zstd",
+      "media_types": ["application/zstd"],
+      "extensions": ["zst", "zstd"],
+      "signatures": [
+        {"identifier": "zstd-frame", "priority": 100, "offset": 0, "hex": "28b52ffd"}
+      ]
+    },
+    {
+      "format_slug": "7z",
+      "media_types": ["application/x-7z-compressed"],
+      "extensions": ["7z"],
+      "signatures": [
+        {"identifier": "7z-header", "priority": 100, "offset": 0, "hex": "377abcaf271c"}
+      ]
+    },
+    {
+      "format_slug": "rar",
+      "media_types": ["application/vnd.rar"],
+      "extensions": ["rar"],
+      "signatures": [
+        {"identifier": "rar4-header", "priority": 100, "offset": 0, "hex": "526172211a0700"},
+        {"identifier": "rar5-header", "priority": 100, "offset": 0, "hex": "526172211a070100"}
+      ]
+    },
+    {
+      "format_slug": "flac",
+      "media_types": ["audio/flac"],
+      "extensions": ["flac"],
+      "signatures": [
+        {"identifier": "flac-header", "priority": 100, "offset": 0, "hex": "664c6143"}
+      ]
+    },
+    {
+      "format_slug": "ogg",
+      "media_types": ["audio/ogg"],
+      "extensions": ["ogg", "oga"],
+      "signatures": [
+        {"identifier": "ogg-header", "priority": 100, "offset": 0, "hex": "4f676753"}
+      ]
+    },
+    {
+      "format_slug": "wav",
+      "media_types": ["audio/wav", "audio/x-wav"],
+      "extensions": ["wav"],
+      "signatures": [
+        {
+          "identifier": "wave-riff",
+          "priority": 100,
+          "all": [
+            {"offset": 0, "hex": "52494646"},
+            {"offset": 8, "hex": "57415645"}
+          ]
+        }
+      ]
+    }
+  ]
+}
