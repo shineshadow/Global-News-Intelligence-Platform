@@ -150,8 +150,32 @@ The runtime has no permissive scanner or parser fallback. It refuses work
 before staging unless the exact pinned release is active and the injected
 mandatory scanner reports ready. The scanner process, credential-free
 inspection sandbox, outbound acquisition orchestration, and adapter workers
-remain separate implementation packages and are not implied by this
+are separate implementation packages and were not implied by that runtime
 candidate.
+
+The scanner-side inspection sandbox candidate is now implemented with:
+
+```text
+Bubblewrap disposable user, mount, PID, IPC, UTS, cgroup, and network namespaces
+read-only exact worker, scanner executable, signature database, and payload
+empty tmpfs scratch space and no canonical-storage mount
+cleared environment with no database, Redis, acquisition, or cloud credentials
+libseccomp syscall policy and dropped capabilities
+CPU, memory, process, descriptor, file-size, output, and wall-clock limits
+one versioned bounded JSON verdict channel
+mandatory ClamAV engine and signature-release provenance
+```
+
+Readiness executes inside the same sandbox before retrieval. Missing
+Bubblewrap, libseccomp, ClamAV, signature data, or valid version provenance
+returns unavailable and the deletion-first runtime refuses to stage bytes.
+Sandbox timeout, crash, stderr, malformed/excessive output, syscall-policy
+violation, scan error, or malware match cannot become an accepted Artifact.
+
+Exact safe-parser implementations remain injected requirements of the
+deletion-first runtime; their production commands must use this isolation
+boundary or an equivalently reviewed sandbox before any adapter is activated.
+The current package does not declare archive/container inspection complete.
 
 ---
 

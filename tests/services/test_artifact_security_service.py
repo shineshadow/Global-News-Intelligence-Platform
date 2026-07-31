@@ -12,11 +12,17 @@ from app.models import (
     ArtifactPayload,
     ArtifactRejection,
 )
+from app.services.artifact_inspection_sandbox import (
+    BubblewrapClamAVScanner,
+    BubblewrapInspectionSandbox,
+    ClamAVSandboxConfiguration,
+)
 from app.services.artifact_security_service import (
     ArtifactIngestRequest,
     ArtifactPromotionError,
     ArtifactSecurityUnavailable,
     DeletionFirstArtifactRuntime,
+    MandatoryArtifactScanner,
     ParserResult,
     ScannerResult,
 )
@@ -140,7 +146,7 @@ async def _prepare(
     database_session_factory,
     tmp_path: Path,
     *,
-    scanner: FakeScanner | None = None,
+    scanner: MandatoryArtifactScanner | None = None,
     parser: FakeParser | None = None,
     suffix: str = "one",
 ) -> tuple[DeletionFirstArtifactRuntime, int, int, Path, Path]:
@@ -469,3 +475,47 @@ async def test_database_failure_removes_newly_promoted_bytes(
 
     assert list(staging.iterdir()) == []
     assert [path for path in canonical.rglob("*") if path.is_file()] == []
+
+
+async def test_runtime_acceptance_uses_sandboxed_mandatory_scanner(
+    database_session_factory,
+    tmp_path,
+) -> None:
+    scanner_path = tmp_path / "fake-clamscan"
+    scanner_path.write_bytes(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "fake_clamscan.py"
+        ).read_bytes()
+    )
+    scanner_path.chmod(0o755)
+    signatures = tmp_path / "signatures"
+    signatures.mkdir()
+    (signatures / "daily.cvd").write_bytes(b"test signatures")
+    scanner = BubblewrapClamAVScanner(
+        BubblewrapInspectionSandbox(
+            configuration=ClamAVSandboxConfiguration(
+                scanner_path=scanner_path,
+                signature_directory=signatures,
+            )
+        )
+    )
+    runtime, endpoint_id, run_id, staging, _ = await _prepare(
+        database_session_factory,
+        tmp_path,
+        scanner=scanner,
+    )
+
+    outcome = await runtime.ingest(
+        _request(endpoint_id=endpoint_id, run_id=run_id)
+    )
+
+    assert outcome.accepted is True
+    assert list(staging.iterdir()) == []
+    async with database_session_factory() as session:
+        artifact = await session.get(AcquisitionArtifact, outcome.artifact_id)
+        assert artifact is not None
+        assert artifact.scanner_name == "ClamAV"
+        assert artifact.scanner_version == "1.4.3"
+        assert artifact.scanner_signature_version == "27777"

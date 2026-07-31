@@ -22,6 +22,7 @@ Generated files:
 - `MIGRATION_PLAN.md`
 - `PHASE_3_ARTIFACT_FOUNDATION_FREEZE_REVIEW.md` — formal schema/data/downgrade/zero-drift freeze record for the corrective and Artifact persistence foundation
 - `PHASE_3_SIGNATURE_IMPORTER_AND_DELETION_RUNTIME.md` — implemented-candidate boundary and proof scope for repository-pinned signatures, exact detection, deletion-first rejection, and accepted-byte promotion
+- `PHASE_3_INSPECTION_SANDBOX_AND_MANDATORY_SCANNER.md` — Bubblewrap/seccomp isolation contract, mandatory ClamAV integration, runtime proof, and operational prerequisites
 - `SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md`
 - `SPECIFICATION_INTEGRATION_CHANGE_REPORT.md`
 - `STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md`

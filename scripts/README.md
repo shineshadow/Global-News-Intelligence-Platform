@@ -90,3 +90,27 @@ The importer verifies the separate manifest before opening its transaction,
 then imports or returns the same active release idempotently. It fails closed
 on changed bytes, unknown formats, ambiguous active evidence, or conflicting
 stored release identity.
+
+## Artifact Inspection Dependencies
+
+Install the repository system dependencies before activating Artifact
+acquisition:
+
+```bash
+bash scripts/install-sys-deps.sh
+```
+
+The inspection boundary requires Bubblewrap, libseccomp, ClamAV, and a
+FreshClam-managed signature database under `/var/lib/clamav`. Scanner
+readiness is checked inside the credential-free sandbox. Missing or stale
+infrastructure has no fallback and prevents retrieval from beginning.
+
+After installation or a signature update, run the real boundary smoke:
+
+```bash
+.venv/bin/python scripts/smoke_artifact_inspection.py
+```
+
+It verifies sandbox readiness, accepts a clean temporary payload, and rejects
+the harmless industry-standard EICAR antivirus test payload. Temporary bytes
+are removed when the smoke exits.

@@ -97,7 +97,8 @@ Calendar Foundation through Phase 2                  frozen
 Phase 3.1 shared Source Acquisition architecture     frozen
 Phase 3 corrective/Artifact foundation               frozen
 Phase 3 signature importer/deletion-first runtime    implemented candidate
-Phase 3 inspection sandbox/mandatory scanner         next
+Phase 3 inspection sandbox/mandatory scanner         implemented candidate
+Phase 3 outbound egress guard                         next
 Phase 3 adapters and acquisition-health UI           after security boundary
 Phase 3 formal implementation review                 final gate
 ```
@@ -109,6 +110,9 @@ The narrower foundation freeze and its proof results are recorded in
 The repository-pinned signature importer and deletion-first runtime candidate
 are recorded in
 `../specifications/PHASE_3_SIGNATURE_IMPORTER_AND_DELETION_RUNTIME.md`.
+The Bubblewrap/seccomp inspection boundary and mandatory ClamAV integration
+candidate are recorded in
+`../specifications/PHASE_3_INSPECTION_SANDBOX_AND_MANDATORY_SCANNER.md`.
 
 ---
 
