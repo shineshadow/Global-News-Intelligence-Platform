@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}{{ detail.monitor.name }} — Monitor{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Monitor {{ detail.monitor.slug }}</div>
+        <h2 class="page-title">{{ detail.monitor.name }}</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Lifecycle</h3>
+                <span class="badge ms-auto">{{ detail.monitor.status }}</span>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-6">Coverage Profile</dt>
+                    <dd class="col-6">{{ detail.monitor.coverage_profile_id }}</dd>
+                    <dt class="col-6">Current revision</dt>
+                    <dd class="col-6">{{ detail.revision.revision_number }}</dd>
+                    <dt class="col-6">Matches</dt>
+                    <dd class="col-6">{{ detail.match_count }}</dd>
+                </dl>
+                <div class="d-flex gap-2">
+                    {% if detail.monitor.status in ["draft", "paused", "expired"] %}
+                    <form method="post"
+                        action="{{ url_for('web_monitor_activate', monitor_id=detail.monitor.id) }}">
+                        <button class="btn btn-primary">Activate</button>
+                    </form>
+                    {% endif %}
+                    {% if detail.monitor.status == "active" %}
+                    <form method="post"
+                        action="{{ url_for('web_monitor_pause', monitor_id=detail.monitor.id) }}">
+                        <button class="btn">Pause</button>
+                    </form>
+                    <form method="post"
+                        action="{{ url_for('web_monitor_evaluate', monitor_id=detail.monitor.id) }}">
+                        <button class="btn">Evaluate now</button>
+                    </form>
+                    {% endif %}
+                    {% if detail.monitor.status != "archived" %}
+                    <form method="post"
+                        action="{{ url_for('web_monitor_archive', monitor_id=detail.monitor.id) }}">
+                        <button class="btn btn-outline-danger">Archive</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Immutable criteria revision</h3>
+            </div>
+            <div class="card-body">
+                <pre class="mb-0">{{ detail.criteria.model_dump_json(indent=2) }}</pre>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Alert routing</h3>
+                <a class="btn btn-sm ms-auto" href="{{ url_for('web_alert_destinations') }}">
+                    Manage destinations
+                </a>
+            </div>
+            <div class="card-body">
+                <p class="text-secondary">
+                    Routes apply only to new matches. Existing alerts retain the
+                    destination settings captured when they were created.
+                </p>
+                {% for destination in alert_destinations %}
+                {% set binding = alert_bindings.get(destination.id) %}
+                <form class="row align-items-end g-2 mb-3" method="post"
+                    action="{{ url_for('web_monitor_alert_destination', monitor_id=detail.monitor.id) }}">
+                    <input type="hidden" name="destination_id" value="{{ destination.id }}">
+                    <div class="col-md-5">
+                        <label class="form-label">{{ destination.name }}</label>
+                        <div class="text-secondary">{{ destination.base_url }} / {{ destination.topic }}</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Priority</label>
+                        <select class="form-select" name="priority">
+                            <option value="" {% if not binding or not binding.priority %}selected{% endif %}>
+                                Monitor default
+                            </option>
+                            {% for value in ["low", "normal", "high", "critical"] %}
+                            <option value="{{ value }}"
+                                {% if binding and binding.priority == value %}selected{% endif %}>
+                                {{ value | title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-check">
+                            <input type="checkbox" class="form-check-input" name="is_enabled"
+                                {% if binding and binding.is_enabled %}checked{% endif %}>
+                            <span class="form-check-label">Enabled</span>
+                        </label>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100">Save route</button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="empty">
+                    <p class="empty-title">No active alert destinations</p>
+                    <p class="empty-subtitle text-secondary">
+                        Create an ntfy destination before routing this monitor.
+                    </p>
+                    <div class="empty-action">
+                        <a class="btn btn-primary" href="{{ url_for('web_alert_destination_new') }}">
+                            Add destination
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Recent evaluations</h3>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Started</th>
+                            <th>Trigger</th>
+                            <th>Status</th>
+                            <th>Matched</th>
+                            <th>New</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for run in evaluations %}
+                        <tr>
+                            <td>{{ run.started_at | datetime_utc }}</td>
+                            <td>{{ run.trigger_type }}</td>
+                            <td>{{ run.status }}</td>
+                            <td>{{ run.matched_count }}</td>
+                            <td>{{ run.new_match_count }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5">No evaluations yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

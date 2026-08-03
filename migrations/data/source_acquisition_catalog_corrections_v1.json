@@ -1,0 +1,61 @@
+{
+  "version": "1.0",
+  "seed_set": "phase3_acquisition_1",
+  "endpoint_types": {
+    "add": [
+      {"slug": "audio_platform", "name": "Audio Platform"},
+      {"slug": "messaging_platform", "name": "Messaging Platform"},
+      {"slug": "object_storage", "name": "Object Storage"},
+      {"slug": "cloud_storage", "name": "Cloud Storage"},
+      {"slug": "message_queue", "name": "Message Queue"}
+    ],
+    "deactivate": ["podcast"]
+  },
+  "acquisition_methods": {
+    "add": [
+      {"slug": "email_client", "name": "Email Client"},
+      {"slug": "file_transfer", "name": "File Transfer"},
+      {"slug": "storage_client", "name": "Storage Client"},
+      {"slug": "filesystem_import", "name": "Filesystem Import"},
+      {"slug": "repository_sync", "name": "Repository Sync"},
+      {"slug": "stream_consumer", "name": "Stream Consumer"},
+      {"slug": "database_query", "name": "Database Query"},
+      {"slug": "message_queue_consumer", "name": "Message Queue Consumer"},
+      {"slug": "media_downloader", "name": "Media Downloader"},
+      {"slug": "bulk_import", "name": "Bulk Import"}
+    ],
+    "deactivate": ["imap", "pop3", "ftp", "sftp"]
+  },
+  "platforms": {
+    "add": [
+      {"slug": "dailymotion", "name": "Dailymotion"},
+      {"slug": "odysee", "name": "Odysee"},
+      {"slug": "bilibili", "name": "Bilibili"},
+      {"slug": "weibo", "name": "Weibo"},
+      {"slug": "wechat", "name": "WeChat"},
+      {"slug": "line", "name": "LINE"},
+      {"slug": "kakaotalk", "name": "KakaoTalk"},
+      {"slug": "snapchat", "name": "Snapchat"},
+      {"slug": "douyin", "name": "Douyin"},
+      {"slug": "kuaishou", "name": "Kuaishou"},
+      {"slug": "vk", "name": "VK"},
+      {"slug": "gab", "name": "Gab"},
+      {"slug": "parler", "name": "Parler"},
+      {"slug": "gettr", "name": "GETTR"},
+      {"slug": "kick", "name": "Kick"},
+      {"slug": "peertube", "name": "PeerTube"},
+      {"slug": "lemmy", "name": "Lemmy"},
+      {"slug": "quora", "name": "Quora"},
+      {"slug": "tumblr", "name": "Tumblr"},
+      {"slug": "pinterest", "name": "Pinterest"},
+      {"slug": "flickr", "name": "Flickr"},
+      {"slug": "soundcloud", "name": "SoundCloud"},
+      {"slug": "spotify", "name": "Spotify"},
+      {"slug": "apple_podcasts", "name": "Apple Podcasts"},
+      {"slug": "patreon", "name": "Patreon"},
+      {"slug": "wordpress", "name": "WordPress"},
+      {"slug": "blogger", "name": "Blogger"}
+    ],
+    "deactivate": []
+  }
+}

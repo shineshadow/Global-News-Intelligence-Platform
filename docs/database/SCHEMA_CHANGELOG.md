@@ -6,6 +6,112 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-07-28 — Intelligence Calendar Phase 2 Frozen
+
+**Persistence revision:** `b8d4f0a2c315`
+**Actor correction:** `a7c3e9f1b204`
+**Revises:** `f29b6d8e3c10`
+**Status:** Frozen
+
+Corrected Calendar actor provenance to distinguish `internal_agent` from
+`external_model`. The guarded upgrade refuses ambiguous historical `ai_job`
+rows, and downgrade refuses to collapse the corrected meanings.
+
+Added 12 normalized Phase 2 persistence tables for inference runs, immutable
+assertions and evidence, source-authority assessment, conflict resolution,
+administrative exceptions and their action history, operator overrides, and
+occurrence-policy override history. Resolution persistence requires two
+completed internal passes with distinct strategies before an optional third
+external pass. Administrative exceptions require those internal passes plus
+completed or explicitly unavailable/ineligible external adjudication.
+
+The formal implementation review passed all 44 architectural proofs,
+49 focused Calendar tests, three migration-safety tests, all 243 repository
+tests, and Alembic head/zero-drift checks. The frozen runtime includes
+autonomous validation, structured relationship extraction, bounded
+internal/external resolution, effective projection, administrative
+exceptions, complete evidence/history inspection, and audited
+occurrence-policy controls.
+
+---
+
+## 2026-07-27 — Intelligence Calendar Phase 1 Frozen
+
+**Freeze revision:** `f29b6d8e3c10`
+**Foundation revision:** `e27a6c9d4f10`
+**Revises:** `d26e5b8c1a40`
+
+Added the 22 normalized Calendar tables frozen by the Calendar Foundation
+Audit: stable Events, materialized Occurrences, immutable descriptive and
+schedule revisions, bounded recurrence, evidence, canonical relationships,
+Coverage Profile policy, explicit Step 25 Monitor links, and merge history.
+
+Deferred database triggers enforce one one-time Occurrence, one active rule
+for recurring Events, owned current revisions, valid IANA zones,
+append-only history, retraction-only assertions, same-profile Monitor links,
+and identity-preserving merges. Downgrade is empty-only.
+
+Calendar creation has no implicit Monitor or alert side effect. Explicit
+linked Monitors remain governed by Step 25, and their new document matches
+create the ordinary Step 26 `content_monitor_match` alert.
+
+Formal freeze review found and corrected three blockers: database state
+changes now require legal same-transaction history, unknown schedules cannot
+claim contradictory exact precision, and Calendar Monitor creation/linking is
+one atomic transaction. Current descriptive and schedule pointers also advance
+exactly one immutable revision.
+
+All 22 focused Calendar tests, all 212 repository tests, clean
+downgrade/re-upgrade, destructive-downgrade refusal, live HTTP smoke checks,
+and zero-drift Alembic comparison passed. Calendar Phase 1 is frozen at
+`f29b6d8e3c10`.
+
+**Post-freeze erratum, not yet migrated:** Phase 1 permits the unapproved
+Calendar actor kind `ai_job`. Calendar Phase 2 must replace it with
+`internal_agent` and `external_model` through a guarded migration that refuses
+to guess when historical provenance is ambiguous. This note does not claim a
+schema change has already occurred.
+
+---
+
+## 2026-07-27 — Step 25 Monitor Rule Engine Frozen
+
+**Freeze revision:** `c25f4a7b9d02`
+**Foundation revision:** `b25c7d9e1f30`
+**Revises:** `f8a1c2d3e4b5`
+
+Added normalized, Coverage-Profile-owned Monitors with immutable criteria
+revisions, explicit lifecycle and expiration policy, auditable evaluation
+runs, and one logical match per Monitor/document pair.
+
+Criteria version 1 persists the frozen Step 24 matching contract. Canonical
+references live in nine normalized selector tables; Boolean expressions and
+regular expressions remain outside this versioned contract. Empty criteria
+require explicit `match_all_in_profile` acknowledgement.
+
+Deferred database triggers require every Monitor to identify a real, sealed
+current revision. Application row locks serialize evaluation with pause,
+archive, and revision changes. Repeated and concurrent matches accumulate
+first/last revision, first/last timestamp, and observation count without
+duplicate logical matches.
+
+The migration creates no Monitor or Step 26 alert state. Downgrade succeeds
+when Step 25 tables are empty and refuses to discard configuration or history.
+
+Formal review found and corrected two blockers. Revision criteria and
+normalized selectors are now sealed and database-immutable, including a guard
+against mixed descendant policy within one hierarchy dimension. The hardening
+migration refuses to seal ambiguous preexisting policy. Match evaluation
+provenance now uses composite foreign keys requiring each evaluation run to
+belong to the same Monitor.
+
+All 179 repository tests, the Step 25 verification SQL, empty hardening
+downgrade/re-upgrade, destructive-downgrade refusal, and the Alembic drift
+check passed against isolated PostgreSQL 17.10. Step 25 is frozen at
+`c25f4a7b9d02`.
+
+---
+
 ## 2026-07-26 — GFA-E Coverage Profiles Frozen
 
 **Alembic revision:** `f8a1c2d3e4b5`
@@ -633,11 +739,11 @@ defaults, structured metadata mappings, deterministic keyword/rule
 classification, ingestion integration, and persistence of confidence,
 provenance, and history.
 
-The next work is:
+The current work sequence is:
 
 ```text
-Step 24   — Classification-aware document filters
-Step 25   — Monitor Rule Engine
+Step 24   — Classification-aware document filters (frozen; no schema change)
+Step 25   — Monitor Rule Engine (frozen)
 Step 26   — Alerts / ntfy
 ```
 

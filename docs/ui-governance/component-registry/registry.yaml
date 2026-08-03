@@ -1,0 +1,49 @@
+registry_name: GNI UI Component Registry
+registry_version: 1
+last_updated: "2026-08-03"
+components:
+  - id: CMP-0001
+    name: Application Shell
+    status: Experimental
+    owner: ui-foundation
+    record: components/CMP-0001-application-shell.yaml
+  - id: CMP-0002
+    name: Primary Navigation Header
+    status: Experimental
+    owner: ui-foundation
+    record: components/CMP-0002-primary-navigation-header.yaml
+  - id: CMP-0003
+    name: Status Badge
+    status: Experimental
+    owner: ui-platform
+    record: components/CMP-0003-status-badge.yaml
+  - id: CMP-0004
+    name: Document List
+    status: Experimental
+    owner: document-browser
+    record: components/CMP-0004-document-list.yaml
+  - id: CMP-0005
+    name: Summary Cards
+    status: Experimental
+    owner: ui-platform
+    record: components/CMP-0005-summary-cards.yaml
+  - id: CMP-0006
+    name: Endpoint Health Table
+    status: Experimental
+    owner: source-management
+    record: components/CMP-0006-endpoint-health-table.yaml
+  - id: CMP-0007
+    name: Failing Feeds Table
+    status: Experimental
+    owner: source-management
+    record: components/CMP-0007-failing-feeds-table.yaml
+  - id: CMP-0008
+    name: Recent Runs Table
+    status: Experimental
+    owner: source-management
+    record: components/CMP-0008-recent-runs-table.yaml
+  - id: CMP-0009
+    name: Date and Time Display
+    status: Proposed
+    owner: ui-platform
+    record: components/CMP-0009-date-time-display.yaml

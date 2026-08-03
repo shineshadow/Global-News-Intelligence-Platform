@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar Exception {{ detail.id }}{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">
+            {{ detail.severity|upper }} · {{ detail.assertion_family }}
+        </div>
+        <h2 class="page-title">{{ detail.event_title }}</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Exception scope</h3></div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-4">Exception / conflict</dt>
+                    <dd class="col-8">{{ detail.state }} / {{ detail.conflict_state }}</dd>
+                    <dt class="col-4">Reason code</dt>
+                    <dd class="col-8">{{ detail.conflict_reason_code }}</dd>
+                    <dt class="col-4">Autonomous result</dt>
+                    <dd class="col-8">{{ detail.reason_unresolved }}</dd>
+                    <dt class="col-4">Evidence snapshot</dt>
+                    <dd class="col-8"><code>{{ detail.evidence_snapshot_hash }}</code></dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Competing assertions</h3></div>
+            <div class="table-responsive">
+                <table class="table table-vcenter">
+                    <thead>
+                        <tr><th>ID</th><th>Value</th><th>Confidence</th><th>Authority</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for assertion in detail.competing_assertions %}
+                        <tr>
+                            <td>{{ assertion.id }}</td>
+                            <td>
+                                {{ assertion.validation_state
+                                    or assertion.geography_id
+                                    or assertion.topic_id
+                                    or assertion.entity_id
+                                    or assertion.source_id }}
+                                {% if assertion.role %}({{ assertion.role }}){% endif %}
+                            </td>
+                            <td>{{ assertion.confidence }}</td>
+                            <td>
+                                {{ assertion.actor_kind }} /
+                                {{ assertion.assignment_method }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Autonomous attempts</h3></div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr><th>Pass</th><th>Process / model</th><th>Result</th><th>Rationale</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in detail.autonomous_attempts %}
+                        <tr>
+                            <td>{{ attempt.reasoning_ordinal or "routing" }}</td>
+                            <td>
+                                {{ attempt.actor_kind }} · {{ attempt.strategy_slug }}
+                                {% if attempt.provider %}
+                                <div class="text-secondary">
+                                    {{ attempt.provider }} / {{ attempt.model }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ attempt.status }} / {{ attempt.outcome or "no decision" }}
+                                {% if attempt.failure_code %}
+                                <div class="text-secondary">{{ attempt.failure_code }}</div>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ attempt.rationale }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Evidence and authority</h3></div>
+            <div class="card-body">
+                {% for evidence in detail.evidence %}
+                <div class="border-bottom pb-3 mb-3">
+                    <div>
+                        <span class="badge">{{ evidence.evidence_kind }}</span>
+                        confidence {{ evidence.confidence }} · source authority
+                        {{ evidence.authority_score }}
+                    </div>
+                    <div>{{ evidence.assertion_text or evidence.excerpt or evidence.external_url }}</div>
+                    <div class="text-secondary">
+                        evidence {{ evidence.id }} · {{ evidence.method }} ·
+                        {{ evidence.observed_at }}
+                    </div>
+                    {% for assessment in detail.authority_assessments %}
+                        {% if assessment.subject_evidence_id == evidence.id %}
+                        <div class="mt-2">
+                            Assessment {{ assessment.authority_score }}
+                            (confidence {{ assessment.assessment_confidence }}) by
+                            {{ assessment.actor_kind }} / {{ assessment.assignment_method }}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-secondary">No evidence retained.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Operator action history</h3></div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Reason</th></tr></thead>
+                    <tbody>
+                        {% for action in detail.operator_action_history %}
+                        <tr>
+                            <td>{{ action.acted_at }}</td>
+                            <td>{{ action.action_kind }}</td>
+                            <td>{{ action.actor_label or action.actor_ref }}</td>
+                            <td>{{ action.reason }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" class="text-secondary">No operator action recorded.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if detail.operator_assertions %}
+        <div class="card mt-3">
+            <div class="card-header"><h3 class="card-title">Operator assertion ledger</h3></div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr><th>ID</th><th>Action</th><th>Value</th><th>Actor</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for assertion in detail.operator_assertions %}
+                        <tr>
+                            <td>{{ assertion.id }}</td>
+                            <td>{{ assertion.assertion_action }}</td>
+                            <td>
+                                {{ assertion.validation_state
+                                    or assertion.geography_id
+                                    or assertion.topic_id
+                                    or assertion.entity_id
+                                    or assertion.source_id }}
+                                {% if assertion.role %}({{ assertion.role }}){% endif %}
+                            </td>
+                            <td>{{ assertion.actor_label or assertion.actor_ref }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <div class="alert alert-info">
+            Leaving this exception unresolved is valid. No timeout or silence is
+            interpreted as a decision.
+        </div>
+        {% if detail.state == "open" %}
+        <form class="card mb-3" method="post"
+            action="{{ url_for(
+                'web_calendar_administrative_resolve',
+                exception_id=detail.id
+            ) }}">
+            <div class="card-header"><h3 class="card-title">Resolve explicitly</h3></div>
+            <div class="card-body">
+                <label class="form-label">Operator reference</label>
+                <input class="form-control mb-3" name="actor_ref" required>
+                <label class="form-label">Select competing assertion</label>
+                <select class="form-select mb-3" name="selected_assertion_id">
+                    <option value="">Use explicit validation state</option>
+                    {% for assertion in detail.competing_assertions %}
+                    <option value="{{ assertion.id }}">
+                        {{ assertion.id }} — {{ assertion.validation_state or assertion.role }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if detail.assertion_family in ["event_validation", "occurrence_validation"] %}
+                <label class="form-label">Or canonical validation state</label>
+                <select class="form-select mb-3" name="validation_state">
+                    <option value="">Select assertion above</option>
+                    {% for value in [
+                        "candidate", "probable", "verified", "confirmed",
+                        "disputed", "rejected"
+                    ] %}
+                    <option value="{{ value }}">{{ value|title }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                <label class="form-label">Reason</label>
+                <textarea class="form-control" name="reason" required></textarea>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-primary" type="submit">
+                    Record canonical resolution
+                </button>
+            </div>
+        </form>
+
+        {% if detail.proposed_assertion %}
+        <form class="card mb-3" method="post"
+            action="{{ url_for(
+                'web_calendar_administrative_deny',
+                exception_id=detail.id
+            ) }}">
+            <div class="card-header"><h3 class="card-title">Deny proposed resolution</h3></div>
+            <div class="card-body">
+                <input type="hidden" name="assertion_id"
+                    value="{{ detail.proposed_assertion.id }}">
+                <input class="form-control mb-3" name="actor_ref"
+                    placeholder="Operator reference" required>
+                <textarea class="form-control" name="reason"
+                    placeholder="Reason for denial" required></textarea>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-outline-danger" type="submit">
+                    Deny proposal
+                </button>
+            </div>
+        </form>
+        {% endif %}
+
+        <form class="card mb-3" method="post"
+            action="{{ url_for(
+                'web_calendar_administrative_action',
+                exception_id=detail.id,
+                action_kind='note'
+            ) }}">
+            <div class="card-header"><h3 class="card-title">Leave unresolved / note</h3></div>
+            <div class="card-body">
+                <input class="form-control mb-3" name="actor_ref"
+                    placeholder="Operator reference" required>
+                <textarea class="form-control" name="reason"
+                    placeholder="Inspection note" required></textarea>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn" type="submit">Record note</button>
+            </div>
+        </form>
+        {% endif %}
+
+        {% if detail.state == "open" %}
+            {% set state_action = "close" %}
+        {% else %}
+            {% set state_action = "reopen" %}
+        {% endif %}
+        <form class="card mb-3" method="post"
+            action="{{ url_for(
+                'web_calendar_administrative_action',
+                exception_id=detail.id,
+                action_kind=state_action
+            ) }}">
+            <div class="card-header">
+                <h3 class="card-title">{{ state_action|title }} exception</h3>
+            </div>
+            <div class="card-body">
+                <input class="form-control mb-3" name="actor_ref"
+                    placeholder="Operator reference" required>
+                <textarea class="form-control" name="reason"
+                    placeholder="Reason" required></textarea>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn" type="submit">{{ state_action|title }}</button>
+            </div>
+        </form>
+
+        {% if detail.operator_overrides
+            and detail.operator_overrides[-1].action_kind in ["assert", "select"] %}
+        <form class="card" method="post"
+            action="{{ url_for(
+                'web_calendar_administrative_action',
+                exception_id=detail.id,
+                action_kind='withdraw'
+            ) }}">
+            <div class="card-header"><h3 class="card-title">Withdraw override</h3></div>
+            <div class="card-body">
+                <input class="form-control mb-3" name="actor_ref"
+                    placeholder="Operator reference" required>
+                <textarea class="form-control" name="reason"
+                    placeholder="Reason for withdrawal" required></textarea>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-outline-danger" type="submit">Withdraw</button>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

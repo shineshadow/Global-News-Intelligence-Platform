@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}{{ detail.title }} — Intelligence Calendar{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Calendar Event {{ detail.public_id }}</div>
+        <h2 class="page-title">{{ detail.title }}</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Occurrences</h3></div>
+            <div class="table-responsive">
+                <table class="table table-vcenter">
+                    <thead><tr><th>Identity</th><th>Schedule</th><th>Validation</th></tr></thead>
+                    <tbody>
+                        {% for occurrence in detail.occurrences %}
+                        <tr>
+                            <td>{{ occurrence.recurrence_key }}</td>
+                            <td>{{ occurrence.schedule_state }}</td>
+                            <td>{{ occurrence.validation_state or "inherits Event" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if occurrence_policies %}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title">Occurrence policy controls</h3>
+                    <div class="card-subtitle">
+                        Profile-scoped operational policy only; these controls
+                        do not change canonical Event truth or model-egress authority.
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-vcenter">
+                    <thead>
+                        <tr>
+                            <th>Profile / Occurrence</th>
+                            <th>Effective policy</th>
+                            <th>Override and history</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for policy in occurrence_policies %}
+                        <tr>
+                            <td>
+                                Profile {{ policy.profile_id }} ·
+                                Policy {{ policy.policy_id }}<br>
+                                <span class="text-secondary">
+                                    Occurrence {{ policy.occurrence_id }}
+                                </span>
+                            </td>
+                            <td>
+                                {{ policy.effective_monitoring_priority }} priority ·
+                                {{ policy.effective_expected_news_importance }}
+                                importance ·
+                                {{ "watched" if policy.effective_is_watched else "ignored" }}
+                            </td>
+                            <td>
+                                <details>
+                                    <summary class="btn btn-sm">
+                                        {{ "Edit override" if policy.override_id else "Add override" }}
+                                    </summary>
+                                    <form class="mt-3" method="post"
+                                        action="{{ url_for(
+                                            'web_calendar_occurrence_policy_set',
+                                            event_id=detail.id,
+                                            policy_id=policy.policy_id,
+                                            occurrence_id=policy.occurrence_id
+                                        ) }}">
+                                        <label class="form-label">Monitoring priority</label>
+                                        <select class="form-select mb-2"
+                                            name="monitoring_priority">
+                                            <option value="">Inherit policy</option>
+                                            {% for value in ["low", "normal", "high", "critical"] %}
+                                            <option value="{{ value }}"
+                                                {% if policy.override_monitoring_priority == value %}
+                                                selected
+                                                {% endif %}>
+                                                {{ value|title }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <label class="form-label">Expected importance</label>
+                                        <select class="form-select mb-2"
+                                            name="expected_news_importance">
+                                            <option value="">Inherit policy</option>
+                                            {% for value in ["low", "normal", "high", "critical"] %}
+                                            <option value="{{ value }}"
+                                                {% if policy.override_expected_news_importance == value %}
+                                                selected
+                                                {% endif %}>
+                                                {{ value|title }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <label class="form-label">Watch state</label>
+                                        <select class="form-select mb-2" name="watch_state">
+                                            <option value="">Inherit policy</option>
+                                            <option value="watch"
+                                                {% if policy.override_is_watched is sameas true %}
+                                                selected
+                                                {% endif %}>Watch</option>
+                                            <option value="ignore"
+                                                {% if policy.override_is_watched is sameas false %}
+                                                selected
+                                                {% endif %}>Ignore</option>
+                                        </select>
+                                        <input class="form-control mb-2" name="actor_ref"
+                                            placeholder="Operator reference" required>
+                                        <textarea class="form-control mb-2" name="reason"
+                                            placeholder="Reason for this operational override"
+                                            required></textarea>
+                                        <button class="btn btn-primary btn-sm" type="submit">
+                                            Save policy override
+                                        </button>
+                                    </form>
+                                </details>
+                                {% if policy.history %}
+                                <details class="mt-2">
+                                    <summary>
+                                        {{ policy.history|length }} audited change(s)
+                                    </summary>
+                                    <ol class="mt-2">
+                                        {% for item in policy.history %}
+                                        <li>
+                                            {{ item.action_kind }} by
+                                            {{ item.actor_label or item.actor_ref or item.actor_kind }}
+                                            — {{ item.reason }}
+                                        </li>
+                                        {% endfor %}
+                                    </ol>
+                                </details>
+                                {% endif %}
+                                {% if policy.override_id %}
+                                <form class="mt-2" method="post"
+                                    action="{{ url_for(
+                                        'web_calendar_occurrence_policy_delete',
+                                        event_id=detail.id,
+                                        policy_id=policy.policy_id,
+                                        occurrence_id=policy.occurrence_id
+                                    ) }}">
+                                    <input class="form-control mb-2" name="actor_ref"
+                                        placeholder="Operator reference" required>
+                                    <input class="form-control mb-2" name="reason"
+                                        placeholder="Reason for removing override" required>
+                                    <button class="btn btn-sm" type="submit">
+                                        Return all values to policy
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">Inference summary</h3>
+            </div>
+            <div class="card-body">
+                <p>
+                    Effective: <strong>
+                        {{ detail.intelligence_summary.effective_validation_state }}
+                    </strong>
+                    via {{ detail.intelligence_summary.active_authority_layer }}
+                </p>
+                <p>
+                    Machine:
+                    {{ detail.intelligence_summary.machine_validation_state or "no assertion" }}
+                    · Operator:
+                    {{ detail.intelligence_summary.operator_validation_state or "no active override" }}
+                </p>
+                <p>
+                    Confidence:
+                    {{ detail.intelligence_summary.assertion_confidence or "not available" }}
+                    · Method:
+                    {{ detail.intelligence_summary.assignment_method or "Phase 1 state" }}
+                </p>
+                <p>
+                    Unresolved conflicts:
+                    {{ detail.intelligence_summary.unresolved_conflict_count }}
+                    · Open exceptions:
+                    {{ detail.intelligence_summary.open_administrative_exception_count }}
+                </p>
+                {% if detail.intelligence_summary.inference_run_id %}
+                <p class="text-secondary">
+                    Run {{ detail.intelligence_summary.inference_run_id }}
+                    ({{ detail.intelligence_summary.inference_run_status }})<br>
+                    Snapshot:
+                    <code>{{ detail.intelligence_summary.evidence_snapshot_hash }}</code>
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Coverage</h3></div>
+            <div class="card-body">
+                <p>Policies: {{ detail.coverage_policy_ids|join(", ") or "none" }}</p>
+                <p>Linked Monitors: {{ detail.monitor_ids|join(", ") or "none" }}</p>
+            </div>
+        </div>
+        {% if detail.coverage_policy_ids %}
+        <form class="card" method="post"
+            action="{{ url_for('web_calendar_monitor_link', event_id=detail.id) }}">
+            <div class="card-header"><h3 class="card-title">Link existing Monitor</h3></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Policy ID</label>
+                    <input class="form-control" type="number" name="policy_id"
+                        value="{{ detail.coverage_policy_ids[0] }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Monitor ID</label>
+                    <input class="form-control" type="number" name="monitor_id" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Purpose</label>
+                    <select class="form-select" name="purpose">
+                        <option value="pre_event">Pre-event</option>
+                        <option value="live">Live</option>
+                        <option value="post_event">Post-event</option>
+                        <option value="standing_series">Standing series</option>
+                    </select>
+                </div>
+                <label class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                        name="calendar_managed" value="true">
+                    <span class="form-check-label">Calendar-managed lifecycle</span>
+                </label>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-primary" type="submit">Link Monitor</button>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

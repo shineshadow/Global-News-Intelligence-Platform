@@ -2,8 +2,16 @@
 
 **Project:** Global News Intelligence Platform  
 **Document:** `SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md`  
-**Status:** Development Placeholder / Architectural Seed  
-**Version:** 0.1-placeholder
+**Status:** Development reference; governing Phase 3 architecture frozen
+**Version:** 0.2-frozen-reference
+
+The governing Phase 3 architecture is
+`PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`. It reconciles this
+earlier seed with frozen GFA-A through GFA-E, the implemented ingestion
+foundation, the Artifact Format catalog, deletion-first security, adapter
+compatibility, idempotency, secrets, rate limits, UI, and current roadmap.
+Where this seed conflicts with that architecture, the frozen architecture
+controls.
 
 ---
 
@@ -64,30 +72,32 @@ Changing acquisition strategy should normally modify or add endpoints without de
 
 ---
 
-## 4. Endpoint Types to Support
+## 4. Endpoint Types
 
-Future canonical endpoint types may include:
+The expanded target vocabulary separates access surfaces from formats and
+semantic content:
 
 ```text
-rss
-atom
-rsshub
-rss_bridge
-html_listing
-html_article
-json_api
-xml_api
-ics
-pdf_listing
-changedetection
-playwright_listing
-youtube_channel
-youtube_playlist
-social
-newsletter
-podcast
+website
+feed
+api
+email
+social_platform
+video_platform
+audio_platform
+file_repository
+messaging_platform
+object_storage
+cloud_storage
+message_queue
 manual
+other
 ```
+
+RSS, Atom, iCalendar, JSON, HTML, and PDF are representations. RSSHub,
+RSS-Bridge, changedetection.io, Playwright, and yt-dlp are adapters or
+acquisition infrastructure. A podcast is distributed through its real feed,
+website, audio/video platform, or other endpoint.
 
 ---
 
@@ -174,6 +184,15 @@ rate-limit behavior
 - Per-source exceptions require explicit configuration, auditability, and risk review.
 - Prefer alternate official hosts or acquisition surfaces when certificate chains are defective.
 - Credentials and API tokens must not be stored in endpoint metadata in plaintext.
+- Untrusted bytes enter isolated non-executable staging and are not canonical
+  content until authority-backed identification and security acceptance.
+- Every destination and redirect passes the shared SSRF/egress guard.
+- Detection, scanning, parsing, media probing, and archive inspection run in
+  the credential-free disposable inspection sandbox.
+- Any suspicious, conflicting, ambiguous, unknown, malformed, or
+  unverifiable payload is deleted immediately before rejection logging.
+- The deletion-first boundary has no UI, API, SQLAdmin, adapter, environment,
+  or operator bypass.
 
 ---
 
@@ -235,7 +254,9 @@ Future design should explicitly address:
 - login/paywall detection,
 - legal/terms review for high-risk acquisition methods.
 
-The platform should fail closed rather than silently bypassing access controls.
+The platform fails closed rather than silently bypassing access controls.
+Security rejection retains metadata and hashes only after verified deletion;
+it never retains the rejected payload.
 
 ---
 

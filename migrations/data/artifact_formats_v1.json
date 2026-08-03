@@ -1,0 +1,92 @@
+{
+  "version": "1.0",
+  "seed_set": "phase3_artifact_formats_1",
+  "formats": [
+    {"slug": "html", "name": "HTML", "family": "text_markup", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true},
+    {"slug": "plain_text", "name": "Plain Text", "family": "text_markup", "kind": "format", "authority_status": "registered", "authority": "IANA", "terminal": true},
+    {"slug": "markdown", "name": "Markdown", "family": "text_markup", "kind": "format", "authority_status": "standardized", "authority": "IETF RFC 7763", "terminal": true},
+    {"slug": "rtf", "name": "Rich Text Format", "family": "text_markup", "kind": "format", "authority_status": "vendor_defined", "authority": "Microsoft", "terminal": true},
+
+    {"slug": "warc", "name": "WARC", "family": "web_archive", "kind": "container", "authority_status": "standardized", "authority": "ISO 28500", "terminal": true, "container": true},
+    {"slug": "mhtml", "name": "MHTML", "family": "web_archive", "kind": "container", "authority_status": "standardized", "authority": "IETF RFC 2557", "terminal": true, "container": true},
+
+    {"slug": "rss", "name": "RSS", "family": "structured_data", "kind": "format", "authority_status": "de_facto", "authority": "RSS Advisory Board", "terminal": true},
+    {"slug": "atom", "name": "Atom", "family": "structured_data", "kind": "format", "authority_status": "standardized", "authority": "IETF RFC 4287", "terminal": true},
+    {"slug": "json_feed", "name": "JSON Feed", "family": "structured_data", "kind": "format", "authority_status": "de_facto", "authority": "JSON Feed specification", "terminal": true},
+    {"slug": "json", "name": "JSON", "family": "structured_data", "kind": "format", "authority_status": "standardized", "authority": "IETF RFC 8259", "terminal": true},
+    {"slug": "json_ld", "name": "JSON-LD", "family": "structured_data", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true},
+    {"slug": "ndjson", "name": "Newline-Delimited JSON", "family": "structured_data", "kind": "format", "authority_status": "de_facto", "authority": "NDJSON specification", "terminal": true},
+    {"slug": "yaml", "name": "YAML", "family": "structured_data", "kind": "format", "authority_status": "de_facto", "authority": "YAML specification", "terminal": true},
+    {"slug": "xml", "name": "XML", "family": "structured_data", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true},
+    {"slug": "rdf_xml", "name": "RDF/XML", "family": "structured_data", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true},
+    {"slug": "turtle", "name": "RDF Turtle", "family": "structured_data", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true},
+    {"slug": "n_triples", "name": "RDF N-Triples", "family": "structured_data", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true},
+
+    {"slug": "email_message", "name": "Internet Message Format", "family": "message_calendar", "kind": "format", "authority_status": "standardized", "authority": "IETF RFC 5322", "terminal": true},
+    {"slug": "ical", "name": "iCalendar", "family": "message_calendar", "kind": "format", "authority_status": "standardized", "authority": "IETF RFC 5545", "terminal": true},
+
+    {"slug": "pdf", "name": "PDF", "family": "document", "kind": "format", "authority_status": "standardized", "authority": "ISO 32000", "terminal": true},
+    {"slug": "doc", "name": "Microsoft Word Binary", "family": "document", "kind": "container", "authority_status": "vendor_defined", "authority": "Microsoft", "terminal": true, "container": true},
+    {"slug": "docx", "name": "Office Open XML Wordprocessing", "family": "document", "kind": "container", "authority_status": "standardized", "authority": "ECMA-376", "terminal": true, "container": true},
+    {"slug": "odt", "name": "OpenDocument Text", "family": "document", "kind": "container", "authority_status": "standardized", "authority": "OASIS OpenDocument", "terminal": true, "container": true},
+    {"slug": "ppt", "name": "Microsoft PowerPoint Binary", "family": "document", "kind": "container", "authority_status": "vendor_defined", "authority": "Microsoft", "terminal": true, "container": true},
+    {"slug": "pptx", "name": "Office Open XML Presentation", "family": "document", "kind": "container", "authority_status": "standardized", "authority": "ECMA-376", "terminal": true, "container": true},
+    {"slug": "odp", "name": "OpenDocument Presentation", "family": "document", "kind": "container", "authority_status": "standardized", "authority": "OASIS OpenDocument", "terminal": true, "container": true},
+    {"slug": "xls", "name": "Microsoft Excel Binary", "family": "document", "kind": "container", "authority_status": "vendor_defined", "authority": "Microsoft", "terminal": true, "container": true},
+    {"slug": "xlsx", "name": "Office Open XML Spreadsheet", "family": "document", "kind": "container", "authority_status": "standardized", "authority": "ECMA-376", "terminal": true, "container": true},
+    {"slug": "ods", "name": "OpenDocument Spreadsheet", "family": "document", "kind": "container", "authority_status": "standardized", "authority": "OASIS OpenDocument", "terminal": true, "container": true},
+    {"slug": "epub", "name": "EPUB", "family": "document", "kind": "container", "authority_status": "standardized", "authority": "W3C", "terminal": true, "container": true},
+
+    {"slug": "csv", "name": "CSV", "family": "tabular_text", "kind": "format", "authority_status": "standardized", "authority": "IETF RFC 4180", "terminal": true},
+    {"slug": "tsv", "name": "TSV", "family": "tabular_text", "kind": "format", "authority_status": "registered", "authority": "IANA", "terminal": true},
+
+    {"slug": "image", "name": "Image", "family": "image", "kind": "family", "authority_status": "local", "authority": "GNI family node", "terminal": false},
+    {"slug": "jpeg", "name": "JPEG", "family": "image", "kind": "format", "authority_status": "standardized", "authority": "ISO/IEC 10918", "terminal": true, "parent": "image"},
+    {"slug": "png", "name": "PNG", "family": "image", "kind": "format", "authority_status": "standardized", "authority": "W3C PNG", "terminal": true, "parent": "image"},
+    {"slug": "webp", "name": "WebP", "family": "image", "kind": "format", "authority_status": "vendor_defined", "authority": "Google", "terminal": true, "parent": "image"},
+    {"slug": "gif", "name": "GIF", "family": "image", "kind": "format", "authority_status": "vendor_defined", "authority": "CompuServe", "terminal": true, "parent": "image"},
+    {"slug": "svg", "name": "SVG", "family": "image", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true, "parent": "image"},
+    {"slug": "avif", "name": "AVIF", "family": "image", "kind": "container", "authority_status": "standardized", "authority": "Alliance for Open Media", "terminal": true, "parent": "image", "container": true},
+    {"slug": "heic", "name": "HEIC", "family": "image", "kind": "container", "authority_status": "standardized", "authority": "ISO/IEC 23008-12", "terminal": true, "parent": "image", "container": true},
+    {"slug": "tiff", "name": "TIFF", "family": "image", "kind": "container", "authority_status": "vendor_defined", "authority": "Adobe", "terminal": true, "parent": "image", "container": true},
+
+    {"slug": "video", "name": "Video", "family": "video", "kind": "family", "authority_status": "local", "authority": "GNI family node", "terminal": false},
+    {"slug": "mp4", "name": "MPEG-4 File Format", "family": "video", "kind": "container", "authority_status": "standardized", "authority": "ISO/IEC 14496-14", "terminal": true, "parent": "video", "container": true},
+    {"slug": "webm", "name": "WebM", "family": "video", "kind": "container", "authority_status": "de_facto", "authority": "WebM Project", "terminal": true, "parent": "video", "container": true},
+    {"slug": "matroska", "name": "Matroska", "family": "video", "kind": "container", "authority_status": "standardized", "authority": "IETF CELLAR", "terminal": true, "parent": "video", "container": true},
+    {"slug": "mpeg_ts", "name": "MPEG Transport Stream", "family": "video", "kind": "container", "authority_status": "standardized", "authority": "ISO/IEC 13818-1", "terminal": true, "parent": "video", "container": true},
+    {"slug": "quicktime", "name": "QuickTime File Format", "family": "video", "kind": "container", "authority_status": "vendor_defined", "authority": "Apple", "terminal": true, "parent": "video", "container": true},
+    {"slug": "avi", "name": "AVI", "family": "video", "kind": "container", "authority_status": "vendor_defined", "authority": "Microsoft", "terminal": true, "parent": "video", "container": true},
+
+    {"slug": "audio", "name": "Audio", "family": "audio", "kind": "family", "authority_status": "local", "authority": "GNI family node", "terminal": false},
+    {"slug": "mp3", "name": "MP3", "family": "audio", "kind": "format", "authority_status": "standardized", "authority": "ISO/IEC 11172-3", "terminal": true, "parent": "audio"},
+    {"slug": "m4a", "name": "MPEG-4 Audio", "family": "audio", "kind": "container", "authority_status": "standardized", "authority": "ISO Base Media File Format", "terminal": true, "parent": "audio", "container": true},
+    {"slug": "aac", "name": "Advanced Audio Coding", "family": "audio", "kind": "format", "authority_status": "standardized", "authority": "ISO/IEC 13818-7", "terminal": true, "parent": "audio"},
+    {"slug": "flac", "name": "FLAC", "family": "audio", "kind": "format", "authority_status": "standardized", "authority": "IETF RFC 9639", "terminal": true, "parent": "audio"},
+    {"slug": "wav", "name": "WAVE", "family": "audio", "kind": "container", "authority_status": "vendor_defined", "authority": "Microsoft and IBM", "terminal": true, "parent": "audio", "container": true},
+    {"slug": "ogg", "name": "Ogg", "family": "audio", "kind": "container", "authority_status": "standardized", "authority": "IETF RFC 3533", "terminal": true, "parent": "audio", "container": true},
+    {"slug": "opus", "name": "Opus", "family": "audio", "kind": "format", "authority_status": "standardized", "authority": "IETF RFC 6716", "terminal": true, "parent": "audio"},
+
+    {"slug": "webvtt", "name": "WebVTT", "family": "timed_text", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true},
+    {"slug": "subrip", "name": "SubRip", "family": "timed_text", "kind": "format", "authority_status": "de_facto", "authority": "SubRip", "terminal": true},
+    {"slug": "ttml", "name": "TTML", "family": "timed_text", "kind": "format", "authority_status": "standardized", "authority": "W3C", "terminal": true},
+    {"slug": "ass", "name": "Advanced SubStation Alpha", "family": "timed_text", "kind": "format", "authority_status": "de_facto", "authority": "Aegisub project", "terminal": true},
+    {"slug": "lrc", "name": "LRC", "family": "timed_text", "kind": "format", "authority_status": "de_facto", "authority": "LRC convention", "terminal": true},
+
+    {"slug": "m3u8", "name": "HTTP Live Streaming Playlist", "family": "stream_manifest", "kind": "manifest", "authority_status": "standardized", "authority": "IETF RFC 8216", "terminal": true, "manifest": true},
+    {"slug": "dash_mpd", "name": "MPEG-DASH MPD", "family": "stream_manifest", "kind": "manifest", "authority_status": "standardized", "authority": "ISO/IEC 23009-1", "terminal": true, "manifest": true},
+
+    {"slug": "archive", "name": "Archive", "family": "archive_compression", "kind": "family", "authority_status": "local", "authority": "GNI family node", "terminal": false},
+    {"slug": "zip", "name": "ZIP", "family": "archive_compression", "kind": "container", "authority_status": "vendor_defined", "authority": "PKWARE", "terminal": true, "parent": "archive", "container": true},
+    {"slug": "tar", "name": "TAR", "family": "archive_compression", "kind": "container", "authority_status": "standardized", "authority": "POSIX", "terminal": true, "parent": "archive", "container": true},
+    {"slug": "gzip", "name": "GZIP", "family": "archive_compression", "kind": "compression", "authority_status": "standardized", "authority": "IETF RFC 1952", "terminal": true, "parent": "archive", "compression": true},
+    {"slug": "bzip2", "name": "bzip2", "family": "archive_compression", "kind": "compression", "authority_status": "de_facto", "authority": "bzip2 specification", "terminal": true, "parent": "archive", "compression": true},
+    {"slug": "xz", "name": "XZ", "family": "archive_compression", "kind": "compression", "authority_status": "de_facto", "authority": "Tukaani project", "terminal": true, "parent": "archive", "compression": true},
+    {"slug": "zstd", "name": "Zstandard", "family": "archive_compression", "kind": "compression", "authority_status": "standardized", "authority": "IETF RFC 8878", "terminal": true, "parent": "archive", "compression": true},
+    {"slug": "7z", "name": "7-Zip", "family": "archive_compression", "kind": "container", "authority_status": "vendor_defined", "authority": "7-Zip", "terminal": true, "parent": "archive", "container": true},
+    {"slug": "rar", "name": "RAR", "family": "archive_compression", "kind": "container", "authority_status": "vendor_defined", "authority": "RARLAB", "terminal": true, "parent": "archive", "container": true},
+
+    {"slug": "binary", "name": "Generic Binary", "family": "fallback", "kind": "fallback", "authority_status": "local", "authority": "GNI fallback", "terminal": false},
+    {"slug": "other", "name": "Other Format", "family": "fallback", "kind": "fallback", "authority_status": "local", "authority": "GNI fallback", "terminal": false}
+  ]
+}

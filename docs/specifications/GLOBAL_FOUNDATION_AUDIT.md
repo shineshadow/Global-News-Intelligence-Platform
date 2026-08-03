@@ -209,10 +209,12 @@ The main track now proceeds:
 
 ```text
 Step 24  Classification-aware News Feed filters and shared matching contract
-Step 25  Persistent Monitor Rule Engine
-Step 26  Alert delivery and ntfy integration
+         (frozen)
+Step 25  Persistent Monitor Rule Engine (frozen)
+Step 26  Alert delivery and ntfy integration (frozen)
 ```
 
-The Intelligence Calendar begins its Foundation Audit in parallel. Calendar
-Phase 1 may overlap Step 25, but automated temporary monitors and polling
-escalation wait for the frozen Monitor Rule Engine.
+The Intelligence Calendar Foundation Audit resumed after Steps 25 and 26
+froze. Its normative decision register and Calendar Phase 1 proof matrix are
+maintained in `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`. Automated temporary
+Monitors and polling escalation remain later phases.

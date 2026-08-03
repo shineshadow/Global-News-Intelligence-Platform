@@ -23,6 +23,10 @@ MASTER_TECHNICAL_SPECIFICATION.md
         │
         │ platform-wide architectural contract
         ▼
+GNI_UI_FOUNDATION_AND_UX_GOVERNANCE.md
+        │
+        │ shared UI behavior, ownership, review, and acceptance
+        ▼
 WEB_UI_IMPLEMENTATION_STRATEGY.md
         │
         │ Web UI architectural rationale and boundaries
@@ -37,6 +41,11 @@ app/web/
 The governing principle is:
 
 > **Build the intelligence application itself, but assemble the user interface from mature open-source components.**
+
+The governance package controls how that strategy is applied across
+components, devices, preferences, prototypes, decisions, exceptions, and
+acceptance. While the governance package remains Draft, it is a review
+candidate rather than a frozen architectural rule.
 
 The platform should not hand-build ordinary UI primitives that mature libraries already provide. It should spend custom-development effort on the intelligence workflows that make the system unique.
 
@@ -347,9 +356,11 @@ A conceptual application shell is:
 ├────────────────┬─────────────────────────────────────────────┤
 │ Dashboard      │                                             │
 │ Breaking       │                                             │
+│ Priority Inbox │                                             │
 │ Calendar       │         MAIN APPLICATION AREA               │
 │ Stories        │                                             │
 │ Documents      │                                             │
+│ Videos         │                                             │
 │ Alerts         │                                             │
 │ Sources        │                                             │
 │ Geographies    │                                             │
@@ -360,6 +371,7 @@ A conceptual application shell is:
 │ Publisher      │                                             │
 │ Workspace      │                                             │
 │ AI Analysis    │                                             │
+│ Attention      │                                             │
 │ System         │                                             │
 └────────────────┴─────────────────────────────────────────────┘
 ```
@@ -812,6 +824,21 @@ Original content must remain visually distinguishable from AI-derived classifica
 
 Story Intelligence owns machine-derived story state.
 
+Story and member-item detail displays Attention compactly:
+
+```text
+[High] +7 [12]
+```
+
+The colored rectangle is the priority band, `+7` is the within-band rank, and
+the bordered translucent bubble is the active item count of the
+priority-driving Story. Standalone items show no Story count bubble.
+
+Cards show a Story icon with an upper-right bubble containing the active item
+count of the Story. For multi-Story items, the count and inherited Attention
+score come from the priority-driving Story. The control has no visible label or
+tooltip; activating it opens memberships or the Story selector.
+
 The UI consumes and presents:
 
 ```text
@@ -995,7 +1022,12 @@ ETag / Last-Modified status
 acquisition fallback
 selector configuration
 preview extracted items
-rate-limit notes
+rate-limit policy and effective precedence
+provider reset / Retry-After observations
+accepted Artifact counts
+read-only security-rejection outcomes
+adapter and configuration version
+secret configured/state indicator without secret values
 ```
 
 Future non-RSS endpoint configuration may require specialized forms for:
@@ -1011,6 +1043,17 @@ Playwright fallback
 ```
 
 These are operator workflows and should not be relegated solely to raw SQLAdmin CRUD.
+
+Rate-limit forms distinguish installation, adapter, provider/robots,
+credential/platform, Source, and endpoint policy. They show the effective
+strictest policy, quota/reset state, concurrency, polling, retry, jitter, and
+budget without permitting a manual poll to bypass the effective limit.
+
+Artifact identification, signature enforcement, suspicious-payload deletion,
+and rejection retention are security-critical. The Web UI and REST API expose
+no configuration, disable switch, exception, quarantine, restore, or override
+for those rules. An authorized operator may inspect a read-only rejection
+outcome and correct the Source/adapter configuration before reacquisition.
 
 ---
 
@@ -1034,6 +1077,23 @@ benchmark results
 ```
 
 AI operations screens must not bypass the AI Router by calling providers directly from the browser.
+
+### 22.1 Attention and Priority Administration
+
+Admin exposes versioned Attention configuration for priority bands, Story
+thresholds and metrics, signal weights, manual override rules, merge/split
+behavior, decay, enrichment, and notification thresholds. A proposed
+configuration is previewed against recent content before activation.
+
+All Content remains the broad acquired stream. Priority Inbox is the
+operator-focused ordering by `Critical +9` through `Low +0`.
+
+### 22.2 Video Processing
+
+Videos expose metadata and subtitle status without default media download. The
+Process action opens a workbench for explicit download, audio extraction, ASR,
+translation, summarization, and later operations. Opening the workbench starts
+no job.
 
 Architecture:
 
@@ -1638,7 +1698,7 @@ Suggested progression:
 
 ```text
 Core Platform
-    Dashboard / Sources / Documents / Runs / Failures
+    Dashboard / Sources / All Content / Runs / Failures
         ↓
 Classification + Monitoring
     Geography / Topic / Entity / Document Type filters
@@ -1648,10 +1708,13 @@ Expanded Acquisition
     source extraction/configuration tools
         ↓
 YouTube
-    video/transcript intelligence
+    Videos / transcript intelligence / explicit Video Processing
         ↓
 AI Routing
     AI operations and derived-analysis panels
+        ↓
+Attention
+    Priority Inbox / feedback / Watch / configurable scoring
         ↓
 Story Intelligence
     evolving Story and new-development interfaces

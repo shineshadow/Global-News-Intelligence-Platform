@@ -1,0 +1,18 @@
+<header class="gni-banner-shell d-print-none" aria-label="Platform header">
+    <div class="gni-banner-frame">
+        <a class="gni-banner-link" href="{{ url_for('web_dashboard') }}">
+            <span class="visually-hidden">
+                Global News Intelligence Platform operations dashboard
+            </span>
+            <img
+                class="gni-banner-image"
+                src="{{ url_for('static', path='img/GNI-1288.png') }}"
+                srcset="
+                    {{ url_for('static', path='img/GNI-1288.png') }} 1x,
+                    {{ url_for('static', path='img/GNI.png') }} 1.686x
+                "
+                alt="Global News Intelligence Platform — multilingual monitoring, analysis, and alerts"
+            >
+        </a>
+    </div>
+</header>

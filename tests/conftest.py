@@ -109,6 +109,86 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            acquisition_rate_limit_reservation_buckets,
+            acquisition_rate_limit_observations,
+            acquisition_lease_events,
+            acquisition_secret_binding_events,
+            acquisition_rate_limit_reservations,
+            acquisition_rate_limit_buckets,
+            acquisition_leases,
+            acquisition_secret_bindings,
+            acquisition_rate_limit_bindings,
+            acquisition_endpoint_configurations,
+            secret_reference_events,
+            acquisition_platform_accounts,
+            acquisition_adapter_secret_slots,
+            acquisition_adapter_compatibilities,
+            acquisition_adapter_artifact_capabilities,
+            secret_references,
+            acquisition_adapters,
+            artifact_rejections,
+            acquisition_artifact_observations,
+            acquisition_artifacts,
+            artifact_payloads,
+            artifact_format_signatures,
+            artifact_signature_releases,
+            artifact_format_relationships,
+            artifact_format_aliases,
+            artifact_format_extensions,
+            artifact_format_media_types,
+            artifact_format_external_identifiers,
+            intelligence_calendar_administrative_exception_actions,
+            intelligence_calendar_occurrence_policy_override_history,
+            intelligence_calendar_operator_overrides,
+            intelligence_calendar_administrative_exceptions,
+            intelligence_calendar_resolution_attempts,
+            intelligence_calendar_conflict_assertions,
+            intelligence_calendar_inference_conflicts,
+            intelligence_calendar_source_authority_evidence,
+            intelligence_calendar_source_authority_assessments,
+            intelligence_calendar_assertion_evidence,
+            intelligence_calendar_assertion_ledger,
+            intelligence_calendar_inference_runs,
+            intelligence_calendar_event_merge_history,
+            intelligence_calendar_event_monitors,
+            intelligence_calendar_policy_content_formats,
+            intelligence_calendar_policy_document_types,
+            intelligence_calendar_policy_search_terms,
+            intelligence_calendar_policy_watch_sources,
+            intelligence_calendar_occurrence_policy_overrides,
+            intelligence_calendar_event_coverage_policies,
+            intelligence_calendar_event_documents,
+            intelligence_calendar_event_sources,
+            intelligence_calendar_event_entities,
+            intelligence_calendar_event_topics,
+            intelligence_calendar_event_geographies,
+            intelligence_calendar_event_state_transitions,
+            intelligence_calendar_event_evidence,
+            intelligence_calendar_occurrence_schedule_revisions,
+            intelligence_calendar_event_occurrences,
+            intelligence_calendar_event_recurrence_exceptions,
+            intelligence_calendar_event_recurrence_rules,
+            intelligence_calendar_event_aliases,
+            intelligence_calendar_event_revisions,
+            intelligence_calendar_events,
+            alert_delivery_attempts,
+            alert_deliveries,
+            alerts,
+            monitor_alert_destinations,
+            alert_destinations,
+            monitor_matches,
+            monitor_evaluation_runs,
+            monitor_revision_entity_roles,
+            monitor_revision_languages,
+            monitor_revision_source_types,
+            monitor_revision_sources,
+            monitor_revision_content_formats,
+            monitor_revision_document_types,
+            monitor_revision_entities,
+            monitor_revision_topics,
+            monitor_revision_geographies,
+            monitor_revisions,
+            monitors,
             coverage_profile_source_polling_overrides,
             coverage_profile_content_formats,
             coverage_profile_document_types,
@@ -127,12 +207,142 @@ async def truncate_test_tables() -> None:
             ingestion_runs,
             source_endpoints,
             sources
-        RESTART IDENTITY CASCADE
+        CONTINUE IDENTITY CASCADE
         """
     )
 
     async with test_engine.begin() as connection:
         await connection.execute(statement)
+        await connection.execute(
+            text(
+                """
+                INSERT INTO acquisition_rate_limit_bindings (
+                    policy_id,
+                    scope,
+                    scope_identity,
+                    actor,
+                    reason
+                )
+                SELECT
+                    id,
+                    'installation',
+                    'installation',
+                    'migration:e4f6a8b0c213',
+                    'Bind frozen installation-wide default'
+                FROM acquisition_rate_limit_policies
+                WHERE slug = 'phase3-installation-default'
+                  AND version = '1'
+                ON CONFLICT DO NOTHING;
+
+                INSERT INTO acquisition_rate_limit_buckets (
+                    binding_id,
+                    scope_identity
+                )
+                SELECT id, 'installation'
+                FROM acquisition_rate_limit_bindings
+                WHERE scope = 'installation'
+                  AND scope_identity = 'installation'
+                  AND valid_to IS NULL
+                ON CONFLICT DO NOTHING;
+
+                UPDATE acquisition_rate_limit_buckets
+                SET window_started_at = now(),
+                    request_count = 0,
+                    daily_window_started_at = now(),
+                    daily_request_count = 0,
+                    active_concurrency = 0,
+                    last_request_at = NULL,
+                    blocked_until = NULL,
+                    provider_reset_at = NULL,
+                    next_eligible_at = NULL,
+                    updated_at = now()
+                WHERE scope_identity = 'installation';
+                """
+            )
+        )
+        await connection.execute(
+            text(
+                """
+                INSERT INTO artifact_format_media_types (
+                    artifact_format_id, media_type, authority_slug,
+                    is_preferred, provenance
+                )
+                SELECT format.id, evidence.media_type, evidence.authority_slug,
+                       evidence.is_preferred,
+                       '{"migration":"f3a1c7d9e2b4"}'::jsonb
+                FROM artifact_formats AS format
+                JOIN (
+                    VALUES
+                        ('rss', 'application/rss+xml', 'iana', true),
+                        ('rss', 'application/rdf+xml', 'iana', false),
+                        ('rss', 'application/xml', 'iana', false),
+                        ('rss', 'text/xml', 'iana', false),
+                        ('atom', 'application/atom+xml', 'iana', true),
+                        ('atom', 'application/xml', 'iana', false),
+                        ('atom', 'text/xml', 'iana', false)
+                ) AS evidence(format_slug, media_type, authority_slug, is_preferred)
+                  ON evidence.format_slug = format.slug;
+
+                INSERT INTO artifact_format_extensions (
+                    artifact_format_id, extension, authority_slug,
+                    is_preferred, provenance
+                )
+                SELECT format.id, evidence.extension, evidence.authority_slug,
+                       evidence.is_preferred,
+                       '{"migration":"f3a1c7d9e2b4"}'::jsonb
+                FROM artifact_formats AS format
+                JOIN (
+                    VALUES
+                        ('rss', 'rss', 'rss-advisory-board', true),
+                        ('rss', 'xml', 'iana', false),
+                        ('atom', 'atom', 'ietf-rfc-4287', true),
+                        ('atom', 'xml', 'iana', false)
+                ) AS evidence(format_slug, extension, authority_slug, is_preferred)
+                  ON evidence.format_slug = format.slug;
+
+                INSERT INTO acquisition_adapters (
+                    slug, version, display_name, implementation, status,
+                    configuration_schema, provenance, activated_at
+                )
+                VALUES (
+                    'feed_parser', '1', 'RSS and Atom Feed Parser',
+                    'ingestion.adapters.feed_parser:FeedParserAdapter',
+                    'active',
+                    jsonb_build_object(
+                        'type', 'object',
+                        'properties', '{}'::jsonb,
+                        'additionalProperties', false
+                    ),
+                    jsonb_build_object(
+                        'migration', 'f3a1c7d9e2b4',
+                        'activation_scope', 'registry-only-no-endpoint-cutover'
+                    ),
+                    now()
+                );
+
+                INSERT INTO acquisition_adapter_compatibilities (
+                    adapter_id, endpoint_type, endpoint_format,
+                    acquisition_method, platform, platform_key
+                )
+                SELECT adapter.id, 'feed', format.slug, 'feed_parser', NULL, '*'
+                FROM acquisition_adapters AS adapter
+                CROSS JOIN (VALUES ('rss'), ('atom')) AS format(slug)
+                WHERE adapter.slug = 'feed_parser' AND adapter.version = '1';
+
+                INSERT INTO acquisition_adapter_artifact_capabilities (
+                    adapter_id, artifact_format_id,
+                    identification_supported, safe_parser_supported,
+                    safe_extraction_supported
+                )
+                SELECT adapter.id, format.id, true, true, false
+                FROM acquisition_adapters AS adapter
+                CROSS JOIN artifact_formats AS format
+                WHERE adapter.slug = 'feed_parser'
+                  AND adapter.version = '1'
+                  AND format.slug IN ('rss', 'atom');
+                """
+            )
+        )
         await connection.execute(
             text(
                 """
@@ -208,16 +418,15 @@ async def dispose_test_engine(
 @pytest_asyncio.fixture(autouse=True)
 async def clean_test_database(
     apply_test_migrations: None,
-) -> AsyncIterator[None]:
+) -> None:
     """
-    Start and finish every test with empty application tables.
+    Start every test with empty application tables.
 
-    Alembic's version table is intentionally preserved.
+    Cleaning before the next test is sufficient even when the preceding test
+    fails. Avoiding duplicate post-test truncation and sequence restarts keeps
+    PostgreSQL relation-file and inode churn bounded. Alembic's version table
+    and seeded reference rows are intentionally preserved.
     """
-
-    await truncate_test_tables()
-
-    yield
 
     await truncate_test_tables()
 

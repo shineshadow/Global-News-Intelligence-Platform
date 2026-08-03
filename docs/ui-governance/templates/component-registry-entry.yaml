@@ -1,0 +1,49 @@
+id: CMP-0000
+name: Component Name
+status: Draft
+category:
+description:
+owner:
+backup_owner:
+source_location:
+  package:
+  module:
+  component:
+documentation_location:
+introduced:
+last_reviewed:
+supported_devices:
+  desktop:
+  laptop:
+  tablet:
+  mobile:
+mobile_scope:
+  supported_workflows: []
+  limitations: []
+variants: []
+states:
+  - default
+preferences:
+  supported: false
+  keys: []
+lazy_loading:
+  supported: false
+  trigger: not_applicable
+  loading_indicator: not_applicable
+  failure_behavior: not_applicable
+  retry_behavior: not_applicable
+  caching_behavior: not_applicable
+dependencies:
+  framework: []
+  internal_components: []
+  external_packages: []
+api_contracts: []
+consuming_workflows: []
+related_decisions: []
+related_exceptions: []
+known_limitations: []
+deprecation:
+  deprecated: false
+  replacement: not_applicable
+  removal_target: not_applicable
+notes:

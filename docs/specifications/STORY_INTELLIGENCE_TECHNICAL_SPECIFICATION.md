@@ -35,6 +35,7 @@ Future specification work should cover:
 - Intelligence Calendar priors and scheduled-versus-observed comparison,
 - alert suppression for repetitive documents,
 - historical re-clustering when models change.
+- immediate Story-derived Attention floors and continued within-band ranking.
 
 ---
 
@@ -49,6 +50,16 @@ Future specification work should cover:
 - Cross-language story matching must operate on original evidence plus multilingual semantic representations.
 - A new article does not automatically constitute a new development.
 - New-development detection must compare claims/facts against existing story state.
+- A Story begins with two qualifying content items. One-item candidate Stories
+  or candidate clusters are not persisted.
+- Two or three active qualifying items establish at least `High +0`; four or
+  more establish at least `Critical +0`.
+- Story scoring continues after Critical so `Critical +0` through
+  `Critical +9` remains useful for operator ordering.
+- Every active member inherits at least the score of its priority-driving
+  Story, subject to the versioned Attention policy.
+- Operator membership is authoritative, auditable, reversible, and has the
+  same Attention consequences as automatic membership.
 
 ---
 
@@ -70,6 +81,7 @@ story_history
 story_scores
 story_summaries
 story_timelines
+story_metric_snapshots
 ```
 
 Potential `story_documents` fields:
@@ -90,26 +102,27 @@ assigned_at
 ## 5. Candidate Processing Flow
 
 ```text
-NEW CLASSIFIED DOCUMENT
+NEW CLASSIFIED CONTENT ITEM
         │
         ▼
-Candidate narrowing
- geography + topics + entities + time
+Candidate narrowing and similarity
+ geography + topics + entities + time + embeddings + Calendar/source context
         │
         ▼
-Embedding similarity
-        │
-        ▼
-Calendar prior / source context
-        │
-        ▼
-Candidate story scoring
-        │
+Matching existing Story?
    ┌────┴────┐
    ▼         ▼
-assign     create story
+assign      no
    │         │
-   └────┬────┘
+   │         ▼
+   │    Match recent unassigned evidence?
+   │         │
+   │    ┌────┴────┐
+   │    ▼         ▼
+   │  create     remain
+   │  two-item   unassigned
+   │  Story
+   └────┬─────────┘
         ▼
 Claim / fact comparison
         │
@@ -117,11 +130,15 @@ Claim / fact comparison
 New-development detection
         │
         ▼
-Story summary / timeline update
+Story metrics, score, summary, and timeline update
         │
         ▼
 Alert evaluation
 ```
+
+The diagram does not authorize a persisted one-item candidate cluster.
+Implementation may parallelize candidate narrowing and similarity work, but
+Story creation requires two qualifying members.
 
 ---
 

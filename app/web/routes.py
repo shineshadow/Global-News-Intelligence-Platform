@@ -26,16 +26,22 @@ from app.services.web_ui_service import (
     list_run_overviews,
     list_source_overviews,
 )
-from app.web.lifecycle_routes import (
-    router as lifecycle_router,
+from app.web.alert_routes import (
+    router as alert_router,
 )
-
+from app.web.calendar_routes import (
+    router as calendar_router,
+)
 from app.web.document_routes import (
     router as document_router,
 )
-
+from app.web.lifecycle_routes import (
+    router as lifecycle_router,
+)
+from app.web.monitor_routes import (
+    router as monitor_router,
+)
 from app.web.templating import templates
-
 
 router = APIRouter(
     include_in_schema=False,
@@ -45,11 +51,22 @@ router = APIRouter(
 # /web/sources/new. Include them before dynamic
 # routes such as /web/sources/{source_id}.
 router.include_router(
+    alert_router
+)
+router.include_router(
     lifecycle_router
 )
 
 router.include_router(
     document_router
+)
+
+router.include_router(
+    monitor_router
+)
+
+router.include_router(
+    calendar_router
 )
 
 

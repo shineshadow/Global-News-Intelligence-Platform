@@ -10,4 +10,8 @@ sudo apt install -y \
     curl \
     git \
     build-essential \
-    libpq-dev
+    libpq-dev \
+    bubblewrap \
+    libseccomp2 \
+    clamav \
+    clamav-freshclam

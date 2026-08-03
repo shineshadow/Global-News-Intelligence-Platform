@@ -1,9 +1,9 @@
 # Global News Intelligence Platform — Current Database Schema
 
 **Document type:** Living implementation reference  
-**Snapshot date:** 2026-07-26
-**Platform phase:** Global Foundation Audit — GFA-E frozen
-**Alembic revision:** `f8a1c2d3e4b5`
+**Snapshot date:** 2026-07-28
+**Platform phase:** Intelligence Calendar Phase 2 frozen
+**Alembic revision:** `b8d4f0a2c315`
 **PostgreSQL server version:** 17.10  
 **Schema:** `public`  
 **Authoritative snapshot:** `CURRENT_SCHEMA.sql`
@@ -28,7 +28,7 @@ Future database design work should consult this document before adding or changi
 
 ## 2. Current Schema Summary
 
-The current schema contains **47 tables**:
+The current schema contains **99 tables**:
 
 1 Alembic infrastructure table
 15 pre-GFA application/classification tables
@@ -37,6 +37,10 @@ The current schema contains **47 tables**:
 13 GFA-C semantic-entity foundation tables
 1 GFA-D content-format catalog table
 10 GFA-E coverage-profile tables
+13 Step 25 Monitor Rule Engine tables
+5 Step 26 alert-delivery tables
+22 Calendar Phase 1 tables
+12 Calendar Phase 2 inference-persistence tables
 
 | Table | Purpose |
 |---|---|
@@ -87,16 +91,31 @@ The current schema contains **47 tables**:
 | `coverage_profile_document_types` | Semantic document-type selectors with descendant policy. |
 | `coverage_profile_content_formats` | Content-format selectors. |
 | `coverage_profile_source_polling_overrides` | Per-profile source polling-priority overrides. |
+| `monitors` | Profile-owned Monitor identity, lifecycle, activation, and expiration policy. |
+| `monitor_revisions` | Immutable scalar criteria for each versioned Monitor definition. |
+| `monitor_revision_geographies` | Geography selectors with explicit descendant policy. |
+| `monitor_revision_topics` | Topic selectors with explicit descendant policy. |
+| `monitor_revision_entities` | Canonical entity selectors. |
+| `monitor_revision_entity_roles` | Entity-role selectors. |
+| `monitor_revision_document_types` | Semantic document-type selectors with descendant policy. |
+| `monitor_revision_content_formats` | Content-format selectors. |
+| `monitor_revision_sources` | Explicit source selectors. |
+| `monitor_revision_source_types` | Source-type selectors with descendant policy. |
+| `monitor_revision_languages` | Effective-language selectors. |
+| `monitor_evaluation_runs` | Auditable Monitor evaluation attempts and outcomes. |
+| `monitor_matches` | Idempotent Monitor-to-document match history. |
 
 Current Alembic revision:
 
 ```text
-f8a1c2d3e4b5
+c25f4a7b9d02
 ```
 
-No custom PostgreSQL enum types or extensions are present. Two PostgreSQL
-functions and two deferred constraint triggers enforce the acyclic entity-type
-hierarchy and the exactly-one-active-default coverage-profile invariant.
+No custom PostgreSQL enum types or extensions are present. Six PostgreSQL
+functions, five deferred constraint triggers, and ten immediate history
+triggers enforce the acyclic entity-type hierarchy, the
+exactly-one-active-default coverage-profile invariant, and sealed immutable
+Monitor revisions.
 
 Step 22 is an additive schema expansion. No Phase 1 table was repurposed or renamed.
 
@@ -1522,7 +1541,8 @@ Update SQLAlchemy models
     ↓
 Create/review Alembic migration
     ↓
-Run migration tests
+Run `scripts/run-test-suite.sh` so migration and regression tests execute in
+separate groups with `/var` inode guards
     ↓
 Apply migration
     ↓
@@ -1969,3 +1989,118 @@ the lower bound while allowing an atomic default switch. Complete scope
 replacements and polling-policy writes lock the profile row so same-profile
 writes cannot silently interleave. Existing API, web, and CSV-inventory
 priority inputs persist through the default profile.
+
+# 34. Step 25 Monitor Rule Engine — Frozen
+
+Alembic revision `b25c7d9e1f30` adds thirteen normalized tables for
+profile-owned Monitors, versioned criteria, evaluation history, and idempotent
+document matches. Freeze-hardening revision `c25f4a7b9d02` seals revision
+history and binds evaluation provenance to the same Monitor.
+
+The current revision contains scalar criteria only:
+
+```text
+criteria_version
+minimum_confidence
+effective_from
+text_query
+match_all_in_profile
+```
+
+Canonical selectors are stored in the nine `monitor_revision_*` relationship
+tables. They are not hidden in Monitor metadata. Hierarchical geography,
+topic, document-type, and source-type selectors retain their explicit
+descendant policy.
+
+Each Monitor identifies one current revision by `(monitor_id,
+current_revision_number)`. Deferred constraint triggers permit atomic Monitor
+creation and revision changes while rejecting a committed Monitor that points
+to a nonexistent or unsealed revision. Once sealed, immediate triggers reject
+revision updates, deletes, and selector changes. Sealing also rejects mixed
+descendant policies within any one Step 24 hierarchy dimension. Application
+services serialize lifecycle, revision, and evaluation operations on the
+Monitor row.
+
+`monitor_matches` permits one row per Monitor/document pair. A repeated match
+preserves the first revision and timestamp, updates the last revision and
+timestamp, and increments `observation_count`. `monitor_evaluation_runs`
+records activation, ingestion, enrichment, and manual evaluations. Step 25
+creates no alert, delivery, destination, or notification table; those remain
+Step 26 responsibilities. Composite foreign keys require the first and last
+evaluation-run references on a match to belong to that same Monitor.
+
+The downgrade is deliberately guarded. It succeeds only when Monitor
+configuration and history are empty and otherwise refuses destructive loss.
+
+# 35. Step 26 Alerts and ntfy Delivery — Frozen
+
+Revision `d26e5b8c1a40` adds immutable
+`content_monitor_match` alerts, installation-level ntfy destinations,
+Monitor/destination bindings, snapshotted deliveries, and append-only delivery
+attempts. One alert is permitted per Monitor match. Delivery retries preserve
+the destination configuration effective when the alert was created.
+
+# 36. Intelligence Calendar Phase 1 — Frozen
+
+Revision `e27a6c9d4f10` adds 22 normalized Calendar tables. Stable Events point
+to immutable descriptive revisions. Every expected instance is an
+Occurrence, including the sole instance of a one-time Event, and points to an
+immutable schedule revision.
+
+Calendar time stores timed values as normalized `timestamptz` plus the source
+IANA timezone and original expression. All-day and coarse date precision use
+local date bounds without fabricated UTC midnight values. Recurrence rules
+retain local DTSTART, bounded materialization horizons, immutable versions,
+explicit exceptions, and stable recurrence keys.
+
+Evidence, transitions, canonical relationship assertions, aliases, and merge
+history preserve actor and provenance. Geography, Topic, Entity, Source,
+Document, semantic document type, and content format reuse the existing
+canonical tables.
+
+Coverage policy is unique by Event and Coverage Profile. Watch sources, search
+terms, semantic document types, and content formats use normalized policy
+tables. Calendar Monitor links contain no criteria JSON and must reference a
+Monitor in the policy's Coverage Profile. Event creation does not create a
+Monitor or alert; a new match from an explicitly linked Monitor follows the
+ordinary Step 26 alert path.
+
+Deferred and immediate triggers enforce current-revision ownership, one-time
+and recurring Event shape, valid timezones, append-only history,
+retraction-only assertions, evidence/document source consistency,
+same-Event policy overrides, endpoint/source ownership, same-profile Monitor
+links, and acyclic identity-preserving merges. Downgrade refuses to remove any
+Calendar-owned state.
+
+Freeze-hardening revision `f29b6d8e3c10` requires legal Phase 1 state
+transition edges and matching state/merge history in the same transaction.
+Current descriptive and schedule pointers advance exactly one immutable
+revision. Unknown schedules require unknown date and time precision, timed
+schedules cannot use `not_applicable` time precision, and all-day recurrence
+duration uses complete local days. Calendar Monitor creation and linking now
+commit or roll back together.
+
+### Applied Calendar actor-kind correction
+
+Corrective revision `a7c3e9f1b204` replaces the unapproved `ai_job` actor
+kind. Calendar actor provenance now permits:
+
+```text
+operator | system | import | internal_agent | external_model
+```
+
+The upgrade refuses any existing `ai_job` row because its truthful
+classification cannot be inferred. The downgrade likewise refuses
+`internal_agent` or `external_model` rows rather than collapsing provenance.
+
+### Calendar Phase 2 frozen persistence
+
+Revision `b8d4f0a2c315` adds normalized inference runs, an immutable assertion
+ledger and evidence links, source-authority assessments, conflicts and
+ordered resolution attempts, administrative exceptions with action history,
+operator overrides, and occurrence-policy override history. Database
+constraints enforce actor/method separation, two distinct internal reasoning
+passes before optional external adjudication, exception eligibility only
+after autonomous exhaustion, normalized same-scope references, append-only
+history, and guarded downgrade. The persistence and its runtime consumers
+passed the formal Calendar Phase 2 freeze review.

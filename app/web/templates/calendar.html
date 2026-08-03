@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Intelligence Calendar — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Expected events and recurring series</div>
+        <h2 class="page-title">Intelligence Calendar</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Canonical Events</h3>
+        <div class="card-actions">
+            <a class="btn" href="{{ url_for('web_calendar_administrative') }}">
+                Administrative Exceptions
+            </a>
+            <a class="btn btn-primary" href="{{ url_for('web_calendar_new') }}">
+                New Event
+            </a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-vcenter">
+            <thead>
+                <tr>
+                    <th>Event</th>
+                    <th>Pattern</th>
+                    <th>Validation</th>
+                    <th>Occurrences</th>
+                    <th>Monitors</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                <tr>
+                    <td>{{ event.title }}</td>
+                    <td>{{ event.schedule_pattern }}</td>
+                    <td><span class="badge">{{ event.validation_state }}</span></td>
+                    <td>{{ event.occurrence_count }}</td>
+                    <td>{{ event.monitor_count }}</td>
+                    <td>
+                        <a class="btn btn-sm"
+                            href="{{ url_for('web_calendar_detail', event_id=event.id) }}">
+                            View
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-secondary py-5">
+                        No Calendar Events have been created.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

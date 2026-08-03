@@ -1,21 +1,24 @@
+from decimal import Decimal, InvalidOperation
 from typing import Literal
 from urllib.parse import urlencode
 
-from fastapi import (
-    APIRouter,
-    Query,
-    Request,
-)
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
+from pydantic import ValidationError
 
 from app.api.dependencies import DatabaseSession
+from app.schemas.document_match import (
+    DocumentMatchCriteria,
+    HierarchyIdMatch,
+    HierarchySlugMatch,
+)
 from app.services.document_browser_service import (
     browse_documents,
+    effective_time_cutoff,
     get_document_detail,
     get_document_filter_options,
 )
 from app.web.templating import templates
-
 
 router = APIRouter(
     include_in_schema=False,
@@ -25,31 +28,23 @@ router = APIRouter(
 def build_browser_url(
     request: Request,
     *,
-    source_id: int | None,
-    country: str | None,
-    language: str | None,
-    time_window: str,
-    query: str | None,
+    filters: dict[str, str | int | Decimal | bool | None],
     page: int,
     page_size: int,
 ) -> str:
-    params: dict[str, str | int] = {
-        "time": time_window,
+    params: dict[str, str | int | Decimal] = {
         "page": page,
         "page_size": page_size,
     }
-
-    if source_id is not None:
-        params["source_id"] = source_id
-
-    if country:
-        params["country"] = country
-
-    if language:
-        params["language"] = language
-
-    if query:
-        params["q"] = query
+    params.update(
+        {
+            key: str(value).lower()
+            if isinstance(value, bool)
+            else value
+            for key, value in filters.items()
+            if value not in (None, "", False)
+        }
+    )
 
     return (
         str(
@@ -62,6 +57,50 @@ def build_browser_url(
     )
 
 
+def optional_positive_int(
+    value: str | None,
+    *,
+    field_name: str,
+) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_name} must be a positive integer.",
+        ) from exc
+    if parsed <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_name} must be a positive integer.",
+        )
+    return parsed
+
+
+def optional_confidence(
+    value: str | None,
+) -> Decimal | None:
+    """Normalize the News Feed's zero-valued “Any Confidence” option."""
+
+    if value in (None, ""):
+        return None
+    try:
+        parsed = Decimal(value)
+    except InvalidOperation as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="minimum_confidence must be a decimal between 0 and 1.",
+        ) from exc
+    if not parsed.is_finite() or parsed < 0 or parsed > 1:
+        raise HTTPException(
+            status_code=422,
+            detail="minimum_confidence must be a decimal between 0 and 1.",
+        )
+    return None if parsed == 0 else parsed
+
+
 @router.get(
     "/web/documents",
     response_class=HTMLResponse,
@@ -71,9 +110,21 @@ async def documents_page(
     request: Request,
     session: DatabaseSession,
 
+    profile_id: str | None = None,
     source_id: str | None = None,
-    country: str | None = None,
+    geography_id: str | None = None,
+    geography_descendants: bool = False,
+    topic_id: str | None = None,
+    topic_descendants: bool = False,
+    entity_id: str | None = None,
+    entity_role: str | None = None,
+    document_type_id: str | None = None,
+    document_type_descendants: bool = False,
+    content_format: str | None = None,
+    source_type: str | None = None,
+    source_type_descendants: bool = False,
     language: str | None = None,
+    minimum_confidence: str | None = None,
 
     time_window: Literal[
         "24h",
@@ -98,25 +149,115 @@ async def documents_page(
         le=100,
     ),
 ):
-    
-    parsed_source_id: int | None = None
+    parsed_profile_id = optional_positive_int(
+        profile_id,
+        field_name="profile_id",
+    )
+    parsed_source_id = optional_positive_int(
+        source_id,
+        field_name="source_id",
+    )
+    parsed_geography_id = optional_positive_int(
+        geography_id,
+        field_name="geography_id",
+    )
+    parsed_topic_id = optional_positive_int(
+        topic_id,
+        field_name="topic_id",
+    )
+    parsed_entity_id = optional_positive_int(
+        entity_id,
+        field_name="entity_id",
+    )
+    parsed_document_type_id = optional_positive_int(
+        document_type_id,
+        field_name="document_type_id",
+    )
+    parsed_minimum_confidence = optional_confidence(
+        minimum_confidence,
+    )
 
-    if source_id:
-        try:
-            parsed_source_id = int(source_id)
-        except ValueError:
-            parsed_source_id = None
+    try:
+        criteria = DocumentMatchCriteria(
+            coverage_profile_id=parsed_profile_id,
+            geographies=HierarchyIdMatch(
+                ids=(
+                    (parsed_geography_id,)
+                    if parsed_geography_id is not None
+                    else ()
+                ),
+                include_descendants=geography_descendants,
+            ),
+            topics=HierarchyIdMatch(
+                ids=(
+                    (parsed_topic_id,)
+                    if parsed_topic_id is not None
+                    else ()
+                ),
+                include_descendants=topic_descendants,
+            ),
+            entity_ids=(
+                (parsed_entity_id,)
+                if parsed_entity_id is not None
+                else ()
+            ),
+            entity_roles=(entity_role,) if entity_role else (),
+            document_types=HierarchyIdMatch(
+                ids=(
+                    (parsed_document_type_id,)
+                    if parsed_document_type_id is not None
+                    else ()
+                ),
+                include_descendants=document_type_descendants,
+            ),
+            content_format_slugs=(
+                (content_format,) if content_format else ()
+            ),
+            source_ids=(
+                (parsed_source_id,)
+                if parsed_source_id is not None
+                else ()
+            ),
+            source_types=HierarchySlugMatch(
+                slugs=(source_type,) if source_type else (),
+                include_descendants=source_type_descendants,
+            ),
+            language_tags=(language,) if language else (),
+            minimum_confidence=parsed_minimum_confidence,
+            effective_from=effective_time_cutoff(time_window),
+            text_query=q,
+        )
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=exc.errors(),
+        ) from exc
 
     result = await browse_documents(
         session,
-        source_id=parsed_source_id,
-        country=country,
-        language=language,
-        time_window=time_window,
-        query=q,
+        criteria=criteria,
         page=page,
         page_size=page_size,
     )
+    filters = {
+        "profile_id": parsed_profile_id,
+        "source_id": parsed_source_id,
+        "geography_id": parsed_geography_id,
+        "geography_descendants": geography_descendants,
+        "topic_id": parsed_topic_id,
+        "topic_descendants": topic_descendants,
+        "entity_id": parsed_entity_id,
+        "entity_role": entity_role,
+        "document_type_id": parsed_document_type_id,
+        "document_type_descendants": document_type_descendants,
+        "content_format": content_format,
+        "source_type": source_type,
+        "source_type_descendants": source_type_descendants,
+        "language": language,
+        "minimum_confidence": parsed_minimum_confidence,
+        "time": time_window,
+        "q": q,
+    }
 
     previous_url = None
     next_url = None
@@ -124,11 +265,7 @@ async def documents_page(
     if result.has_previous:
         previous_url = build_browser_url(
             request,
-            source_id=parsed_source_id,
-            country=country,
-            language=language,
-            time_window=time_window,
-            query=q,
+            filters=filters,
             page=result.page - 1,
             page_size=page_size,
         )
@@ -136,11 +273,7 @@ async def documents_page(
     if result.has_next:
         next_url = build_browser_url(
             request,
-            source_id=parsed_source_id,
-            country=country,
-            language=language,
-            time_window=time_window,
-            query=q,
+            filters=filters,
             page=result.page + 1,
             page_size=page_size,
         )
@@ -149,9 +282,21 @@ async def documents_page(
         "active_page": "documents",
         "result": result,
 
+        "profile_id": parsed_profile_id,
         "source_id": parsed_source_id,
-        "country": country or "",
+        "geography_id": parsed_geography_id,
+        "geography_descendants": geography_descendants,
+        "topic_id": parsed_topic_id,
+        "topic_descendants": topic_descendants,
+        "entity_id": parsed_entity_id,
+        "entity_role": entity_role or "",
+        "document_type_id": parsed_document_type_id,
+        "document_type_descendants": document_type_descendants,
+        "content_format": content_format or "",
+        "source_type": source_type or "",
+        "source_type_descendants": source_type_descendants,
         "language": language or "",
+        "minimum_confidence": parsed_minimum_confidence,
         "time_window": time_window,
         "q": q or "",
 

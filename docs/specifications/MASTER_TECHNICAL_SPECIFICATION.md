@@ -13,6 +13,20 @@ Build a self-hosted, AI-assisted global news intelligence and monitoring platfor
 
 The system is intended to go significantly beyond a conventional RSS reader such as [Inoreader](https://www.inoreader.com/).
 
+GNI's single editorial objective is to help its operator determine what to pay
+attention to now so they can research, write, and publish their own work.
+Broad acquisition serves that objective; profile-specific Attention decisions,
+Story convergence, operator judgment, and selective enrichment reduce the
+resulting noise.
+
+All User-facing dates and times follow the owner-approved UI-only American
+display standard in `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`. Canonical
+instants remain timezone-aware in storage and machine interfaces. UI display
+converts them to the User's configured IANA timezone, initially
+`America/New_York`, and uses `MM/DD` for the current local year or `MM/DD/YY`
+otherwise. Time is hidden by default; when necessary it uses `hh:mm am/pm`.
+Seconds and 24-hour time are never shown in the UI.
+
 The fundamental unit of the system is not merely an article or feed item. The system will distinguish between:
 
 #### Source
@@ -77,7 +91,7 @@ The platform must be capable of:
 8. Monitoring selected social-media sources where technically and legally accessible.
 9. Monitoring YouTube channels.
 10. Automatically acquiring YouTube subtitles and transcripts.
-11. Locally transcribing videos without usable captions.
+11. Locally transcribing videos without usable captions when explicitly requested through Video Processing; ASR is not automatic merely because captions are absent.
 12. Performing keyword and phrase monitoring.
 13. Supporting Boolean and regular-expression rules.
 14. Automatically classifying content through a unified multi-dimensional system covering geography, hierarchical topics, entities, and document type.
@@ -91,6 +105,9 @@ The platform must be capable of:
 22. Correlating stories across languages.
 23. Identifying new information added to an existing story.
 24. Scoring stories for relevance and importance.
+24a. Ranking content through an operator-controlled `Low +0` through
+`Critical +9` Attention scale in which two Story items establish at least
+`High +0` and four Story items establish at least `Critical +0`.
 25. Maintaining an Intelligence Calendar of known, scheduled, recurring, and AI-discovered future events.
 26. Populating the Intelligence Calendar through recurring-event research, manual entry, automatic future-event extraction from incoming documents, and official-calendar ingestion.
 27. Detecting future-event references and temporal language in incoming multilingual content.
@@ -857,8 +874,11 @@ Human-created subtitles
         ↓
 YouTube automatic captions
         ↓
-Local ASR
+Explicit operator-requested Local ASR
 ```
+
+Missing captions are reported on the video card and detail view. They do not
+automatically dispatch media download or ASR.
 ---
 
 ### 7.4 Local ASR
@@ -908,7 +928,7 @@ The Intelligence Calendar may temporarily increase YouTube monitoring around exp
 - military events
 - diplomatic summits
 
-The event scheduler may increase channel polling, detect livestreams, monitor relevant playlists, acquire metadata with yt-dlp, retrieve captions, and invoke local ASR when captions are unavailable.
+The event scheduler may increase channel polling, detect livestreams, monitor relevant playlists, acquire metadata with yt-dlp, and retrieve captions. When captions are unavailable it may elevate the video for operator attention, but it does not invoke media download or local ASR without an explicit Video Processing request.
 
 Calendar-triggered YouTube escalation must automatically return to normal monitoring levels after the configured post-event window.
 
@@ -1018,7 +1038,9 @@ Calendar-related request metadata may additionally include:
 
 ```text
 calendar_event_id
-calendar_priority
+calendar_occurrence_id
+coverage_profile_id
+monitoring_priority
 expected_news_importance
 source_authority
 event_confidence
@@ -1458,19 +1480,19 @@ Substantive document geography must be represented through normalized `document_
 
 Document semantic type must be classified independently through the canonical document-type system. Examples include `news_report`, `press_release`, `court_decision`, `legislation`, `regulation`, `research_paper`, `transcript`, and `procurement_notice`.
 
-Source types:
+Source and acquisition classification must not be collapsed into a single
+`source_type` list. The frozen GFA-A dimensions are:
+
+```text
+Source.source_type             publisher/issuer identity class
+SourceEndpoint.endpoint_type   access-surface class
+SourceEndpoint.endpoint_format primary acquisition envelope
+SourceEndpoint.acquisition_method
+SourceEndpoint.platform
 ```
-rss
-website
-youtube
-social
-government
-military
-court
-newsletter
-podcast
-manual
-```
+
+RSS is an endpoint/Artifact format, YouTube is a platform, and podcast is a
+program/content layer. Government, military, and court are Source types.
 ---
 
 
@@ -1550,17 +1572,27 @@ transcripts
 transcript_segments
 
 intelligence_calendar_events
+intelligence_calendar_event_revisions
+intelligence_calendar_event_aliases
+intelligence_calendar_event_recurrence_rules
+intelligence_calendar_event_recurrence_exceptions
+intelligence_calendar_event_occurrences
+intelligence_calendar_occurrence_schedule_revisions
+intelligence_calendar_event_evidence
+intelligence_calendar_event_state_transitions
 intelligence_calendar_event_geographies
 intelligence_calendar_event_topics
 intelligence_calendar_event_entities
 intelligence_calendar_event_sources
 intelligence_calendar_event_documents
-intelligence_calendar_event_stories
 intelligence_calendar_event_monitors
-intelligence_calendar_event_history
-intelligence_calendar_event_watch_sources
-intelligence_calendar_event_search_terms
-intelligence_calendar_monitor_templates
+intelligence_calendar_event_coverage_policies
+intelligence_calendar_occurrence_policy_overrides
+intelligence_calendar_policy_watch_sources
+intelligence_calendar_policy_search_terms
+intelligence_calendar_policy_document_types
+intelligence_calendar_policy_content_formats
+intelligence_calendar_event_merge_history
 ```
 
 The `events` table represents observed real-world occurrences.
@@ -1569,7 +1601,9 @@ The `intelligence_calendar_events` table represents known, scheduled, recurring,
 
 A Calendar Event may later link to an observed real-world Event, allowing the system to distinguish what was expected from what actually occurred.
 
-Detailed Calendar field definitions and relational-table schemas are maintained in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
+The normative Calendar Phase 1 schema and ownership rules are maintained in
+`INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`. Later Calendar behavior remains
+detailed in `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`.
 
 Detailed classification schemas, relationship metadata, provenance fields, taxonomy versioning, confidence semantics, and backfill behavior are maintained in `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`.
 
@@ -2279,7 +2313,10 @@ Calendar search should support:
 - expected news importance
 - source
 
-Calendar results should support event-local time, user-local time, and UTC display.
+Calendar results display dates and times only in the owner-local American
+standard. Event-local and UTC instants remain available internally for
+correct scheduling, recurrence, inference, and comparison, but are not
+alternate operator-facing timestamp formats.
 
 ## 23. AI Question Interface
 
@@ -2552,9 +2589,9 @@ Current implementation sequence:
 Step 22  Canonical classification persistence foundation       implemented
 Step 23  Deterministic and structured-metadata classification  implemented
 GFA A-E  Global canonical/configuration foundations             frozen
-Step 24  Classification-aware News Feed filters                next
-Step 25  Monitor Rule Engine
-Step 26  Alerts and ntfy delivery
+Step 24  Classification-aware News Feed filters                frozen
+Step 25  Monitor Rule Engine                                   frozen
+Step 26  Alerts and ntfy delivery                              frozen
 ```
 
 Step 24 defines a shared document-matching contract. A News Feed filter is a
@@ -2565,7 +2602,23 @@ continuously evaluates new or enriched documents. Step 26 performs delivery.
 
 ### Phase 3 — Expanded Sources
 
-Add:
+**Architecture status:** FROZEN. Corrective and Artifact-foundation
+migrations are an implementation freeze candidate.
+
+Begin with the shared Source Acquisition Foundation Audit defined in
+`PHASE_3_SHARED_SOURCE_ACQUISITION_ARCHITECTURE.md`.
+
+Foundation:
+
+- authority-backed Acquisition Artifact Format catalog
+- versioned PRONOM/DROID signatures
+- security-critical deletion-first identification
+- adapter registry and exact compatibility declarations
+- durable acquisition leases and replay protection
+- secret-reference and hierarchical rate-limit policy
+- Source Acquisition and Health UI
+
+Adapters:
 
 - RSSHub
 - RSS-Bridge
@@ -2575,7 +2628,13 @@ Add:
 
 Success criterion:
 
-Monitor several hundred mixed source types.
+Monitor several hundred mixed source types without weakening Source identity,
+format provenance, idempotency, rate limits, credential boundaries, or
+deletion-first artifact security.
+
+The security rejection boundary is non-configurable. Suspicious or
+unverifiable payloads are deleted immediately before rejection metadata is
+recorded.
 
 ---
 
@@ -2591,7 +2650,8 @@ Add:
 
 Success criterion:
 
-Automatically detect and process new videos.
+Automatically detect new videos and process metadata and available subtitles
+without downloading video media by default.
 
 ---
 
@@ -2605,7 +2665,8 @@ Add:
 
 Success criterion:
 
-Accurately transcribe representative Korean, Japanese, Mandarin, and English channels.
+Accurately transcribe explicitly selected representative Korean, Japanese,
+Mandarin, and English videos through Video Processing.
 
 ---
 
@@ -2698,54 +2759,88 @@ The platform identifies meaningful developments rather than merely new documents
 
 The Intelligence Calendar should be developed as a parallel track aligned with dependencies in the main roadmap.
 
-#### Calendar Foundation Audit — Current Parallel Work
+#### Calendar Foundation Audit — FROZEN
 
 Before the first Calendar migration, reconcile event identity, time and
 recurrence, validation state, confidence, evidence, history, canonical
 relationships, and operator policy with the frozen GFA foundations.
 
-The audit must preserve this ownership boundary:
+The audit freezes this ownership boundary:
 
 ```text
 Calendar Event
-    canonical expected occurrence and schedule
+    canonical definition of an expected occurrence or recurring series
+
+Calendar Occurrence
+    one scheduled instance with immutable schedule history
 
 Coverage profile / Calendar monitoring policy
-    whether and how an operator monitors that occurrence
+    whether and how an operator monitors an Event or Occurrence
 ```
 
 Calendar priority, watch sources, temporary monitors, and polling escalation
 must not become installation-global attributes merely because the initial
 deployment has one operator.
 
+The authoritative closed decision register, normalized Phase 1 schema package,
+and direct invariant proof matrix are in
+`INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md`.
+
 #### Calendar Phase 1 — Manual Calendar
+
+**Implementation status:** FROZEN at Alembic revision `f29b6d8e3c10`; see
+`INTELLIGENCE_CALENDAR_PHASE_1.md` for the implemented
+surface and the 29-proof mapping.
 
 Begin after the Core Platform foundation exists.
 
 Add:
 
-- `intelligence_calendar_events`
-- manual event entry
+- normalized Event and Occurrence identity
+- immutable descriptive and schedule revisions
+- manual entry and structured evidence
 - basic Calendar UI
-- basic recurrence
+- bounded recurrence and explicit exceptions
+- Coverage Profile policy
+- optional normalized Step 25 Monitor creation/linking
 
-#### Calendar Phase 2 — Validation and Relationships
+#### Calendar Phase 2 — Validation Automation and Relationship Enrichment
+
+**Architecture and implementation status:** FROZEN.
 
 Align with Monitoring, Topic, and Entity capabilities.
 
 Add:
 
-- event validation
-- Calendar priority
-- expected news importance
-- event topics
-- event entities
-- event sources
-- event history
+- automated corroboration and source-authority assessment
+- autonomous machine-derived validation and relationship assertions
+- actor provenance separate from GFA-C semantic derivation method
+- two-pass internal conflict resolution
+- eligible third-pass external-model adjudication
+- provider-neutral Calendar validation routing
+- exception-only Administrative Queue
+- immutable operator overrides and effective-state resolution
+- occurrence-specific policy overrides
+- advanced evidence and history UI
+
+Operator participation is never a normal-path dependency. The approved
+architecture and Phase 1 actor-kind erratum are defined in
+`INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md`.
+
+Calendar Phase 2 does not bypass the main AI roadmap. It may implement the
+provider-neutral `calendar_validation` orchestration contract and internal
+resolution adapter, but provider/model deployment, general budgets, and
+production external-provider rollout remain owned by the Local AI, AI
+Routing, and OpenAI Integration phases.
 
 #### Calendar Phase 3 — Official and Recurring Calendar Ingestion
 
 Align with Expanded Sources.
+
+Calendar Phase 3 consumes the shared Phase 3 adapter and Artifact contracts.
+It does not create a `calendar_feed` endpoint type: official calendars arrive
+through feed, API, website, file-repository, or email surfaces with exact
+Artifact formats such as iCalendar, JSON, HTML, PDF, or email message.
 
 Add:
 
@@ -2877,7 +2972,18 @@ The following are considered current architectural decisions:
 
 - `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md` is authoritative for detailed classification behavior, canonical taxonomy/geography/document-type schemas, confidence/provenance, and classification reprocessing.
 - `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md` is authoritative for detailed Intelligence Calendar behavior.
-- Future subsystem specifications may include `STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md`, `SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md`, and `AI_ROUTING_TECHNICAL_SPECIFICATION.md`.
+- `CONTENT_ATTENTION_AND_ENRICHMENT_POLICY.md` governs profile-specific
+  Attention scoring, Story floors, operator precedence, selective enrichment,
+  and configurable importance weights.
+- `IDENTITY_PROFILE_AND_PREFERENCE_ARCHITECTURE.md` governs future-safe
+  ownership of personal decisions and learned preference state.
+- `SEMANTIC_WATCH_TECHNICAL_SPECIFICATION.md` governs item-derived semantic
+  monitoring without changing frozen Monitor criteria.
+- `VIDEO_INTELLIGENCE_TECHNICAL_SPECIFICATION.md` governs metadata- and
+  subtitle-first video behavior and explicit Video Processing.
+- Future subsystem specifications may further mature Story Intelligence,
+  Source Acquisition, and AI Routing through their existing companion
+  documents.
 - Companion subsystem specifications must reuse Master architectural contracts and must not create competing authoritative data models.
 
 ### Web UI Decisions
@@ -3240,9 +3346,14 @@ Detailed subsystem specifications complement this Master without replacing its a
 ```text
 DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md
 INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md
+INTELLIGENCE_CALENDAR_PHASE_2_ARCHITECTURE.md
 STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md
 SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md
 AI_ROUTING_TECHNICAL_SPECIFICATION.md
+CONTENT_ATTENTION_AND_ENRICHMENT_POLICY.md
+IDENTITY_PROFILE_AND_PREFERENCE_ARCHITECTURE.md
+SEMANTIC_WATCH_TECHNICAL_SPECIFICATION.md
+VIDEO_INTELLIGENCE_TECHNICAL_SPECIFICATION.md
 ```
 
 Implementation-oriented documents should remain subordinate to the Master and companion specifications:

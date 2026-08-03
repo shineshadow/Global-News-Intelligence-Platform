@@ -4,13 +4,13 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
-
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = WEB_DIR / "templates"
+THEME_DIR = WEB_DIR / "themes"
 
 
 templates = Jinja2Templates(
-    directory=TEMPLATE_DIR,
+    directory=[TEMPLATE_DIR, THEME_DIR],
 )
 
 

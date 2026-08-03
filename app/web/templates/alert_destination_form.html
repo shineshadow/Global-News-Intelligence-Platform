@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}{{ "Edit" if destination else "New" }} ntfy Destination — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="page-pretitle">Alert Configuration</div>
+        <h2 class="page-title">{{ "Edit" if destination else "New" }} ntfy Destination</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<form class="card" method="post"
+    action="{% if destination %}{{ url_for('web_alert_destination_update', destination_id=destination.id) }}{% else %}{{ url_for('web_alert_destination_create') }}{% endif %}">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Name</label>
+                <input class="form-control" name="name"
+                    value="{{ destination.name if destination else '' }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Slug</label>
+                <input class="form-control" name="slug"
+                    value="{{ destination.slug if destination else '' }}"
+                    pattern="[a-z0-9]+(_[a-z0-9]+)*"
+                    {% if destination %}disabled{% else %}required{% endif %}>
+            </div>
+            <div class="col-md-8">
+                <label class="form-label">ntfy base URL</label>
+                <input class="form-control" name="base_url"
+                    value="{{ destination.base_url if destination else 'https://ntfy.sh' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Topic</label>
+                <input class="form-control" name="topic"
+                    value="{{ destination.topic if destination else '' }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Bearer-token environment variable</label>
+                <input class="form-control" name="auth_token_env_var"
+                    value="{{ destination.auth_token_env_var if destination and destination.auth_token_env_var else '' }}"
+                    placeholder="GNI_NTFY_TOKEN">
+                <div class="form-hint">The token itself is never stored in PostgreSQL.</div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Timeout</label>
+                <input class="form-control" type="number"
+                    name="request_timeout_seconds"
+                    value="{{ destination.request_timeout_seconds if destination else 10 }}"
+                    min="1" max="60">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Max attempts</label>
+                <input class="form-control" type="number"
+                    name="max_attempts"
+                    value="{{ destination.max_attempts if destination else 5 }}"
+                    min="1" max="20">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Retry base</label>
+                <input class="form-control" type="number"
+                    name="retry_base_seconds"
+                    value="{{ destination.retry_base_seconds if destination else 30 }}"
+                    min="1">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Retry maximum</label>
+                <input class="form-control" type="number"
+                    name="retry_max_seconds"
+                    value="{{ destination.retry_max_seconds if destination else 3600 }}"
+                    min="1">
+            </div>
+            {% if destination %}
+            <div class="col-12">
+                <label class="form-check">
+                    <input class="form-check-input" type="checkbox" name="is_active"
+                        {% if destination.is_active %}checked{% endif %}>
+                    <span class="form-check-label">Active for future routing and delivery</span>
+                </label>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-footer">
+        <button class="btn btn-primary" type="submit">
+            {{ "Save destination" if destination else "Create destination" }}
+        </button>
+    </div>
+</form>
+{% endblock %}

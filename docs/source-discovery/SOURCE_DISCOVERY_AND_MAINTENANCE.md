@@ -70,6 +70,12 @@ Examples:
 
 The platform should always prefer the simplest reliable ingestion method.
 
+Every method uses the shared Phase 3 acquisition contract. Retrieved bytes
+enter isolated staging and become canonical only after authority-backed
+Artifact identification and security acceptance. Suspicious or unverifiable
+payloads are deleted immediately; source value or priority never weakens that
+non-configurable boundary.
+
 ---
 
 # 3. Core Source Management Principles

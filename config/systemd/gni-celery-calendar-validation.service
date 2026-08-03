@@ -1,0 +1,31 @@
+[Unit]
+Description=Global News Intelligence Celery Calendar validation worker
+Wants=network-online.target
+Requires=gni-migrate.service
+After=network-online.target gni-migrate.service redis-server.service
+
+[Service]
+Type=simple
+
+User=shine
+Group=shine
+
+WorkingDirectory=/home/shine/python/Projects/Global-News-Intelligence-Platform
+
+EnvironmentFile=/etc/global-news-intelligence/gni.env
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/home/shine/python/Projects/Global-News-Intelligence-Platform/.venv/bin/celery -A workers.celery_app:celery_app worker --loglevel=INFO --queues=calendar-validation --concurrency=1 --hostname=calendar-validation@%%h
+
+Restart=on-failure
+RestartSec=5
+
+KillSignal=SIGTERM
+TimeoutStopSec=120
+
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

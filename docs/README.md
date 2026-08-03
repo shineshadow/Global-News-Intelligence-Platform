@@ -3,6 +3,17 @@
 Generated files:
 
 - `AI_ROUTING_TECHNICAL_SPECIFICATION.md`
+- `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md` — UI-only American date/time display, canonical machine-format boundary, and formatter acceptance rules
+- `GNI_UI_FOUNDATION_AND_UX_GOVERNANCE.md` — Draft shared UI layers, device contract, preference resolution, component ownership, prototype review, and acceptance governance
+- `specifications/PHASE_3_FEED_ADAPTER_AND_SHARED_WORKER.md` — Implemented-candidate RSS/Atom adapter, shared acquisition worker, structural inspection, and fail-closed cutover boundary
+- `ui-governance/` — operational component registry, permanent UX decisions, acceptance/exception records, reusable templates, and standards supplement
+- `change-reports/UI_FOUNDATION_AND_UX_GOVERNANCE_CONFLICT_AUDIT.md` — integration audit and approval questions for the owner-supplied governance draft
+- `change-reports/UI_DATE_TIME_CORRECTION_AUDIT.md` — adoption record for the 9-page UI-only standard and rejection of the 11-page universal proposal
+- `CONTENT_ATTENTION_AND_ENRICHMENT_POLICY.md` — profile-specific 0–39 attention scoring, Story floors, enrichment gates, operator precedence, and Admin configuration
+- `IDENTITY_PROFILE_AND_PREFERENCE_ARCHITECTURE.md` — future-safe User, Coverage Profile, Attention Profile, feedback, and preference ownership boundary
+- `SEMANTIC_WATCH_TECHNICAL_SPECIFICATION.md` — one-click item-derived semantic monitoring without changing frozen literal Monitor semantics
+- `VIDEO_INTELLIGENCE_TECHNICAL_SPECIFICATION.md` — metadata/subtitle-first video acquisition and explicit Video Processing workflow
+- `change-reports/ATTENTION_SPECIFICATION_CONFLICT_AUDIT.md` — cross-spec conflict results and executable consistency-check scope
 - `API_SPECIFICATION.md`
 - `ARCHITECTURE.md`
 - `BENCHMARK_PROCEDURES.md`
@@ -12,11 +23,20 @@ Generated files:
 - `DOCUMENT_CLASSIFICATION_TECHNICAL_SPECIFICATION.md`
 - `IMPLEMENTATION.md`
 - `INTELLIGENCE_CALENDAR_TECHNICAL_SPECIFICATION.md`
+- `INTELLIGENCE_CALENDAR_FOUNDATION_AUDIT.md` — frozen Calendar Foundation audit and normative Phase 1 boundary
 - `MASTER_TECHNICAL_SPECIFICATION.md`
 - `MIGRATION_PLAN.md`
+- `PHASE_3_ARTIFACT_FOUNDATION_FREEZE_REVIEW.md` — formal schema/data/downgrade/zero-drift freeze record for the corrective and Artifact persistence foundation
+- `PHASE_3_SIGNATURE_IMPORTER_AND_DELETION_RUNTIME.md` — implemented-candidate boundary and proof scope for repository-pinned signatures, exact detection, deletion-first rejection, and accepted-byte promotion
+- `PHASE_3_INSPECTION_SANDBOX_AND_MANDATORY_SCANNER.md` — Bubblewrap/seccomp isolation contract, mandatory ClamAV integration, runtime proof, and operational prerequisites
+- `PHASE_3_OUTBOUND_EGRESS_GUARD.md` — IP-pinned DNS/SSRF, redirect, credential, TLS, response-limit, and exact internal-service boundary
+- `PHASE_3_ACQUISITION_CONTROL_RUNTIME.md` — exact adapter registry, durable leases, secret references/bindings, and atomic hierarchical rate authority
 - `SOURCE_ACQUISITION_TECHNICAL_SPECIFICATION.md`
 - `SPECIFICATION_INTEGRATION_CHANGE_REPORT.md`
 - `STORY_INTELLIGENCE_TECHNICAL_SPECIFICATION.md`
+- `STEP_24_CLASSIFICATION_AWARE_NEWS_FEED_FILTERS.md` — shared transient filter and future monitor-matching contract
+- `STEP_25_MONITOR_RULE_ENGINE.md` — active persistent Monitor lifecycle, revision, evaluation, and match contract
+- `STEP_26_ALERTS_AND_NTFY.md` — active alert event, delivery, retry, and ntfy contract
 - `UI_IMPLEMENTATION_NOTES.md`
 - `WORKER_DESIGN_SPECIFICATION.md`
 - `WEB_UI_IMPLEMENTATION_STRATEGY.md` — Web UI architecture, component boundaries, and rationale

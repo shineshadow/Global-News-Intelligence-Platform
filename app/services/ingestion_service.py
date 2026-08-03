@@ -31,13 +31,15 @@ from app.services.exceptions import (
     ResourceNotFoundError,
 )
 from app.services.language_service import ensure_language_tag
+from app.services.monitor_service import (
+    evaluate_document_against_active_monitors,
+)
 from ingestion.rss import (
     FeedHTTPStatusError,
     FeedPollResult,
     ParsedFeedItem,
     poll_feed,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,11 @@ class _PollContext:
     poll_interval_seconds: int
 
 
+# Public boundary used by the Phase 3 acquisition worker while the legacy
+# polling entry point remains available for an explicit parity period.
+FeedPollContext = _PollContext
+
+
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -132,70 +139,51 @@ async def _start_ingestion_run(
     """Validate the endpoint and create a committed running record."""
 
     if trigger_type not in VALID_TRIGGER_TYPES:
-        raise ValueError(
-            f"Unsupported ingestion trigger: {trigger_type}"
+        raise ValueError(f"Unsupported ingestion trigger: {trigger_type}")
+
+    async with session_factory() as session, session.begin():
+        endpoint = await source_endpoint_repository.get_source_endpoint_by_id(
+            session,
+            endpoint_id,
         )
 
-    async with session_factory() as session:
-        async with session.begin():
-            endpoint = (
-                await source_endpoint_repository
-                .get_source_endpoint_by_id(
-                    session,
-                    endpoint_id,
-                )
-            )
+        if endpoint is None:
+            raise ResourceNotFoundError(f"Source endpoint {endpoint_id} was not found.")
 
-            if endpoint is None:
-                raise ResourceNotFoundError(
-                    f"Source endpoint {endpoint_id} was not found."
-                )
+        source = await source_repository.get_source_by_id(
+            session,
+            endpoint.source_id,
+        )
 
-            source = await source_repository.get_source_by_id(
-                session,
-                endpoint.source_id,
-            )
+        if source is None:
+            raise ResourceNotFoundError(f"Source {endpoint.source_id} was not found.")
 
-            if source is None:
-                raise ResourceNotFoundError(
-                    f"Source {endpoint.source_id} was not found."
-                )
+        if source.status != "active":
+            raise InvalidUpdateError(f"Source {source.id} is not active.")
 
-            if source.status != "active":
-                raise InvalidUpdateError(
-                    f"Source {source.id} is not active."
-                )
+        if endpoint.status != "active":
+            raise InvalidUpdateError(f"Source endpoint {endpoint.id} is not active.")
 
-            if endpoint.status != "active":
-                raise InvalidUpdateError(
-                    f"Source endpoint {endpoint.id} is not active."
-                )
+        run = await ingestion_run_repository.create_ingestion_run(
+            session,
+            {
+                "source_id": source.id,
+                "source_endpoint_id": endpoint.id,
+                "endpoint_url": endpoint.url,
+                "trigger_type": trigger_type,
+                "status": "running",
+            },
+        )
 
-            run = (
-                await ingestion_run_repository
-                .create_ingestion_run(
-                    session,
-                    {
-                        "source_id": source.id,
-                        "source_endpoint_id": endpoint.id,
-                        "endpoint_url": endpoint.url,
-                        "trigger_type": trigger_type,
-                        "status": "running",
-                    },
-                )
-            )
-
-            return _PollContext(
-                run_id=run.id,
-                source_id=source.id,
-                endpoint_id=endpoint.id,
-                endpoint_url=endpoint.url,
-                etag=endpoint.etag,
-                last_modified=endpoint.last_modified,
-                poll_interval_seconds=(
-                    endpoint.poll_interval_seconds
-                ),
-            )
+        return _PollContext(
+            run_id=run.id,
+            source_id=source.id,
+            endpoint_id=endpoint.id,
+            endpoint_url=endpoint.url,
+            etag=endpoint.etag,
+            last_modified=endpoint.last_modified,
+            poll_interval_seconds=(endpoint.poll_interval_seconds),
+        )
 
 
 def _current_document_values(
@@ -269,25 +257,19 @@ async def _snapshot_document_if_needed(
     hash has already been stored historically.
     """
 
-    existing_version = (
-        await document_version_repository
-        .get_document_version_by_hash(
-            session,
-            document.id,
-            document.content_hash,
-            document.content_format,
-        )
+    existing_version = await document_version_repository.get_document_version_by_hash(
+        session,
+        document.id,
+        document.content_hash,
+        document.content_format,
     )
 
     if existing_version is not None:
         return
 
-    version_number = (
-        await document_version_repository
-        .get_next_version_number(
-            session,
-            document.id,
-        )
+    version_number = await document_version_repository.get_next_version_number(
+        session,
+        document.id,
     )
 
     await document_version_repository.create_document_version(
@@ -308,9 +290,7 @@ async def _snapshot_document_if_needed(
             "retrieved_at": document.retrieved_at,
             "content_hash": document.content_hash,
             "changed_fields": changed_fields,
-            "version_metadata": dict(
-                document.document_metadata or {}
-            ),
+            "version_metadata": dict(document.document_metadata or {}),
         },
     )
 
@@ -327,25 +307,19 @@ async def _persist_feed_item(
 
     await ensure_language_tag(session, item.language)
 
-    document = (
-        await document_repository
-        .get_document_by_endpoint_external_id(
-            session,
-            endpoint.id,
-            item.external_id,
-            for_update=True,
-        )
+    document = await document_repository.get_document_by_endpoint_external_id(
+        session,
+        endpoint.id,
+        item.external_id,
+        for_update=True,
     )
 
     if document is None and item.canonical_url is not None:
-        document = (
-            await document_repository
-            .get_document_by_endpoint_canonical_url(
-                session,
-                endpoint.id,
-                item.canonical_url,
-                for_update=True,
-            )
+        document = await document_repository.get_document_by_endpoint_canonical_url(
+            session,
+            endpoint.id,
+            item.canonical_url,
+            for_update=True,
         )
 
     values = _current_document_values(
@@ -409,317 +383,73 @@ async def _finish_successful_fetch(
     finished_at = _utcnow()
     duration_ms = _elapsed_milliseconds(started_clock)
 
-    async with session_factory() as session:
-        async with session.begin():
-            endpoint = (
-                await source_endpoint_repository
-                .get_source_endpoint_by_id_for_update(
-                    session,
-                    context.endpoint_id,
-                )
+    async with session_factory() as session, session.begin():
+        endpoint = await source_endpoint_repository.get_source_endpoint_by_id_for_update(
+            session,
+            context.endpoint_id,
+        )
+
+        run = await ingestion_run_repository.get_ingestion_run_by_id(
+            session,
+            context.run_id,
+            for_update=True,
+        )
+
+        source = await source_repository.get_source_by_id(
+            session,
+            context.source_id,
+        )
+
+        if endpoint is None:
+            raise ResourceNotFoundError(
+                f"Source endpoint {context.endpoint_id} was removed during polling."
             )
 
-            run = (
-                await ingestion_run_repository
-                .get_ingestion_run_by_id(
-                    session,
-                    context.run_id,
-                    for_update=True,
-                )
-            )
+        if run is None:
+            raise ResourceNotFoundError(f"Ingestion run {context.run_id} was not found.")
 
-            source = await source_repository.get_source_by_id(
-                session,
-                context.source_id,
-            )
+        if source is None:
+            raise ResourceNotFoundError(f"Source {context.source_id} was not found.")
 
-            if endpoint is None:
-                raise ResourceNotFoundError(
-                    f"Source endpoint {context.endpoint_id} "
-                    "was removed during polling."
-                )
-
-            if run is None:
-                raise ResourceNotFoundError(
-                    f"Ingestion run {context.run_id} was not found."
-                )
-
-            if source is None:
-                raise ResourceNotFoundError(
-                    f"Source {context.source_id} was not found."
-                )
-
-            if result.fetch.not_modified:
-                await source_endpoint_repository.update_source_endpoint(
-                    session,
-                    endpoint,
-                    {
-                        "last_checked_at": finished_at,
-                        "last_success_at": finished_at,
-                        "next_poll_at": (
-                            finished_at
-                            + timedelta(
-                                seconds=(
-                                    endpoint
-                                    .poll_interval_seconds
-                                )
-                            )
-                        ),
-                        "etag": result.fetch.etag,
-                        "last_modified": (
-                            result.fetch.last_modified
-                        ),
-                        "last_http_status": (
-                            result.fetch.status_code
-                        ),
-                        "consecutive_failures": 0,
-                        "last_error": None,
-                    },
-                )
-
-                await ingestion_run_repository.update_ingestion_run(
-                    session,
-                    run,
-                    {
-                        "status": "succeeded",
-                        "finished_at": finished_at,
-                        "duration_ms": duration_ms,
-                        "http_status": result.fetch.status_code,
-                        "response_bytes": 0,
-                        "items_seen": 0,
-                        "items_created": 0,
-                        "items_updated": 0,
-                        "items_unchanged": 0,
-                        "items_failed": 0,
-                        "error_type": None,
-                        "error_message": None,
-                        "error_details": {},
-                        "run_metadata": {
-                            "not_modified": True,
-                            "final_url": (
-                                result.fetch.final_url
-                            ),
-                        },
-                    },
-                )
-
-                return EndpointPollSummary(
-                    run_id=run.id,
-                    endpoint_id=endpoint.id,
-                    status="succeeded",
-                    http_status=result.fetch.status_code,
-                    not_modified=True,
-                    items_seen=0,
-                    items_created=0,
-                    items_updated=0,
-                    items_unchanged=0,
-                    items_failed=0,
-                )
-
-            if result.feed is None:
-                raise RuntimeError(
-                    "The feed retrieval succeeded but parsing "
-                    "returned no feed."
-                )
-
-            items_created = 0
-            items_updated = 0
-            items_unchanged = 0
-            items_failed = 0
-
-            item_errors: list[dict[str, str]] = []
-
-            for item in result.feed.items:
-                try:
-                    async with session.begin_nested():
-                        action, document_id = await _persist_feed_item(
-                            session,
-                            item,
-                            source=source,
-                            endpoint=endpoint,
-                            retrieved_at=finished_at,
-                        )
-
-                    try:
-                        classification_summary = (
-                            await classify_document_deterministically(
-                                session,
-                                document_id,
-                                trigger="ingestion",
-                            )
-                        )
-                        if classification_summary.status == "failed":
-                            logger.warning(
-                                "Deterministic classification failed "
-                                "after preserving document %s: %s",
-                                document_id,
-                                classification_summary.error,
-                            )
-                    except Exception as exc:
-                        # Classification is enrichment. A classifier/config
-                        # failure must never discard a valid raw document.
-                        logger.warning(
-                            "Deterministic classification could not run "
-                            "after preserving document %s: %s",
-                            document_id,
-                            exc,
-                            exc_info=True,
-                        )
-
-                    if action == "created":
-                        items_created += 1
-                    elif action == "updated":
-                        items_updated += 1
-                    else:
-                        items_unchanged += 1
-
-                except Exception as exc:
-                    items_failed += 1
-
-                    if len(item_errors) < 50:
-                        item_errors.append(
-                            {
-                                "external_id": item.external_id,
-                                "error_type": (
-                                    type(exc).__name__
-                                ),
-                                "message": str(exc),
-                            }
-                        )
-
-                    logger.warning(
-                        "Feed item failed for endpoint %s: %s",
-                        endpoint.id,
-                        exc,
-                        exc_info=True,
-                    )
-
-            items_seen = len(result.feed.items)
-
-            successful_items = (
-                items_created
-                + items_updated
-                + items_unchanged
-            )
-
-            if items_failed == 0:
-                final_status = "succeeded"
-            elif successful_items > 0:
-                final_status = "partial"
-            else:
-                final_status = "failed"
-
-            error_message: str | None = None
-
-            if items_failed:
-                error_message = (
-                    f"{items_failed} of {items_seen} feed items "
-                    "failed processing."
-                )
-
-            endpoint_values: dict = {
-                "last_checked_at": finished_at,
-                "last_http_status": result.fetch.status_code,
-                "last_error": error_message,
-            }
-
-            if final_status == "succeeded":
-                endpoint_values.update(
-                    {
-                        "last_success_at": finished_at,
-                        "next_poll_at": (
-                            finished_at
-                            + timedelta(
-                                seconds=(
-                                    endpoint
-                                    .poll_interval_seconds
-                                )
-                            )
-                        ),
-                        "etag": result.fetch.etag,
-                        "last_modified": (
-                            result.fetch.last_modified
-                        ),
-                        "consecutive_failures": 0,
-                        "last_error": None,
-                    }
-                )
-
-            elif final_status == "partial":
-                # Do not save new validators. The next request
-                # must retrieve the full feed and retry failed items.
-                endpoint_values["next_poll_at"] = (
-                    finished_at
-                    + timedelta(
-                        seconds=min(
-                            endpoint.poll_interval_seconds,
-                            300,
-                        )
-                    )
-                )
-
-            else:
-                failure_count = (
-                    endpoint.consecutive_failures + 1
-                )
-
-                endpoint_values.update(
-                    {
-                        "consecutive_failures": failure_count,
-                        "next_poll_at": (
-                            finished_at
-                            + timedelta(
-                                seconds=_failure_delay_seconds(
-                                    endpoint
-                                    .poll_interval_seconds,
-                                    failure_count,
-                                )
-                            )
-                        ),
-                    }
-                )
-
+        if result.fetch.not_modified:
             await source_endpoint_repository.update_source_endpoint(
                 session,
                 endpoint,
-                endpoint_values,
+                {
+                    "last_checked_at": finished_at,
+                    "last_success_at": finished_at,
+                    "next_poll_at": (
+                        finished_at + timedelta(seconds=(endpoint.poll_interval_seconds))
+                    ),
+                    "etag": result.fetch.etag,
+                    "last_modified": (result.fetch.last_modified),
+                    "last_http_status": (result.fetch.status_code),
+                    "consecutive_failures": 0,
+                    "last_error": None,
+                },
             )
 
             await ingestion_run_repository.update_ingestion_run(
                 session,
                 run,
                 {
-                    "status": final_status,
+                    "status": "succeeded",
                     "finished_at": finished_at,
                     "duration_ms": duration_ms,
                     "http_status": result.fetch.status_code,
-                    "response_bytes": (
-                        result.fetch.response_bytes
-                    ),
-                    "items_seen": items_seen,
-                    "items_created": items_created,
-                    "items_updated": items_updated,
-                    "items_unchanged": items_unchanged,
-                    "items_failed": items_failed,
-                    "error_type": (
-                        "ItemProcessingError"
-                        if items_failed
-                        else None
-                    ),
-                    "error_message": error_message,
-                    "error_details": {
-                        "item_errors": item_errors,
-                    },
+                    "response_bytes": 0,
+                    "items_seen": 0,
+                    "items_created": 0,
+                    "items_updated": 0,
+                    "items_unchanged": 0,
+                    "items_failed": 0,
+                    "error_type": None,
+                    "error_message": None,
+                    "error_details": {},
                     "run_metadata": {
-                        "not_modified": False,
-                        "final_url": result.fetch.final_url,
-                        "feed_title": result.feed.title,
-                        "feed_version": result.feed.version,
-                        "feed_language": result.feed.language,
-                        "feed_bozo": result.feed.bozo,
-                        "parse_warning": (
-                            result.feed.parse_warning
-                        ),
+                        **dict(run.run_metadata or {}),
+                        "not_modified": True,
+                        "final_url": (result.fetch.final_url),
                     },
                 },
             )
@@ -727,15 +457,223 @@ async def _finish_successful_fetch(
             return EndpointPollSummary(
                 run_id=run.id,
                 endpoint_id=endpoint.id,
-                status=final_status,
+                status="succeeded",
                 http_status=result.fetch.status_code,
-                not_modified=False,
-                items_seen=items_seen,
-                items_created=items_created,
-                items_updated=items_updated,
-                items_unchanged=items_unchanged,
-                items_failed=items_failed,
+                not_modified=True,
+                items_seen=0,
+                items_created=0,
+                items_updated=0,
+                items_unchanged=0,
+                items_failed=0,
             )
+
+        if result.feed is None:
+            raise RuntimeError("The feed retrieval succeeded but parsing returned no feed.")
+
+        items_created = 0
+        items_updated = 0
+        items_unchanged = 0
+        items_failed = 0
+
+        item_errors: list[dict[str, str]] = []
+
+        for item in result.feed.items:
+            try:
+                async with session.begin_nested():
+                    action, document_id = await _persist_feed_item(
+                        session,
+                        item,
+                        source=source,
+                        endpoint=endpoint,
+                        retrieved_at=finished_at,
+                    )
+
+                try:
+                    classification_status = "failed"
+                    classification_summary = await classify_document_deterministically(
+                        session,
+                        document_id,
+                        trigger="ingestion",
+                    )
+                    classification_status = classification_summary.status
+                    if classification_summary.status == "failed":
+                        logger.warning(
+                            "Deterministic classification failed "
+                            "after preserving document %s: %s",
+                            document_id,
+                            classification_summary.error,
+                        )
+                except Exception as exc:
+                    # Classification is enrichment. A classifier/config
+                    # failure must never discard a valid raw document.
+                    logger.warning(
+                        "Deterministic classification could not run "
+                        "after preserving document %s: %s",
+                        document_id,
+                        exc,
+                        exc_info=True,
+                    )
+
+                try:
+                    await evaluate_document_against_active_monitors(
+                        session,
+                        document_id,
+                        trigger_type=(
+                            "enrichment"
+                            if classification_status in {"succeeded", "skipped"}
+                            else "ingestion"
+                        ),
+                    )
+                except Exception as exc:
+                    # Monitoring is downstream enrichment. It must not
+                    # discard a valid raw document or classification.
+                    logger.warning(
+                        "Monitor evaluation could not run after preserving document %s: %s",
+                        document_id,
+                        exc,
+                        exc_info=True,
+                    )
+
+                if action == "created":
+                    items_created += 1
+                elif action == "updated":
+                    items_updated += 1
+                else:
+                    items_unchanged += 1
+
+            except Exception as exc:
+                items_failed += 1
+
+                if len(item_errors) < 50:
+                    item_errors.append(
+                        {
+                            "external_id": item.external_id,
+                            "error_type": (type(exc).__name__),
+                            "message": str(exc),
+                        }
+                    )
+
+                logger.warning(
+                    "Feed item failed for endpoint %s: %s",
+                    endpoint.id,
+                    exc,
+                    exc_info=True,
+                )
+
+        items_seen = len(result.feed.items)
+
+        successful_items = items_created + items_updated + items_unchanged
+
+        if items_failed == 0:
+            final_status = "succeeded"
+        elif successful_items > 0:
+            final_status = "partial"
+        else:
+            final_status = "failed"
+
+        error_message: str | None = None
+
+        if items_failed:
+            error_message = f"{items_failed} of {items_seen} feed items failed processing."
+
+        endpoint_values: dict = {
+            "last_checked_at": finished_at,
+            "last_http_status": result.fetch.status_code,
+            "last_error": error_message,
+        }
+
+        if final_status == "succeeded":
+            endpoint_values.update(
+                {
+                    "last_success_at": finished_at,
+                    "next_poll_at": (
+                        finished_at + timedelta(seconds=(endpoint.poll_interval_seconds))
+                    ),
+                    "etag": result.fetch.etag,
+                    "last_modified": (result.fetch.last_modified),
+                    "consecutive_failures": 0,
+                    "last_error": None,
+                }
+            )
+
+        elif final_status == "partial":
+            # Do not save new validators. The next request
+            # must retrieve the full feed and retry failed items.
+            endpoint_values["next_poll_at"] = finished_at + timedelta(
+                seconds=min(
+                    endpoint.poll_interval_seconds,
+                    300,
+                )
+            )
+
+        else:
+            failure_count = endpoint.consecutive_failures + 1
+
+            endpoint_values.update(
+                {
+                    "consecutive_failures": failure_count,
+                    "next_poll_at": (
+                        finished_at
+                        + timedelta(
+                            seconds=_failure_delay_seconds(
+                                endpoint.poll_interval_seconds,
+                                failure_count,
+                            )
+                        )
+                    ),
+                }
+            )
+
+        await source_endpoint_repository.update_source_endpoint(
+            session,
+            endpoint,
+            endpoint_values,
+        )
+
+        await ingestion_run_repository.update_ingestion_run(
+            session,
+            run,
+            {
+                "status": final_status,
+                "finished_at": finished_at,
+                "duration_ms": duration_ms,
+                "http_status": result.fetch.status_code,
+                "response_bytes": (result.fetch.response_bytes),
+                "items_seen": items_seen,
+                "items_created": items_created,
+                "items_updated": items_updated,
+                "items_unchanged": items_unchanged,
+                "items_failed": items_failed,
+                "error_type": ("ItemProcessingError" if items_failed else None),
+                "error_message": error_message,
+                "error_details": {
+                    "item_errors": item_errors,
+                },
+                "run_metadata": {
+                    **dict(run.run_metadata or {}),
+                    "not_modified": False,
+                    "final_url": result.fetch.final_url,
+                    "feed_title": result.feed.title,
+                    "feed_version": result.feed.version,
+                    "feed_language": result.feed.language,
+                    "feed_bozo": result.feed.bozo,
+                    "parse_warning": (result.feed.parse_warning),
+                },
+            },
+        )
+
+        return EndpointPollSummary(
+            run_id=run.id,
+            endpoint_id=endpoint.id,
+            status=final_status,
+            http_status=result.fetch.status_code,
+            not_modified=False,
+            items_seen=items_seen,
+            items_created=items_created,
+            items_updated=items_updated,
+            items_unchanged=items_unchanged,
+            items_failed=items_failed,
+        )
 
 
 async def _record_poll_failure(
@@ -759,79 +697,69 @@ async def _record_poll_failure(
         else None
     )
 
-    async with session_factory() as session:
-        async with session.begin():
-            endpoint = (
-                await source_endpoint_repository
-                .get_source_endpoint_by_id_for_update(
-                    session,
-                    context.endpoint_id,
-                )
-            )
+    async with session_factory() as session, session.begin():
+        endpoint = await source_endpoint_repository.get_source_endpoint_by_id_for_update(
+            session,
+            context.endpoint_id,
+        )
 
-            run = (
-                await ingestion_run_repository
-                .get_ingestion_run_by_id(
-                    session,
-                    context.run_id,
-                    for_update=True,
-                )
-            )
+        run = await ingestion_run_repository.get_ingestion_run_by_id(
+            session,
+            context.run_id,
+            for_update=True,
+        )
 
-            if run is None:
-                return
+        if run is None:
+            return
 
-            if run.status != "running":
-                return
+        if run.status != "running":
+            return
 
-            await ingestion_run_repository.update_ingestion_run(
+        await ingestion_run_repository.update_ingestion_run(
+            session,
+            run,
+            {
+                "status": "failed",
+                "finished_at": finished_at,
+                "duration_ms": duration_ms,
+                "http_status": http_status,
+                "error_type": type(exception).__name__,
+                "error_message": str(exception),
+                "error_details": {
+                    "endpoint_url": context.endpoint_url,
+                },
+            },
+        )
+
+        if endpoint is not None:
+            failure_count = endpoint.consecutive_failures + 1
+
+            await source_endpoint_repository.update_source_endpoint(
                 session,
-                run,
+                endpoint,
                 {
-                    "status": "failed",
-                    "finished_at": finished_at,
-                    "duration_ms": duration_ms,
-                    "http_status": http_status,
-                    "error_type": type(exception).__name__,
-                    "error_message": str(exception),
-                    "error_details": {
-                        "endpoint_url": context.endpoint_url,
-                    },
+                    "last_checked_at": finished_at,
+                    "last_http_status": http_status,
+                    "consecutive_failures": (failure_count),
+                    "last_error": str(exception),
+                    "next_poll_at": (
+                        finished_at
+                        + timedelta(
+                            seconds=(
+                                _failure_delay_seconds(
+                                    endpoint.poll_interval_seconds,
+                                    failure_count,
+                                )
+                            )
+                        )
+                    ),
                 },
             )
 
-            if endpoint is not None:
-                failure_count = (
-                    endpoint.consecutive_failures + 1
-                )
 
-                await (
-                    source_endpoint_repository
-                    .update_source_endpoint(
-                        session,
-                        endpoint,
-                        {
-                            "last_checked_at": finished_at,
-                            "last_http_status": http_status,
-                            "consecutive_failures": (
-                                failure_count
-                            ),
-                            "last_error": str(exception),
-                            "next_poll_at": (
-                                finished_at
-                                + timedelta(
-                                    seconds=(
-                                        _failure_delay_seconds(
-                                            endpoint
-                                            .poll_interval_seconds,
-                                            failure_count,
-                                        )
-                                    )
-                                )
-                            ),
-                        },
-                    )
-                )
+start_feed_ingestion_run = _start_ingestion_run
+finish_feed_poll = _finish_successful_fetch
+record_feed_poll_failure = _record_poll_failure
 
 
 async def poll_source_endpoint(
@@ -839,9 +767,7 @@ async def poll_source_endpoint(
     *,
     trigger_type: PollTrigger = "manual",
     client: httpx.AsyncClient | None = None,
-    session_factory: async_sessionmaker[
-        AsyncSession
-    ] = async_session_factory,
+    session_factory: async_sessionmaker[AsyncSession] = async_session_factory,
 ) -> EndpointPollSummary:
     """
     Poll one configured source endpoint and persist its result.

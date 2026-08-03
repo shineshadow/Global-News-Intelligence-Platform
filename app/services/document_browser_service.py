@@ -3,18 +3,28 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import (
     func,
-    or_,
     select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.language_tags import require_language_tag
 from app.models import (
+    ContentFormat,
+    CoverageProfile,
     Document,
+    DocumentEntity,
+    DocumentType,
     DocumentVersion,
+    Entity,
+    Geography,
     IngestionRun,
     Source,
     SourceEndpoint,
+    SourceType,
+    Topic,
+)
+from app.schemas.document_match import DocumentMatchCriteria
+from app.services.document_matching_service import (
+    build_document_match_plan,
 )
 from app.services.exceptions import (
     ResourceNotFoundError,
@@ -28,9 +38,35 @@ class SourceFilterOption:
 
 
 @dataclass(slots=True, frozen=True)
+class IdFilterOption:
+    id: int
+    name: str
+
+
+@dataclass(slots=True, frozen=True)
+class SlugFilterOption:
+    slug: str
+    name: str
+
+
+@dataclass(slots=True, frozen=True)
+class ProfileFilterOption:
+    id: int
+    name: str
+    is_default: bool
+
+
+@dataclass(slots=True, frozen=True)
 class DocumentFilterOptions:
+    profiles: list[ProfileFilterOption]
     sources: list[SourceFilterOption]
-    countries: list[str]
+    geographies: list[IdFilterOption]
+    topics: list[IdFilterOption]
+    entities: list[IdFilterOption]
+    entity_roles: list[str]
+    document_types: list[IdFilterOption]
+    content_formats: list[SlugFilterOption]
+    source_types: list[SlugFilterOption]
     languages: list[str]
 
 
@@ -55,6 +91,7 @@ class DocumentListItem:
     effective_at: datetime
 
     canonical_url: str | None
+    content_format: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -86,7 +123,7 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-def _time_cutoff(
+def effective_time_cutoff(
     time_window: str,
 ) -> datetime | None:
     now = _utcnow()
@@ -106,6 +143,16 @@ def _time_cutoff(
 async def get_document_filter_options(
     session: AsyncSession,
 ) -> DocumentFilterOptions:
+    profile_rows = (
+        await session.scalars(
+            select(CoverageProfile)
+            .where(CoverageProfile.is_active.is_(True))
+            .order_by(
+                CoverageProfile.is_default.desc(),
+                CoverageProfile.name,
+            )
+        )
+    ).all()
     source_rows = (
         await session.execute(
             select(
@@ -120,23 +167,6 @@ async def get_document_filter_options(
             .order_by(Source.name)
         )
     ).all()
-
-    country_rows = (
-        await session.scalars(
-            select(Source.country)
-            .join(
-                Document,
-                Document.source_id == Source.id,
-            )
-            .where(
-                Source.country.is_not(None),
-                Source.country != "",
-            )
-            .distinct()
-            .order_by(Source.country)
-        )
-    ).all()
-
     effective_language = func.coalesce(
         Document.language,
         Source.primary_language,
@@ -159,7 +189,81 @@ async def get_document_filter_options(
         )
     ).all()
 
+    geography_rows = (
+        await session.execute(
+            select(Geography.id, Geography.name)
+            .where(Geography.is_active.is_(True))
+            .order_by(Geography.name)
+        )
+    ).all()
+    topic_rows = (
+        await session.execute(
+            select(Topic.id, Topic.name)
+            .where(Topic.is_active.is_(True))
+            .order_by(Topic.sort_order, Topic.name)
+        )
+    ).all()
+    entity_rows = (
+        await session.execute(
+            select(Entity.id, Entity.canonical_name)
+            .join(
+                DocumentEntity,
+                DocumentEntity.entity_id == Entity.id,
+            )
+            .where(
+                Entity.is_active.is_(True),
+                DocumentEntity.is_active.is_(True),
+            )
+            .distinct()
+            .order_by(Entity.canonical_name)
+        )
+    ).all()
+    entity_roles = list(
+        (
+            await session.scalars(
+                select(DocumentEntity.entity_role)
+                .where(DocumentEntity.is_active.is_(True))
+                .distinct()
+                .order_by(DocumentEntity.entity_role)
+            )
+        ).all()
+    )
+    document_type_rows = (
+        await session.execute(
+            select(DocumentType.id, DocumentType.name)
+            .where(DocumentType.is_active.is_(True))
+            .order_by(DocumentType.name)
+        )
+    ).all()
+    content_format_rows = (
+        await session.execute(
+            select(ContentFormat.slug, ContentFormat.name)
+            .join(
+                Document,
+                Document.content_format == ContentFormat.slug,
+            )
+            .where(ContentFormat.is_active.is_(True))
+            .distinct()
+            .order_by(ContentFormat.name)
+        )
+    ).all()
+    source_type_rows = (
+        await session.execute(
+            select(SourceType.slug, SourceType.name)
+            .where(SourceType.is_active.is_(True))
+            .order_by(SourceType.name)
+        )
+    ).all()
+
     return DocumentFilterOptions(
+        profiles=[
+            ProfileFilterOption(
+                id=profile.id,
+                name=profile.name,
+                is_default=profile.is_default,
+            )
+            for profile in profile_rows
+        ],
         sources=[
             SourceFilterOption(
                 id=source_id,
@@ -168,7 +272,31 @@ async def get_document_filter_options(
             for source_id, source_name
             in source_rows
         ],
-        countries=list(country_rows),
+        geographies=[
+            IdFilterOption(id=item_id, name=name)
+            for item_id, name in geography_rows
+        ],
+        topics=[
+            IdFilterOption(id=item_id, name=name)
+            for item_id, name in topic_rows
+        ],
+        entities=[
+            IdFilterOption(id=item_id, name=name)
+            for item_id, name in entity_rows
+        ],
+        entity_roles=entity_roles,
+        document_types=[
+            IdFilterOption(id=item_id, name=name)
+            for item_id, name in document_type_rows
+        ],
+        content_formats=[
+            SlugFilterOption(slug=slug, name=name)
+            for slug, name in content_format_rows
+        ],
+        source_types=[
+            SlugFilterOption(slug=slug, name=name)
+            for slug, name in source_type_rows
+        ],
         languages=list(language_rows),
     )
 
@@ -176,11 +304,7 @@ async def get_document_filter_options(
 async def browse_documents(
     session: AsyncSession,
     *,
-    source_id: int | None = None,
-    country: str | None = None,
-    language: str | None = None,
-    time_window: str = "24h",
-    query: str | None = None,
+    criteria: DocumentMatchCriteria,
     page: int = 1,
     page_size: int = 50,
 ) -> DocumentBrowserPage:
@@ -189,54 +313,8 @@ async def browse_documents(
         Document.retrieved_at,
     )
 
-    effective_language = func.coalesce(
-        Document.language,
-        Source.primary_language,
-    )
-
-    conditions = []
-
-    if source_id is not None:
-        conditions.append(
-            Document.source_id == source_id
-        )
-
-    if country:
-        conditions.append(
-            Source.country == country
-        )
-
-    if language:
-        canonical_language = require_language_tag(
-            language
-        )
-        conditions.append(
-            effective_language == canonical_language
-        )
-
-    cutoff = _time_cutoff(time_window)
-
-    if cutoff is not None:
-        conditions.append(
-            effective_at >= cutoff
-        )
-
-    if query:
-        query = query.strip()
-
-        if query:
-            pattern = f"%{query}%"
-
-            conditions.append(
-                or_(
-                    Document.title_original.ilike(
-                        pattern
-                    ),
-                    Document.summary_original.ilike(
-                        pattern
-                    ),
-                )
-            )
+    plan = await build_document_match_plan(session, criteria)
+    conditions = plan.predicates
 
     count_statement = (
         select(func.count(Document.id))
@@ -327,6 +405,7 @@ async def browse_documents(
             canonical_url=(
                 document.canonical_url
             ),
+            content_format=document.content_format,
         )
         for document, source_name, effective
         in rows

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict AXDyd9iyuHSS8Vp1PoCQF3Ek4J5SJk4W9QiqFmNFps23SpCGRsYgvnFPboHr5HY
+\restrict 8Y1OcZWeyqrAc5e4UkKQ8BCLToCDDBUaduw27PpZcNhQeCVrPobBu2AcgpXcybN
 
 -- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
 -- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
@@ -18,6 +18,1026 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: calendar_phase2_reject_mutation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_reject_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            RAISE EXCEPTION '% is append-only', TG_TABLE_NAME;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_require_exception_action(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_require_exception_action() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE required_action text;
+        BEGIN
+            IF OLD.state IS NOT DISTINCT FROM NEW.state THEN
+                RETURN NEW;
+            END IF;
+
+            required_action := CASE
+                WHEN NEW.state = 'resolved' THEN 'resolve'
+                WHEN NEW.state = 'closed' THEN 'close'
+                WHEN NEW.state = 'open' THEN 'reopen'
+            END;
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM intelligence_calendar_administrative_exception_actions
+                WHERE exception_id = NEW.id
+                  AND action_kind = required_action
+                  AND acted_at >= transaction_timestamp()
+            ) THEN
+                RAISE EXCEPTION
+                    'Administrative exception state change requires '
+                    'same-transaction operator action';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_require_policy_override_history(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_require_policy_override_history() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            expected_action text;
+            effective_policy_id bigint;
+            effective_occurrence_id bigint;
+        BEGIN
+            expected_action := CASE TG_OP
+                WHEN 'INSERT' THEN 'create'
+                WHEN 'UPDATE' THEN 'update'
+                WHEN 'DELETE' THEN 'delete'
+            END;
+            effective_policy_id := COALESCE(NEW.policy_id, OLD.policy_id);
+            effective_occurrence_id :=
+                COALESCE(NEW.occurrence_id, OLD.occurrence_id);
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM intelligence_calendar_occurrence_policy_override_history h
+                WHERE h.policy_id = effective_policy_id
+                  AND h.occurrence_id = effective_occurrence_id
+                  AND h.action_kind = expected_action
+                  AND h.changed_at >= transaction_timestamp()
+                  AND h.old_monitoring_priority
+                      IS NOT DISTINCT FROM OLD.monitoring_priority
+                  AND h.new_monitoring_priority
+                      IS NOT DISTINCT FROM NEW.monitoring_priority
+                  AND h.old_expected_news_importance
+                      IS NOT DISTINCT FROM OLD.expected_news_importance
+                  AND h.new_expected_news_importance
+                      IS NOT DISTINCT FROM NEW.expected_news_importance
+                  AND h.old_is_watched IS NOT DISTINCT FROM OLD.is_watched
+                  AND h.new_is_watched IS NOT DISTINCT FROM NEW.is_watched
+            ) THEN
+                RAISE EXCEPTION
+                    'Occurrence policy override change requires exact '
+                    'same-transaction history';
+            END IF;
+            RETURN COALESCE(NEW, OLD);
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_validate_assertion_supersession(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_validate_assertion_supersession() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE prior intelligence_calendar_assertion_ledger%ROWTYPE;
+        BEGIN
+            IF NEW.supersedes_assertion_id IS NULL THEN
+                RETURN NEW;
+            END IF;
+
+            SELECT * INTO STRICT prior
+            FROM intelligence_calendar_assertion_ledger
+            WHERE id = NEW.supersedes_assertion_id
+            FOR KEY SHARE;
+
+            IF prior.id >= NEW.id
+               OR prior.series_id <> NEW.series_id
+               OR prior.event_id <> NEW.event_id
+               OR prior.assertion_family <> NEW.assertion_family
+               OR prior.occurrence_id IS DISTINCT FROM NEW.occurrence_id
+               OR prior.geography_id IS DISTINCT FROM NEW.geography_id
+               OR prior.topic_id IS DISTINCT FROM NEW.topic_id
+               OR prior.entity_id IS DISTINCT FROM NEW.entity_id
+               OR prior.source_id IS DISTINCT FROM NEW.source_id
+               OR prior.role IS DISTINCT FROM NEW.role
+               OR (prior.actor_kind = 'operator')
+                  IS DISTINCT FROM (NEW.actor_kind = 'operator')
+            THEN
+                RAISE EXCEPTION
+                    'Assertion supersession must be forward-only within '
+                    'one series, scope, and authority layer';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_validate_authority_assessment(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_validate_authority_assessment() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            prior intelligence_calendar_source_authority_assessments%ROWTYPE;
+            document_source_id bigint;
+        BEGIN
+            IF NEW.source_id IS NOT NULL AND NEW.document_id IS NOT NULL THEN
+                SELECT source_id INTO document_source_id
+                FROM documents WHERE id = NEW.document_id;
+                IF document_source_id <> NEW.source_id THEN
+                    RAISE EXCEPTION
+                        'Authority assessment source and document source differ';
+                END IF;
+            END IF;
+
+            IF NEW.supersedes_assessment_id IS NOT NULL THEN
+                SELECT * INTO STRICT prior
+                FROM intelligence_calendar_source_authority_assessments
+                WHERE id = NEW.supersedes_assessment_id
+                FOR KEY SHARE;
+
+                IF prior.id >= NEW.id
+                   OR prior.series_id <> NEW.series_id
+                   OR prior.event_id <> NEW.event_id
+                   OR prior.occurrence_id IS DISTINCT FROM NEW.occurrence_id
+                   OR prior.source_id IS DISTINCT FROM NEW.source_id
+                   OR prior.document_id IS DISTINCT FROM NEW.document_id
+                   OR prior.subject_evidence_id
+                      IS DISTINCT FROM NEW.subject_evidence_id
+                   OR (prior.actor_kind = 'operator')
+                      IS DISTINCT FROM (NEW.actor_kind = 'operator')
+                THEN
+                    RAISE EXCEPTION
+                        'Authority supersession must be forward-only within '
+                        'one series, subject, and authority layer';
+                END IF;
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_validate_conflict_assertion(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_validate_conflict_assertion() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            conflict_row intelligence_calendar_inference_conflicts%ROWTYPE;
+            assertion_row intelligence_calendar_assertion_ledger%ROWTYPE;
+        BEGIN
+            SELECT * INTO STRICT conflict_row
+            FROM intelligence_calendar_inference_conflicts
+            WHERE id = NEW.conflict_id;
+            SELECT * INTO STRICT assertion_row
+            FROM intelligence_calendar_assertion_ledger
+            WHERE id = NEW.assertion_id;
+
+            IF conflict_row.event_id <> NEW.event_id
+               OR assertion_row.event_id <> NEW.event_id
+               OR conflict_row.assertion_family
+                  <> assertion_row.assertion_family
+               OR conflict_row.occurrence_id
+                  IS DISTINCT FROM assertion_row.occurrence_id
+            THEN
+                RAISE EXCEPTION
+                    'Conflict assertions must share Event, Occurrence, and family';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_validate_exception_eligibility(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_validate_exception_eligibility() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            conflict_row intelligence_calendar_inference_conflicts%ROWTYPE;
+            internal_count integer;
+            external_exhausted boolean;
+        BEGIN
+            SELECT * INTO STRICT conflict_row
+            FROM intelligence_calendar_inference_conflicts
+            WHERE id = NEW.conflict_id
+            FOR KEY SHARE;
+
+            IF conflict_row.state <> 'unresolved'
+               OR conflict_row.severity NOT IN ('high', 'critical')
+               OR NEW.severity <> conflict_row.severity
+            THEN
+                RAISE EXCEPTION
+                    'Administrative exception requires matching unresolved '
+                    'high/critical conflict';
+            END IF;
+
+            SELECT count(*) INTO internal_count
+            FROM intelligence_calendar_resolution_attempts
+            WHERE conflict_id = NEW.conflict_id
+              AND reasoning_ordinal IN (1, 2)
+              AND actor_kind = 'internal_agent'
+              AND status = 'completed';
+
+            SELECT EXISTS (
+                SELECT 1
+                FROM intelligence_calendar_resolution_attempts
+                WHERE conflict_id = NEW.conflict_id
+                  AND actor_kind = 'external_model'
+                  AND (
+                      (reasoning_ordinal = 3 AND status = 'completed')
+                      OR (
+                          reasoning_ordinal IS NULL
+                          AND status IN ('unavailable', 'ineligible')
+                      )
+                  )
+            ) INTO external_exhausted;
+
+            IF internal_count <> 2 OR NOT external_exhausted THEN
+                RAISE EXCEPTION
+                    'Administrative exception requires two internal passes '
+                    'and exhausted external adjudication';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_validate_operator_override(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_validate_operator_override() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            assertion_row intelligence_calendar_assertion_ledger%ROWTYPE;
+            prior intelligence_calendar_operator_overrides%ROWTYPE;
+        BEGIN
+            SELECT * INTO STRICT assertion_row
+            FROM intelligence_calendar_assertion_ledger
+            WHERE id = NEW.assertion_id
+            FOR KEY SHARE;
+
+            IF assertion_row.event_id <> NEW.event_id
+               OR assertion_row.occurrence_id
+                  IS DISTINCT FROM NEW.occurrence_id
+               OR assertion_row.actor_kind <> 'operator'
+               OR assertion_row.assignment_method <> 'manual'
+            THEN
+                RAISE EXCEPTION
+                    'Operator override requires same-scope operator/manual assertion';
+            END IF;
+
+            IF (NEW.action_kind IN ('assert', 'select')
+                AND assertion_row.assertion_action <> 'affirm')
+               OR (NEW.action_kind = 'deny'
+                   AND assertion_row.assertion_action <> 'deny')
+               OR (NEW.action_kind = 'withdraw'
+                   AND assertion_row.assertion_action <> 'withdraw')
+            THEN
+                RAISE EXCEPTION
+                    'Operator override action and assertion action differ';
+            END IF;
+
+            IF NEW.supersedes_override_id IS NOT NULL THEN
+                SELECT * INTO STRICT prior
+                FROM intelligence_calendar_operator_overrides
+                WHERE id = NEW.supersedes_override_id
+                FOR KEY SHARE;
+                IF prior.id >= NEW.id
+                   OR prior.event_id <> NEW.event_id
+                   OR prior.occurrence_id
+                      IS DISTINCT FROM NEW.occurrence_id
+                THEN
+                    RAISE EXCEPTION
+                        'Operator override supersession must be forward-only '
+                        'within one scope';
+                END IF;
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_validate_resolution_attempt(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_validate_resolution_attempt() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE first_strategy text;
+        BEGIN
+            IF NEW.status <> 'completed' THEN
+                RETURN NEW;
+            END IF;
+
+            IF NEW.reasoning_ordinal = 2 THEN
+                SELECT strategy_slug || ':' || strategy_version
+                INTO first_strategy
+                FROM intelligence_calendar_resolution_attempts
+                WHERE conflict_id = NEW.conflict_id
+                  AND reasoning_ordinal = 1
+                  AND status = 'completed';
+                IF first_strategy IS NULL THEN
+                    RAISE EXCEPTION
+                        'Second reasoning pass requires completed first pass';
+                END IF;
+                IF first_strategy =
+                   NEW.strategy_slug || ':' || NEW.strategy_version
+                THEN
+                    RAISE EXCEPTION
+                        'Second reasoning pass must use a distinct strategy';
+                END IF;
+            ELSIF NEW.reasoning_ordinal = 3 THEN
+                IF (
+                    SELECT count(*)
+                    FROM intelligence_calendar_resolution_attempts
+                    WHERE conflict_id = NEW.conflict_id
+                      AND reasoning_ordinal IN (1, 2)
+                      AND status = 'completed'
+                ) <> 2 THEN
+                    RAISE EXCEPTION
+                        'External reasoning pass requires two internal passes';
+                END IF;
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_phase2_validate_resolution_reference(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_phase2_validate_resolution_reference() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            family_value text;
+            occurrence_value bigint;
+            assertion_family_value text;
+            assertion_occurrence_value bigint;
+            conflict_event_id bigint;
+        BEGIN
+            IF TG_TABLE_NAME = 'intelligence_calendar_inference_conflicts' THEN
+                IF NEW.selected_assertion_id IS NULL THEN
+                    RETURN NEW;
+                END IF;
+                SELECT assertion_family, occurrence_id
+                INTO assertion_family_value, assertion_occurrence_value
+                FROM intelligence_calendar_assertion_ledger
+                WHERE id = NEW.selected_assertion_id;
+                IF assertion_family_value <> NEW.assertion_family
+                   OR assertion_occurrence_value
+                      IS DISTINCT FROM NEW.occurrence_id
+                THEN
+                    RAISE EXCEPTION
+                        'Conflict resolution assertion scope differs';
+                END IF;
+                RETURN NEW;
+            END IF;
+
+            SELECT event_id, assertion_family, occurrence_id
+            INTO conflict_event_id, family_value, occurrence_value
+            FROM intelligence_calendar_inference_conflicts
+            WHERE id = NEW.conflict_id;
+
+            IF NEW.event_id <> conflict_event_id THEN
+                RAISE EXCEPTION 'Resolution Event differs from conflict Event';
+            END IF;
+
+            IF TG_TABLE_NAME = 'intelligence_calendar_resolution_attempts' THEN
+                IF NEW.selected_assertion_id IS NULL THEN
+                    RETURN NEW;
+                END IF;
+                SELECT assertion_family, occurrence_id
+                INTO assertion_family_value, assertion_occurrence_value
+                FROM intelligence_calendar_assertion_ledger
+                WHERE id = NEW.selected_assertion_id;
+            ELSE
+                IF NEW.proposed_assertion_id IS NULL THEN
+                    RETURN NEW;
+                END IF;
+                SELECT assertion_family, occurrence_id
+                INTO assertion_family_value, assertion_occurrence_value
+                FROM intelligence_calendar_assertion_ledger
+                WHERE id = NEW.proposed_assertion_id;
+            END IF;
+
+            IF family_value <> assertion_family_value
+               OR occurrence_value IS DISTINCT FROM assertion_occurrence_value
+            THEN
+                RAISE EXCEPTION 'Resolution assertion scope differs';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: calendar_reject_mutation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_reject_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            RAISE EXCEPTION '% is append-only', TG_TABLE_NAME;
+        END
+        $$;
+
+
+--
+-- Name: calendar_require_forward_revision(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_require_forward_revision() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE old_number integer;
+        DECLARE new_number integer;
+        BEGIN
+            IF TG_TABLE_NAME = 'intelligence_calendar_events' THEN
+                IF OLD.current_revision_id = NEW.current_revision_id THEN
+                    RETURN NEW;
+                END IF;
+                SELECT revision_number INTO old_number
+                FROM intelligence_calendar_event_revisions
+                WHERE id = OLD.current_revision_id AND event_id = OLD.id;
+                SELECT revision_number INTO new_number
+                FROM intelligence_calendar_event_revisions
+                WHERE id = NEW.current_revision_id AND event_id = NEW.id;
+            ELSE
+                IF OLD.current_schedule_revision_id
+                   = NEW.current_schedule_revision_id
+                THEN
+                    RETURN NEW;
+                END IF;
+                SELECT revision_number INTO old_number
+                FROM intelligence_calendar_occurrence_schedule_revisions
+                WHERE id = OLD.current_schedule_revision_id
+                  AND occurrence_id = OLD.id;
+                SELECT revision_number INTO new_number
+                FROM intelligence_calendar_occurrence_schedule_revisions
+                WHERE id = NEW.current_schedule_revision_id
+                  AND occurrence_id = NEW.id;
+            END IF;
+            IF new_number IS NULL OR old_number IS NULL
+               OR new_number <> old_number + 1
+            THEN
+                RAISE EXCEPTION
+                    'Calendar current revision pointers advance exactly one revision';
+            END IF;
+            RETURN NEW;
+        END
+        $$;
+
+
+--
+-- Name: calendar_require_state_history(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_require_state_history() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE inherited_validation text;
+        BEGIN
+            IF TG_TABLE_NAME = 'intelligence_calendar_events' THEN
+                IF OLD.identity_state IS DISTINCT FROM NEW.identity_state
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM intelligence_calendar_event_state_transitions
+                       WHERE event_id = NEW.id
+                         AND occurrence_id IS NULL
+                         AND dimension = 'identity'
+                         AND previous_state = OLD.identity_state
+                         AND next_state = NEW.identity_state
+                         AND transitioned_at >= transaction_timestamp()
+                   )
+                THEN
+                    RAISE EXCEPTION
+                        'Event identity change requires same-transaction history';
+                END IF;
+                IF OLD.validation_state IS DISTINCT FROM NEW.validation_state
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM intelligence_calendar_event_state_transitions
+                       WHERE event_id = NEW.id
+                         AND occurrence_id IS NULL
+                         AND dimension = 'validation'
+                         AND previous_state = OLD.validation_state
+                         AND next_state = NEW.validation_state
+                         AND transitioned_at >= transaction_timestamp()
+                   )
+                THEN
+                    RAISE EXCEPTION
+                        'Event validation change requires same-transaction history';
+                END IF;
+                IF NEW.identity_state = 'merged'
+                   AND (
+                       NEW.merged_into_event_id IS NULL
+                       OR NOT EXISTS (
+                           SELECT 1
+                           FROM intelligence_calendar_event_merge_history
+                           WHERE loser_event_id = NEW.id
+                             AND winner_event_id = NEW.merged_into_event_id
+                             AND merged_at >= transaction_timestamp()
+                       )
+                   )
+                THEN
+                    RAISE EXCEPTION
+                        'merged Event requires same-transaction merge history';
+                END IF;
+            ELSE
+                IF OLD.schedule_state IS DISTINCT FROM NEW.schedule_state
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM intelligence_calendar_event_state_transitions
+                       WHERE event_id = NEW.event_id
+                         AND occurrence_id = NEW.id
+                         AND dimension = 'schedule'
+                         AND previous_state = OLD.schedule_state
+                         AND next_state = NEW.schedule_state
+                         AND transitioned_at >= transaction_timestamp()
+                   )
+                THEN
+                    RAISE EXCEPTION
+                        'Occurrence schedule change requires same-transaction history';
+                END IF;
+                IF OLD.validation_state IS DISTINCT FROM NEW.validation_state THEN
+                    SELECT validation_state INTO inherited_validation
+                    FROM intelligence_calendar_events
+                    WHERE id = NEW.event_id;
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM intelligence_calendar_event_state_transitions
+                        WHERE event_id = NEW.event_id
+                          AND occurrence_id = NEW.id
+                          AND dimension = 'validation'
+                          AND previous_state = COALESCE(
+                              OLD.validation_state,
+                              inherited_validation
+                          )
+                          AND next_state = NEW.validation_state
+                          AND transitioned_at >= transaction_timestamp()
+                    )
+                    THEN
+                        RAISE EXCEPTION
+                            'Occurrence validation change requires '
+                            'same-transaction history';
+                    END IF;
+                END IF;
+            END IF;
+            RETURN NULL;
+        END
+        $$;
+
+
+--
+-- Name: calendar_restrict_assertion_mutation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_restrict_assertion_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF TG_OP = 'UPDATE'
+               AND OLD.retracted_at IS NULL
+               AND NEW.retracted_at IS NOT NULL
+               AND (to_jsonb(NEW) - 'retracted_at')
+                   = (to_jsonb(OLD) - 'retracted_at')
+            THEN
+                RETURN NEW;
+            END IF;
+            RAISE EXCEPTION
+                'Calendar assertions may only be retracted, never rewritten or deleted';
+        END
+        $$;
+
+
+--
+-- Name: calendar_restrict_recurrence_rule_mutation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_restrict_recurrence_rule_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF OLD.status = 'active'
+               AND NEW.status = 'superseded'
+               AND (to_jsonb(NEW) - 'status') = (to_jsonb(OLD) - 'status')
+            THEN
+                RETURN NEW;
+            END IF;
+            RAISE EXCEPTION 'sealed recurrence rules are immutable';
+        END
+        $$;
+
+
+--
+-- Name: calendar_validate_event_shape(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_validate_event_shape() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE target_event_id bigint;
+        DECLARE pattern text;
+        DECLARE occurrence_count bigint;
+        DECLARE active_rule_count bigint;
+        DECLARE invalid_occurrence_count bigint;
+        BEGIN
+            IF TG_TABLE_NAME = 'intelligence_calendar_events' THEN
+                target_event_id := COALESCE(NEW.id, OLD.id);
+            ELSE
+                target_event_id := COALESCE(NEW.event_id, OLD.event_id);
+            END IF;
+            SELECT schedule_pattern INTO pattern
+            FROM intelligence_calendar_events WHERE id = target_event_id;
+            IF pattern IS NULL THEN
+                RETURN NULL;
+            END IF;
+            SELECT count(*) INTO occurrence_count
+            FROM intelligence_calendar_event_occurrences
+            WHERE event_id = target_event_id;
+            SELECT count(*) INTO active_rule_count
+            FROM intelligence_calendar_event_recurrence_rules
+            WHERE event_id = target_event_id AND status = 'active';
+            IF pattern = 'one_time' THEN
+                IF occurrence_count <> 1 OR active_rule_count <> 0 OR EXISTS (
+                    SELECT 1 FROM intelligence_calendar_event_occurrences
+                    WHERE event_id = target_event_id
+                      AND (
+                          recurrence_rule_id IS NOT NULL
+                          OR recurrence_key <> 'one_time'
+                      )
+                ) THEN
+                    RAISE EXCEPTION
+                        'one-time Event requires exactly one one-time Occurrence';
+                END IF;
+            ELSE
+                SELECT count(*) INTO invalid_occurrence_count
+                FROM intelligence_calendar_event_occurrences occurrence
+                LEFT JOIN intelligence_calendar_event_recurrence_rules rule
+                  ON rule.id = occurrence.recurrence_rule_id
+                 AND rule.event_id = occurrence.event_id
+                WHERE occurrence.event_id = target_event_id
+                  AND rule.id IS NULL;
+                IF active_rule_count <> 1 OR invalid_occurrence_count <> 0 THEN
+                    RAISE EXCEPTION
+                        'recurring Event requires one active rule and owned Occurrences';
+                END IF;
+            END IF;
+            RETURN NULL;
+        END
+        $$;
+
+
+--
+-- Name: calendar_validate_evidence_source(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_validate_evidence_source() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE document_source_id bigint;
+        BEGIN
+            IF NEW.source_id IS NOT NULL AND NEW.document_id IS NOT NULL THEN
+                SELECT source_id INTO document_source_id
+                FROM documents WHERE id = NEW.document_id;
+                IF document_source_id IS DISTINCT FROM NEW.source_id THEN
+                    RAISE EXCEPTION
+                        'evidence source does not own referenced document';
+                END IF;
+            END IF;
+            RETURN NEW;
+        END
+        $$;
+
+
+--
+-- Name: calendar_validate_merge(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_validate_merge() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE current_target bigint;
+        BEGIN
+            current_target := NEW.winner_event_id;
+            LOOP
+                IF current_target = NEW.loser_event_id THEN
+                    RAISE EXCEPTION 'Calendar Event merge cycle detected';
+                END IF;
+                SELECT merged_into_event_id INTO current_target
+                FROM intelligence_calendar_events
+                WHERE id = current_target;
+                EXIT WHEN current_target IS NULL;
+            END LOOP;
+            IF NOT EXISTS (
+                SELECT 1 FROM intelligence_calendar_events
+                WHERE id = NEW.loser_event_id
+                  AND identity_state = 'merged'
+                  AND merged_into_event_id = NEW.winner_event_id
+            ) THEN
+                RAISE EXCEPTION
+                    'loser must point to winner in merged identity state';
+            END IF;
+            RETURN NEW;
+        END
+        $$;
+
+
+--
+-- Name: calendar_validate_monitor_profile(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_validate_monitor_profile() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE policy_profile_id bigint;
+        DECLARE monitor_profile_id bigint;
+        BEGIN
+            SELECT profile_id INTO policy_profile_id
+            FROM intelligence_calendar_event_coverage_policies
+            WHERE id = NEW.policy_id;
+            SELECT coverage_profile_id INTO monitor_profile_id
+            FROM monitors WHERE id = NEW.monitor_id;
+            IF policy_profile_id IS DISTINCT FROM monitor_profile_id THEN
+                RAISE EXCEPTION
+                    'Calendar policy and Monitor Coverage Profiles differ';
+            END IF;
+            RETURN NEW;
+        END
+        $$;
+
+
+--
+-- Name: calendar_validate_policy_override(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_validate_policy_override() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE policy_event_id bigint;
+        DECLARE occurrence_event_id bigint;
+        BEGIN
+            SELECT event_id INTO policy_event_id
+            FROM intelligence_calendar_event_coverage_policies
+            WHERE id = NEW.policy_id;
+            SELECT event_id INTO occurrence_event_id
+            FROM intelligence_calendar_event_occurrences
+            WHERE id = NEW.occurrence_id;
+            IF policy_event_id IS DISTINCT FROM occurrence_event_id THEN
+                RAISE EXCEPTION
+                    'occurrence override policy and occurrence events differ';
+            END IF;
+            RETURN NEW;
+        END
+        $$;
+
+
+--
+-- Name: calendar_validate_timezone(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_validate_timezone() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF NEW.timezone_name IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM pg_timezone_names
+                   WHERE name = NEW.timezone_name
+               )
+            THEN
+                RAISE EXCEPTION 'invalid IANA timezone: %', NEW.timezone_name;
+            END IF;
+            RETURN NEW;
+        END
+        $$;
+
+
+--
+-- Name: calendar_validate_watch_endpoint(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.calendar_validate_watch_endpoint() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE endpoint_source_id bigint;
+        BEGIN
+            IF NEW.source_endpoint_id IS NOT NULL THEN
+                SELECT source_id INTO endpoint_source_id
+                FROM source_endpoints WHERE id = NEW.source_endpoint_id;
+                IF endpoint_source_id IS DISTINCT FROM NEW.source_id THEN
+                    RAISE EXCEPTION
+                        'watch endpoint does not belong to watch source';
+                END IF;
+            END IF;
+            RETURN NEW;
+        END
+        $$;
+
+
+--
+-- Name: preserve_alert_event(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.preserve_alert_event() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            RAISE EXCEPTION 'alert events are immutable';
+        END;
+        $$;
+
+
+--
+-- Name: preserve_completed_alert_attempt(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.preserve_completed_alert_attempt() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF TG_OP = 'DELETE' THEN
+                RAISE EXCEPTION 'alert delivery attempts cannot be deleted';
+            END IF;
+            IF OLD.status <> 'running' THEN
+                RAISE EXCEPTION
+                    'completed alert delivery attempts are immutable';
+            END IF;
+            IF NEW.delivery_id IS DISTINCT FROM OLD.delivery_id
+               OR NEW.attempt_number IS DISTINCT FROM OLD.attempt_number
+               OR NEW.claim_token IS DISTINCT FROM OLD.claim_token
+               OR NEW.request_url IS DISTINCT FROM OLD.request_url
+               OR NEW.started_at IS DISTINCT FROM OLD.started_at
+               OR NEW.metadata IS DISTINCT FROM OLD.metadata
+               OR NEW.status = 'running' THEN
+                RAISE EXCEPTION
+                    'only completion fields may finalize an alert attempt';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: preserve_monitor_revision_immutability(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.preserve_monitor_revision_immutability() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            inconsistent_hierarchy boolean;
+        BEGIN
+            IF TG_OP = 'DELETE' THEN
+                IF OLD.sealed_at IS NOT NULL THEN
+                    RAISE EXCEPTION
+                        'sealed Monitor revisions cannot be deleted';
+                END IF;
+                RETURN OLD;
+            END IF;
+
+            IF OLD.sealed_at IS NOT NULL THEN
+                RAISE EXCEPTION
+                    'sealed Monitor revisions cannot be updated';
+            END IF;
+            IF NEW.sealed_at IS NULL THEN
+                RAISE EXCEPTION
+                    'the only permitted Monitor revision update is sealing';
+            END IF;
+            IF (
+                NEW.id,
+                NEW.monitor_id,
+                NEW.revision_number,
+                NEW.criteria_version,
+                NEW.minimum_confidence,
+                NEW.effective_from,
+                NEW.text_query,
+                NEW.match_all_in_profile,
+                NEW.change_reason,
+                NEW.created_at
+            ) IS DISTINCT FROM (
+                OLD.id,
+                OLD.monitor_id,
+                OLD.revision_number,
+                OLD.criteria_version,
+                OLD.minimum_confidence,
+                OLD.effective_from,
+                OLD.text_query,
+                OLD.match_all_in_profile,
+                OLD.change_reason,
+                OLD.created_at
+            ) THEN
+                RAISE EXCEPTION
+                    'Monitor revision criteria cannot change while sealing';
+            END IF;
+
+            SELECT EXISTS (
+                SELECT 1
+                FROM (
+                    SELECT revision_id
+                    FROM monitor_revision_geographies
+                    WHERE revision_id = NEW.id
+                    GROUP BY revision_id
+                    HAVING count(DISTINCT include_descendants) > 1
+                    UNION ALL
+                    SELECT revision_id
+                    FROM monitor_revision_topics
+                    WHERE revision_id = NEW.id
+                    GROUP BY revision_id
+                    HAVING count(DISTINCT include_descendants) > 1
+                    UNION ALL
+                    SELECT revision_id
+                    FROM monitor_revision_document_types
+                    WHERE revision_id = NEW.id
+                    GROUP BY revision_id
+                    HAVING count(DISTINCT include_descendants) > 1
+                    UNION ALL
+                    SELECT revision_id
+                    FROM monitor_revision_source_types
+                    WHERE revision_id = NEW.id
+                    GROUP BY revision_id
+                    HAVING count(DISTINCT include_descendants) > 1
+                ) AS mixed_policies
+            ) INTO inconsistent_hierarchy;
+            IF inconsistent_hierarchy THEN
+                RAISE EXCEPTION
+                    'one Monitor hierarchy dimension cannot mix descendant policies';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$;
+
+
+--
+-- Name: preserve_monitor_revision_selectors(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.preserve_monitor_revision_selectors() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            old_sealed timestamptz;
+            new_sealed timestamptz;
+        BEGIN
+            IF TG_OP IN ('UPDATE', 'DELETE') THEN
+                SELECT sealed_at INTO old_sealed
+                FROM monitor_revisions
+                WHERE id = OLD.revision_id;
+                IF old_sealed IS NOT NULL THEN
+                    RAISE EXCEPTION
+                        'selectors of sealed Monitor revisions cannot change';
+                END IF;
+            END IF;
+            IF TG_OP IN ('INSERT', 'UPDATE') THEN
+                SELECT sealed_at INTO new_sealed
+                FROM monitor_revisions
+                WHERE id = NEW.revision_id;
+                IF new_sealed IS NOT NULL THEN
+                    RAISE EXCEPTION
+                        'selectors cannot be added to a sealed Monitor revision';
+                END IF;
+            END IF;
+            RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+        END;
+        $$;
+
 
 --
 -- Name: prevent_entity_type_hierarchy_cycle(); Type: FUNCTION; Schema: public; Owner: -
@@ -55,6 +1075,35 @@ CREATE FUNCTION public.prevent_entity_type_hierarchy_cycle() RETURNS trigger
 
 
 --
+-- Name: require_alert_match_provenance(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.require_alert_match_provenance() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM alerts AS alert
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM monitor_matches AS match
+                    WHERE match.id = alert.monitor_match_id
+                      AND match.monitor_id = alert.monitor_id
+                      AND match.document_id = alert.document_id
+                      AND match.first_monitor_revision_id =
+                          alert.monitor_revision_id
+                )
+            ) THEN
+                RAISE EXCEPTION
+                    'alert provenance must match the originating Monitor match';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+
+
+--
 -- Name: require_default_coverage_profile(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -70,6 +1119,55 @@ CREATE FUNCTION public.require_default_coverage_profile() RETURNS trigger
             ) <> 1 THEN
                 RAISE EXCEPTION
                     'exactly one active default coverage profile is required';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+
+
+--
+-- Name: require_monitor_current_revision(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.require_monitor_current_revision() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM monitors AS monitor
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM monitor_revisions AS revision
+                    WHERE revision.monitor_id = monitor.id
+                      AND revision.revision_number =
+                          monitor.current_revision_number
+                      AND revision.sealed_at IS NOT NULL
+                )
+            ) THEN
+                RAISE EXCEPTION
+                    'every monitor must reference an existing sealed current revision';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+
+
+--
+-- Name: require_monitor_revisions_sealed(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.require_monitor_revisions_sealed() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM monitor_revisions
+                WHERE sealed_at IS NULL
+            ) THEN
+                RAISE EXCEPTION
+                    'every Monitor revision must be sealed before commit';
             END IF;
             RETURN NULL;
         END;
@@ -122,6 +1220,210 @@ ALTER SEQUENCE public.acquisition_methods_id_seq OWNED BY public.acquisition_met
 CREATE TABLE public.alembic_version (
     version_num character varying(32) NOT NULL
 );
+
+
+--
+-- Name: alert_deliveries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alert_deliveries (
+    id bigint NOT NULL,
+    alert_id bigint NOT NULL,
+    destination_id bigint NOT NULL,
+    priority character varying(20) NOT NULL,
+    base_url text NOT NULL,
+    topic character varying(255) NOT NULL,
+    auth_token_env_var character varying(255),
+    request_timeout_seconds integer NOT NULL,
+    max_attempts integer NOT NULL,
+    retry_base_seconds integer NOT NULL,
+    retry_max_seconds integer NOT NULL,
+    status character varying(30) DEFAULT 'pending'::character varying NOT NULL,
+    attempt_count integer DEFAULT 0 NOT NULL,
+    cycle_attempt_count integer DEFAULT 0 NOT NULL,
+    next_attempt_at timestamp with time zone DEFAULT now(),
+    claimed_at timestamp with time zone,
+    claim_expires_at timestamp with time zone,
+    claim_token uuid,
+    last_attempt_at timestamp with time zone,
+    delivered_at timestamp with time zone,
+    last_http_status integer,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_alert_deliveries_attempt_count CHECK ((attempt_count >= 0)),
+    CONSTRAINT ck_alert_deliveries_auth_env CHECK (((auth_token_env_var IS NULL) OR ((auth_token_env_var)::text ~ '^[A-Za-z_][A-Za-z0-9_]*$'::text))),
+    CONSTRAINT ck_alert_deliveries_base_url CHECK ((base_url ~ '^https?://'::text)),
+    CONSTRAINT ck_alert_deliveries_claim_state CHECK (((((status)::text = 'processing'::text) AND (claim_token IS NOT NULL) AND (claimed_at IS NOT NULL) AND (claim_expires_at IS NOT NULL)) OR (((status)::text <> 'processing'::text) AND (claim_token IS NULL) AND (claimed_at IS NULL) AND (claim_expires_at IS NULL)))),
+    CONSTRAINT ck_alert_deliveries_cycle_attempt_count CHECK (((cycle_attempt_count >= 0) AND (cycle_attempt_count <= attempt_count))),
+    CONSTRAINT ck_alert_deliveries_delivered_state CHECK ((((status)::text <> 'delivered'::text) OR (delivered_at IS NOT NULL))),
+    CONSTRAINT ck_alert_deliveries_http_status CHECK (((last_http_status IS NULL) OR ((last_http_status >= 100) AND (last_http_status <= 599)))),
+    CONSTRAINT ck_alert_deliveries_max_attempts CHECK (((max_attempts >= 1) AND (max_attempts <= 20))),
+    CONSTRAINT ck_alert_deliveries_priority CHECK (((priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT ck_alert_deliveries_retry_base CHECK (((retry_base_seconds >= 1) AND (retry_base_seconds <= 86400))),
+    CONSTRAINT ck_alert_deliveries_retry_max CHECK (((retry_max_seconds >= retry_base_seconds) AND (retry_max_seconds <= 604800))),
+    CONSTRAINT ck_alert_deliveries_schedule_state CHECK (((((status)::text = ANY ((ARRAY['pending'::character varying, 'retry_scheduled'::character varying])::text[])) AND (next_attempt_at IS NOT NULL)) OR (((status)::text <> ALL ((ARRAY['pending'::character varying, 'retry_scheduled'::character varying])::text[])) AND (next_attempt_at IS NULL)))),
+    CONSTRAINT ck_alert_deliveries_status CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying, 'retry_scheduled'::character varying, 'delivered'::character varying, 'permanent_failure'::character varying, 'cancelled'::character varying])::text[]))),
+    CONSTRAINT ck_alert_deliveries_timeout CHECK (((request_timeout_seconds >= 1) AND (request_timeout_seconds <= 60))),
+    CONSTRAINT ck_alert_deliveries_topic CHECK (((topic)::text ~ '^[A-Za-z0-9_-]+$'::text))
+);
+
+
+--
+-- Name: alert_deliveries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.alert_deliveries_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: alert_deliveries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.alert_deliveries_id_seq OWNED BY public.alert_deliveries.id;
+
+
+--
+-- Name: alert_delivery_attempts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alert_delivery_attempts (
+    id bigint NOT NULL,
+    delivery_id bigint NOT NULL,
+    attempt_number integer NOT NULL,
+    claim_token uuid NOT NULL,
+    status character varying(30) DEFAULT 'running'::character varying NOT NULL,
+    request_url text NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    http_status integer,
+    error text,
+    response_excerpt text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT ck_alert_delivery_attempts_completed_after_started CHECK (((completed_at IS NULL) OR (completed_at >= started_at))),
+    CONSTRAINT ck_alert_delivery_attempts_completion CHECK (((((status)::text = 'running'::text) AND (completed_at IS NULL)) OR (((status)::text <> 'running'::text) AND (completed_at IS NOT NULL)))),
+    CONSTRAINT ck_alert_delivery_attempts_http_status CHECK (((http_status IS NULL) OR ((http_status >= 100) AND (http_status <= 599)))),
+    CONSTRAINT ck_alert_delivery_attempts_number CHECK ((attempt_number > 0)),
+    CONSTRAINT ck_alert_delivery_attempts_status CHECK (((status)::text = ANY ((ARRAY['running'::character varying, 'succeeded'::character varying, 'retryable_failure'::character varying, 'permanent_failure'::character varying])::text[])))
+);
+
+
+--
+-- Name: alert_delivery_attempts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.alert_delivery_attempts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: alert_delivery_attempts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.alert_delivery_attempts_id_seq OWNED BY public.alert_delivery_attempts.id;
+
+
+--
+-- Name: alert_destinations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alert_destinations (
+    id bigint NOT NULL,
+    slug character varying(255) NOT NULL,
+    name character varying(255) NOT NULL,
+    channel character varying(20) DEFAULT 'ntfy'::character varying NOT NULL,
+    base_url text NOT NULL,
+    topic character varying(255) NOT NULL,
+    auth_token_env_var character varying(255),
+    is_active boolean DEFAULT true NOT NULL,
+    request_timeout_seconds integer DEFAULT 10 NOT NULL,
+    max_attempts integer DEFAULT 5 NOT NULL,
+    retry_base_seconds integer DEFAULT 30 NOT NULL,
+    retry_max_seconds integer DEFAULT 3600 NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_alert_destinations_auth_env CHECK (((auth_token_env_var IS NULL) OR ((auth_token_env_var)::text ~ '^[A-Za-z_][A-Za-z0-9_]*$'::text))),
+    CONSTRAINT ck_alert_destinations_base_url CHECK ((base_url ~ '^https?://'::text)),
+    CONSTRAINT ck_alert_destinations_channel CHECK (((channel)::text = 'ntfy'::text)),
+    CONSTRAINT ck_alert_destinations_max_attempts CHECK (((max_attempts >= 1) AND (max_attempts <= 20))),
+    CONSTRAINT ck_alert_destinations_name_nonempty CHECK ((btrim((name)::text) <> ''::text)),
+    CONSTRAINT ck_alert_destinations_retry_base CHECK (((retry_base_seconds >= 1) AND (retry_base_seconds <= 86400))),
+    CONSTRAINT ck_alert_destinations_retry_max CHECK (((retry_max_seconds >= retry_base_seconds) AND (retry_max_seconds <= 604800))),
+    CONSTRAINT ck_alert_destinations_slug_format CHECK (((slug)::text ~ '^[a-z0-9]+(_[a-z0-9]+)*$'::text)),
+    CONSTRAINT ck_alert_destinations_timeout CHECK (((request_timeout_seconds >= 1) AND (request_timeout_seconds <= 60))),
+    CONSTRAINT ck_alert_destinations_topic CHECK (((topic)::text ~ '^[A-Za-z0-9_-]+$'::text))
+);
+
+
+--
+-- Name: alert_destinations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.alert_destinations_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: alert_destinations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.alert_destinations_id_seq OWNED BY public.alert_destinations.id;
+
+
+--
+-- Name: alerts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alerts (
+    id bigint NOT NULL,
+    alert_class character varying(50) DEFAULT 'content_monitor_match'::character varying NOT NULL,
+    monitor_id bigint NOT NULL,
+    monitor_match_id bigint NOT NULL,
+    monitor_revision_id bigint NOT NULL,
+    document_id bigint NOT NULL,
+    priority character varying(20) DEFAULT 'normal'::character varying NOT NULL,
+    title character varying(512) NOT NULL,
+    message text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_alerts_alert_class CHECK (((alert_class)::text = 'content_monitor_match'::text)),
+    CONSTRAINT ck_alerts_message_nonempty CHECK ((btrim(message) <> ''::text)),
+    CONSTRAINT ck_alerts_priority CHECK (((priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT ck_alerts_title_nonempty CHECK ((btrim((title)::text) <> ''::text))
+);
+
+
+--
+-- Name: alerts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.alerts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: alerts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.alerts_id_seq OWNED BY public.alerts.id;
 
 
 --
@@ -1280,6 +2582,1462 @@ ALTER SEQUENCE public.ingestion_runs_id_seq OWNED BY public.ingestion_runs.id;
 
 
 --
+-- Name: intelligence_calendar_administrative_exception_actions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_administrative_exception_actions (
+    id bigint NOT NULL,
+    exception_id bigint NOT NULL,
+    action_kind character varying(20) NOT NULL,
+    override_id bigint,
+    reason text NOT NULL,
+    actor_kind character varying(20) NOT NULL,
+    actor_ref character varying(255) NOT NULL,
+    actor_label character varying(255),
+    acted_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_administrative_exception_actio_0ad8 CHECK ((((action_kind)::text <> 'resolve'::text) OR (override_id IS NOT NULL))),
+    CONSTRAINT ck_intelligence_calendar_administrative_exception_actio_0c88 CHECK ((btrim(reason) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_administrative_exception_actio_2cfa CHECK (((action_kind)::text = ANY ((ARRAY['resolve'::character varying, 'close'::character varying, 'reopen'::character varying, 'note'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_administrative_exception_actio_aa62 CHECK ((((actor_kind)::text = 'operator'::text) AND (btrim((actor_ref)::text) <> ''::text)))
+);
+
+
+--
+-- Name: intelligence_calendar_administrative_exception_actions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_administrative_exception_actions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_administrative_exception_actions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_administrative_exception_actions_id_seq OWNED BY public.intelligence_calendar_administrative_exception_actions.id;
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_administrative_exceptions (
+    id bigint NOT NULL,
+    public_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    event_id bigint NOT NULL,
+    conflict_id bigint NOT NULL,
+    severity character varying(20) NOT NULL,
+    state character varying(20) NOT NULL,
+    reason_unresolved text NOT NULL,
+    proposed_assertion_id bigint,
+    resolved_at timestamp with time zone,
+    closed_at timestamp with time zone,
+    actor_kind character varying(20) DEFAULT 'system'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_administrative_exceptions_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_administrative_exceptions_reas_e4a9 CHECK ((btrim(reason_unresolved) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_administrative_exceptions_severity CHECK (((severity)::text = ANY ((ARRAY['high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_administrative_exceptions_state CHECK (((state)::text = ANY ((ARRAY['open'::character varying, 'resolved'::character varying, 'closed'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_administrative_exceptions_state_times CHECK (((((state)::text = 'open'::text) AND (resolved_at IS NULL) AND (closed_at IS NULL)) OR (((state)::text = 'resolved'::text) AND (resolved_at IS NOT NULL) AND (closed_at IS NULL)) OR (((state)::text = 'closed'::text) AND (closed_at IS NOT NULL))))
+);
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_administrative_exceptions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_administrative_exceptions_id_seq OWNED BY public.intelligence_calendar_administrative_exceptions.id;
+
+
+--
+-- Name: intelligence_calendar_assertion_evidence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_assertion_evidence (
+    event_id bigint NOT NULL,
+    assertion_id bigint NOT NULL,
+    evidence_id bigint NOT NULL,
+    use_kind character varying(20) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_assertion_evidence_use_kind CHECK (((use_kind)::text = ANY ((ARRAY['supports'::character varying, 'contradicts'::character varying, 'corrects'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_assertion_ledger (
+    id bigint NOT NULL,
+    series_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    assertion_family character varying(30) NOT NULL,
+    geography_id bigint,
+    topic_id bigint,
+    entity_id bigint,
+    source_id bigint,
+    role character varying(50),
+    validation_state character varying(20),
+    assertion_action character varying(20) NOT NULL,
+    confidence numeric(5,4) NOT NULL,
+    assignment_method character varying(50) NOT NULL,
+    inference_run_id bigint,
+    supersedes_assertion_id bigint,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'system'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_action CHECK (((assertion_action)::text = ANY ((ARRAY['affirm'::character varying, 'deny'::character varying, 'withdraw'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_confidence CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_external_method CHECK (((((actor_kind)::text = 'external_model'::text) AND ((assignment_method)::text = 'external_ai_model'::text)) OR (((actor_kind)::text <> 'external_model'::text) AND ((assignment_method)::text <> 'external_ai_model'::text)))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_family CHECK (((assertion_family)::text = ANY ((ARRAY['event_validation'::character varying, 'occurrence_validation'::character varying, 'event_geography'::character varying, 'event_topic'::character varying, 'event_entity'::character varying, 'event_source'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_family_fields CHECK (((((assertion_family)::text = 'event_validation'::text) AND ((validation_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[])) AND (occurrence_id IS NULL) AND (geography_id IS NULL) AND (topic_id IS NULL) AND (entity_id IS NULL) AND (source_id IS NULL) AND (role IS NULL)) OR (((assertion_family)::text = 'occurrence_validation'::text) AND ((validation_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[])) AND (occurrence_id IS NOT NULL) AND (geography_id IS NULL) AND (topic_id IS NULL) AND (entity_id IS NULL) AND (source_id IS NULL) AND (role IS NULL)) OR (((assertion_family)::text = 'event_geography'::text) AND (validation_state IS NULL) AND (occurrence_id IS NULL) AND (geography_id IS NOT NULL) AND (topic_id IS NULL) AND (entity_id IS NULL) AND (source_id IS NULL) AND ((role)::text = ANY ((ARRAY['venue'::character varying, 'jurisdiction'::character varying, 'affected_area'::character varying, 'participant_location'::character varying])::text[]))) OR (((assertion_family)::text = 'event_topic'::text) AND (validation_state IS NULL) AND (occurrence_id IS NULL) AND (geography_id IS NULL) AND (topic_id IS NOT NULL) AND (entity_id IS NULL) AND (source_id IS NULL) AND ((role)::text = ANY ((ARRAY['primary'::character varying, 'secondary'::character varying])::text[]))) OR (((assertion_family)::text = 'event_entity'::text) AND (validation_state IS NULL) AND (occurrence_id IS NULL) AND (geography_id IS NULL) AND (topic_id IS NULL) AND (entity_id IS NOT NULL) AND (source_id IS NULL) AND ((role)::text = ANY ((ARRAY['organizer'::character varying, 'participant'::character varying, 'subject'::character varying, 'speaker'::character varying, 'host'::character varying])::text[]))) OR (((assertion_family)::text = 'event_source'::text) AND (validation_state IS NULL) AND (occurrence_id IS NULL) AND (geography_id IS NULL) AND (topic_id IS NULL) AND (entity_id IS NULL) AND (source_id IS NOT NULL) AND ((role)::text = ANY ((ARRAY['official'::character varying, 'expected'::character varying, 'reference'::character varying])::text[]))))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_internal_method CHECK ((((assignment_method)::text <> 'internal_autonomous_agent'::text) OR ((actor_kind)::text = 'internal_agent'::text))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_machine_run CHECK ((((actor_kind)::text = 'operator'::text) OR (inference_run_id IS NOT NULL))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_manual_authority CHECK (((((actor_kind)::text = 'operator'::text) AND ((assignment_method)::text = 'manual'::text)) OR (((actor_kind)::text <> 'operator'::text) AND ((assignment_method)::text <> 'manual'::text)))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_not_self CHECK (((supersedes_assertion_id IS NULL) OR (supersedes_assertion_id <> id))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_valid_interval CHECK (((valid_to IS NULL) OR (valid_to >= valid_from))),
+    CONSTRAINT ck_intelligence_calendar_assertion_ledger_withdraw_target CHECK ((((assertion_action)::text <> 'withdraw'::text) OR (supersedes_assertion_id IS NOT NULL)))
+);
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_assertion_ledger_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_assertion_ledger_id_seq OWNED BY public.intelligence_calendar_assertion_ledger.id;
+
+
+--
+-- Name: intelligence_calendar_conflict_assertions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_conflict_assertions (
+    event_id bigint NOT NULL,
+    conflict_id bigint NOT NULL,
+    assertion_id bigint NOT NULL,
+    membership_kind character varying(20) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_conflict_assertions_membership CHECK (((membership_kind)::text = ANY ((ARRAY['competing'::character varying, 'proposed'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_event_aliases; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_aliases (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    alias character varying(500) NOT NULL,
+    normalized_alias character varying(500) NOT NULL,
+    language_tag character varying(255) NOT NULL,
+    alias_type character varying(30) NOT NULL,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_aliases_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_aliases_alias_nonempty CHECK ((btrim((alias)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_event_aliases_alias_type CHECK (((alias_type)::text = ANY ((ARRAY['title'::character varying, 'short_name'::character varying, 'native_name'::character varying, 'former_name'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_aliases_normalized_nonempty CHECK ((btrim((normalized_alias)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_event_aliases_valid_interval CHECK (((valid_to IS NULL) OR (valid_to > valid_from)))
+);
+
+
+--
+-- Name: intelligence_calendar_event_aliases_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_aliases_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_aliases_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_aliases_id_seq OWNED BY public.intelligence_calendar_event_aliases.id;
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_coverage_policies (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    profile_id bigint NOT NULL,
+    watch_state character varying(20) DEFAULT 'watch'::character varying NOT NULL,
+    monitoring_priority character varying(20) DEFAULT 'normal'::character varying NOT NULL,
+    expected_news_importance character varying(20) DEFAULT 'normal'::character varying NOT NULL,
+    pre_event_window_seconds integer DEFAULT 86400 NOT NULL,
+    post_event_window_seconds integer DEFAULT 86400 NOT NULL,
+    reminder_alerts_enabled boolean DEFAULT false NOT NULL,
+    change_alerts_enabled boolean DEFAULT false NOT NULL,
+    polling_escalation_allowed boolean DEFAULT false NOT NULL,
+    youtube_escalation_allowed boolean DEFAULT false NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_coverage_policies_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_coverage_policies_expect_00a6 CHECK (((expected_news_importance)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_coverage_policies_monito_f866 CHECK (((monitoring_priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_coverage_policies_watch_state CHECK (((watch_state)::text = ANY ((ARRAY['watch'::character varying, 'ignore'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_coverage_policies_window_8a76 CHECK (((pre_event_window_seconds >= 0) AND (post_event_window_seconds >= 0)))
+);
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_coverage_policies_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_coverage_policies_id_seq OWNED BY public.intelligence_calendar_event_coverage_policies.id;
+
+
+--
+-- Name: intelligence_calendar_event_documents; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_documents (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    document_id bigint NOT NULL,
+    relationship_type character varying(40) NOT NULL,
+    confidence numeric(5,4) NOT NULL,
+    method character varying(50) NOT NULL,
+    evidence_id bigint,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_documents_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_documents_confidence CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_event_documents_relationship_type CHECK (((relationship_type)::text = ANY ((ARRAY['announcement'::character varying, 'confirmation'::character varying, 'preview'::character varying, 'pre_event_analysis'::character varying, 'live_update'::character varying, 'result'::character varying, 'post_event_analysis'::character varying, 'cancellation'::character varying, 'postponement'::character varying, 'correction'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_event_documents_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_documents_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_documents_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_documents_id_seq OWNED BY public.intelligence_calendar_event_documents.id;
+
+
+--
+-- Name: intelligence_calendar_event_entities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_entities (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    entity_id bigint NOT NULL,
+    role character varying(50) NOT NULL,
+    confidence numeric(5,4) NOT NULL,
+    method character varying(50) NOT NULL,
+    evidence_id bigint,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    retracted_at timestamp with time zone,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_entities_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_entities_confidence CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_event_entities_role CHECK (((role)::text = ANY ((ARRAY['organizer'::character varying, 'participant'::character varying, 'subject'::character varying, 'speaker'::character varying, 'host'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_entities_role_nonempty CHECK ((btrim((role)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_event_entities_valid_interval CHECK (((retracted_at IS NULL) OR (retracted_at >= valid_from)))
+);
+
+
+--
+-- Name: intelligence_calendar_event_entities_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_entities_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_entities_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_entities_id_seq OWNED BY public.intelligence_calendar_event_entities.id;
+
+
+--
+-- Name: intelligence_calendar_event_evidence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_evidence (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    evidence_kind character varying(20) NOT NULL,
+    source_id bigint,
+    document_id bigint,
+    external_url text,
+    assertion_text text,
+    excerpt text,
+    language_tag character varying(255),
+    authority_score numeric(5,4) DEFAULT 0 NOT NULL,
+    confidence numeric(5,4) NOT NULL,
+    method character varying(50) NOT NULL,
+    published_at timestamp with time zone,
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    fingerprint character varying(64) NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_evidence_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_evidence_authority_score CHECK (((authority_score >= (0)::numeric) AND (authority_score <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_event_evidence_confidence CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_event_evidence_evidence_kind CHECK (((evidence_kind)::text = ANY ((ARRAY['supports'::character varying, 'contradicts'::character varying, 'corrects'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_evidence_reference_present CHECK (((source_id IS NOT NULL) OR (document_id IS NOT NULL) OR (external_url IS NOT NULL) OR (assertion_text IS NOT NULL)))
+);
+
+
+--
+-- Name: intelligence_calendar_event_evidence_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_evidence_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_evidence_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_evidence_id_seq OWNED BY public.intelligence_calendar_event_evidence.id;
+
+
+--
+-- Name: intelligence_calendar_event_geographies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_geographies (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    geography_id bigint NOT NULL,
+    role character varying(50) NOT NULL,
+    confidence numeric(5,4) NOT NULL,
+    method character varying(50) NOT NULL,
+    evidence_id bigint,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    retracted_at timestamp with time zone,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_geographies_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_geographies_confidence CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_event_geographies_role CHECK (((role)::text = ANY ((ARRAY['venue'::character varying, 'jurisdiction'::character varying, 'affected_area'::character varying, 'participant_location'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_geographies_role_nonempty CHECK ((btrim((role)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_event_geographies_valid_interval CHECK (((retracted_at IS NULL) OR (retracted_at >= valid_from)))
+);
+
+
+--
+-- Name: intelligence_calendar_event_geographies_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_geographies_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_geographies_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_geographies_id_seq OWNED BY public.intelligence_calendar_event_geographies.id;
+
+
+--
+-- Name: intelligence_calendar_event_merge_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_merge_history (
+    id bigint NOT NULL,
+    winner_event_id bigint NOT NULL,
+    loser_event_id bigint NOT NULL,
+    reason text NOT NULL,
+    evidence_id bigint,
+    merged_at timestamp with time zone DEFAULT now() NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    CONSTRAINT ck_intelligence_calendar_event_merge_history_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_merge_history_different_events CHECK ((winner_event_id <> loser_event_id)),
+    CONSTRAINT ck_intelligence_calendar_event_merge_history_reason_nonempty CHECK ((btrim(reason) <> ''::text))
+);
+
+
+--
+-- Name: intelligence_calendar_event_merge_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_merge_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_merge_history_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_merge_history_id_seq OWNED BY public.intelligence_calendar_event_merge_history.id;
+
+
+--
+-- Name: intelligence_calendar_event_monitors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_monitors (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    policy_id bigint NOT NULL,
+    monitor_id bigint NOT NULL,
+    purpose character varying(30) NOT NULL,
+    is_calendar_managed boolean DEFAULT false NOT NULL,
+    activation_at timestamp with time zone,
+    deactivation_at timestamp with time zone,
+    link_status character varying(20) DEFAULT 'linked'::character varying NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_monitors_activation_interval CHECK (((deactivation_at IS NULL) OR (deactivation_at > activation_at))),
+    CONSTRAINT ck_intelligence_calendar_event_monitors_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_monitors_link_status CHECK (((link_status)::text = ANY ((ARRAY['linked'::character varying, 'active'::character varying, 'inactive'::character varying, 'retired'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_monitors_purpose CHECK (((purpose)::text = ANY ((ARRAY['standing_series'::character varying, 'pre_event'::character varying, 'live'::character varying, 'post_event'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_event_monitors_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_monitors_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_monitors_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_monitors_id_seq OWNED BY public.intelligence_calendar_event_monitors.id;
+
+
+--
+-- Name: intelligence_calendar_event_occurrences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_occurrences (
+    id bigint NOT NULL,
+    public_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    event_id bigint NOT NULL,
+    recurrence_rule_id bigint,
+    recurrence_key character varying(255) NOT NULL,
+    schedule_state character varying(20) DEFAULT 'scheduled'::character varying NOT NULL,
+    validation_state character varying(20),
+    current_schedule_revision_id bigint NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_occurrences_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_occurrences_key_nonempty CHECK ((btrim((recurrence_key)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_event_occurrences_schedule_state CHECK (((schedule_state)::text = ANY ((ARRAY['tentative'::character varying, 'scheduled'::character varying, 'postponed'::character varying, 'cancelled'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_occurrences_validation_state CHECK (((validation_state IS NULL) OR ((validation_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))))
+);
+
+
+--
+-- Name: intelligence_calendar_event_occurrences_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_occurrences_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_occurrences_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_occurrences_id_seq OWNED BY public.intelligence_calendar_event_occurrences.id;
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_exceptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_recurrence_exceptions (
+    id bigint NOT NULL,
+    recurrence_rule_id bigint NOT NULL,
+    recurrence_key character varying(255) NOT NULL,
+    exception_type character varying(20) NOT NULL,
+    reason text,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_exceptions_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_exceptions_ex_7e5d CHECK (((exception_type)::text = ANY ((ARRAY['excluded'::character varying, 'added'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_exceptions_ke_3512 CHECK ((btrim((recurrence_key)::text) <> ''::text))
+);
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_exceptions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_recurrence_exceptions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_exceptions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_recurrence_exceptions_id_seq OWNED BY public.intelligence_calendar_event_recurrence_exceptions.id;
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_recurrence_rules (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    version_number integer NOT NULL,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    rrule text NOT NULL,
+    dtstart_local timestamp without time zone,
+    dtstart_date date,
+    timezone_name character varying(255),
+    all_day boolean NOT NULL,
+    duration_seconds integer,
+    materialization_horizon_days integer DEFAULT 730 NOT NULL,
+    sealed_at timestamp with time zone DEFAULT now() NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_all_day_7d90 CHECK (((NOT all_day) OR (duration_seconds IS NULL) OR ((duration_seconds % 86400) = 0))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_duratio_6c64 CHECK (((duration_seconds IS NULL) OR (duration_seconds > 0))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_horizon CHECK (((materialization_horizon_days >= 1) AND (materialization_horizon_days <= 3660))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_start_mode CHECK (((all_day AND (dtstart_date IS NOT NULL) AND (dtstart_local IS NULL) AND (timezone_name IS NULL)) OR ((NOT all_day) AND (dtstart_local IS NOT NULL) AND (dtstart_date IS NULL) AND (timezone_name IS NOT NULL)))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_status CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'superseded'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_recurrence_rules_version_0e93 CHECK ((version_number > 0))
+);
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_recurrence_rules_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_recurrence_rules_id_seq OWNED BY public.intelligence_calendar_event_recurrence_rules.id;
+
+
+--
+-- Name: intelligence_calendar_event_revisions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_revisions (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    revision_number integer NOT NULL,
+    title character varying(500) NOT NULL,
+    description text,
+    original_language_tag character varying(255),
+    discovery_method character varying(40) DEFAULT 'manual'::character varying NOT NULL,
+    change_reason text,
+    sealed_at timestamp with time zone DEFAULT now() NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_revisions_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_revisions_discovery_method CHECK (((discovery_method)::text = ANY ((ARRAY['manual'::character varying, 'recurring_event_research'::character varying, 'document_extraction'::character varying, 'official_calendar'::character varying, 'ai_discovered'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_revisions_revision_positive CHECK ((revision_number > 0)),
+    CONSTRAINT ck_intelligence_calendar_event_revisions_title_nonempty CHECK ((btrim((title)::text) <> ''::text))
+);
+
+
+--
+-- Name: intelligence_calendar_event_revisions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_revisions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_revisions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_revisions_id_seq OWNED BY public.intelligence_calendar_event_revisions.id;
+
+
+--
+-- Name: intelligence_calendar_event_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_sources (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    source_id bigint NOT NULL,
+    role character varying(50) NOT NULL,
+    confidence numeric(5,4) NOT NULL,
+    method character varying(50) NOT NULL,
+    evidence_id bigint,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    retracted_at timestamp with time zone,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_sources_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_sources_confidence CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_event_sources_role CHECK (((role)::text = ANY ((ARRAY['official'::character varying, 'expected'::character varying, 'reference'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_sources_role_nonempty CHECK ((btrim((role)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_event_sources_valid_interval CHECK (((retracted_at IS NULL) OR (retracted_at >= valid_from)))
+);
+
+
+--
+-- Name: intelligence_calendar_event_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_sources_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_sources_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_sources_id_seq OWNED BY public.intelligence_calendar_event_sources.id;
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_state_transitions (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    dimension character varying(20) NOT NULL,
+    previous_state character varying(30) NOT NULL,
+    next_state character varying(30) NOT NULL,
+    reason text,
+    evidence_id bigint,
+    transitioned_at timestamp with time zone DEFAULT now() NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_dimens_37c8 CHECK (((((dimension)::text = 'identity'::text) AND ((previous_state)::text = ANY ((ARRAY['active'::character varying, 'archived'::character varying, 'merged'::character varying])::text[])) AND ((next_state)::text = ANY ((ARRAY['active'::character varying, 'archived'::character varying, 'merged'::character varying])::text[]))) OR (((dimension)::text = 'validation'::text) AND ((previous_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[])) AND ((next_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))) OR (((dimension)::text = 'schedule'::text) AND ((previous_state)::text = ANY ((ARRAY['tentative'::character varying, 'scheduled'::character varying, 'postponed'::character varying, 'cancelled'::character varying])::text[])) AND ((next_state)::text = ANY ((ARRAY['tentative'::character varying, 'scheduled'::character varying, 'postponed'::character varying, 'cancelled'::character varying])::text[]))) OR (((dimension)::text = 'outcome'::text) AND ((previous_state)::text = ANY ((ARRAY['pending'::character varying, 'in_progress'::character varying, 'occurred'::character varying, 'partially_occurred'::character varying, 'did_not_occur'::character varying, 'unknown'::character varying])::text[])) AND ((next_state)::text = ANY ((ARRAY['pending'::character varying, 'in_progress'::character varying, 'occurred'::character varying, 'partially_occurred'::character varying, 'did_not_occur'::character varying, 'unknown'::character varying])::text[]))))),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_dimension CHECK (((dimension)::text = ANY ((ARRAY['identity'::character varying, 'validation'::character varying, 'schedule'::character varying, 'outcome'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_legal__04f0 CHECK (((((dimension)::text = 'identity'::text) AND ((((previous_state)::text = 'active'::text) AND ((next_state)::text = ANY ((ARRAY['archived'::character varying, 'merged'::character varying])::text[]))) OR (((previous_state)::text = 'archived'::text) AND ((next_state)::text = 'active'::text)))) OR (((dimension)::text = 'validation'::text) AND ((((previous_state)::text = 'candidate'::text) AND ((next_state)::text = ANY ((ARRAY['probable'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))) OR (((previous_state)::text = 'probable'::text) AND ((next_state)::text = ANY ((ARRAY['verified'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))) OR (((previous_state)::text = 'verified'::text) AND ((next_state)::text = ANY ((ARRAY['confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[]))) OR (((previous_state)::text = 'confirmed'::text) AND ((next_state)::text = 'disputed'::text)) OR (((previous_state)::text = 'disputed'::text) AND ((next_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'rejected'::character varying])::text[]))) OR (((previous_state)::text = 'rejected'::text) AND ((next_state)::text = 'candidate'::text)))) OR (((dimension)::text = 'schedule'::text) AND ((((previous_state)::text = 'tentative'::text) AND ((next_state)::text = ANY ((ARRAY['scheduled'::character varying, 'postponed'::character varying, 'cancelled'::character varying])::text[]))) OR (((previous_state)::text = 'scheduled'::text) AND ((next_state)::text = ANY ((ARRAY['postponed'::character varying, 'cancelled'::character varying])::text[]))) OR (((previous_state)::text = 'postponed'::text) AND ((next_state)::text = ANY ((ARRAY['scheduled'::character varying, 'cancelled'::character varying])::text[]))))))),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_phase1_0704 CHECK (((dimension)::text <> 'outcome'::text)),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_schedu_9990 CHECK (((((dimension)::text = 'schedule'::text) AND (occurrence_id IS NOT NULL)) OR ((dimension)::text <> 'schedule'::text))),
+    CONSTRAINT ck_intelligence_calendar_event_state_transitions_state_changes CHECK (((previous_state)::text <> (next_state)::text))
+);
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_state_transitions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_state_transitions_id_seq OWNED BY public.intelligence_calendar_event_state_transitions.id;
+
+
+--
+-- Name: intelligence_calendar_event_topics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_event_topics (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    topic_id bigint NOT NULL,
+    role character varying(50) NOT NULL,
+    confidence numeric(5,4) NOT NULL,
+    method character varying(50) NOT NULL,
+    evidence_id bigint,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    retracted_at timestamp with time zone,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_event_topics_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_topics_confidence CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_event_topics_role CHECK (((role)::text = ANY ((ARRAY['primary'::character varying, 'secondary'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_event_topics_role_nonempty CHECK ((btrim((role)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_event_topics_valid_interval CHECK (((retracted_at IS NULL) OR (retracted_at >= valid_from)))
+);
+
+
+--
+-- Name: intelligence_calendar_event_topics_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_event_topics_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_event_topics_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_event_topics_id_seq OWNED BY public.intelligence_calendar_event_topics.id;
+
+
+--
+-- Name: intelligence_calendar_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_events (
+    id bigint NOT NULL,
+    public_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    schedule_pattern character varying(20) NOT NULL,
+    identity_state character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    validation_state character varying(20) DEFAULT 'candidate'::character varying NOT NULL,
+    current_revision_id bigint NOT NULL,
+    merged_into_event_id bigint,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_events_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_events_identity_state CHECK (((identity_state)::text = ANY ((ARRAY['active'::character varying, 'archived'::character varying, 'merged'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_events_merge_state CHECK (((((identity_state)::text = 'merged'::text) AND (merged_into_event_id IS NOT NULL)) OR (((identity_state)::text <> 'merged'::text) AND (merged_into_event_id IS NULL)))),
+    CONSTRAINT ck_intelligence_calendar_events_not_self_merged CHECK (((merged_into_event_id IS NULL) OR (merged_into_event_id <> id))),
+    CONSTRAINT ck_intelligence_calendar_events_schedule_pattern CHECK (((schedule_pattern)::text = ANY ((ARRAY['one_time'::character varying, 'recurring'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_events_validation_state CHECK (((validation_state)::text = ANY ((ARRAY['candidate'::character varying, 'probable'::character varying, 'verified'::character varying, 'confirmed'::character varying, 'disputed'::character varying, 'rejected'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_events_id_seq OWNED BY public.intelligence_calendar_events.id;
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_inference_conflicts (
+    id bigint NOT NULL,
+    public_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    assertion_family character varying(30) NOT NULL,
+    severity character varying(20) NOT NULL,
+    reason_code character varying(100) NOT NULL,
+    state character varying(20) NOT NULL,
+    evidence_snapshot_hash character varying(64) NOT NULL,
+    detection_run_id bigint NOT NULL,
+    selected_assertion_id bigint,
+    decision_provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    detected_at timestamp with time zone DEFAULT now() NOT NULL,
+    resolved_at timestamp with time zone,
+    actor_kind character varying(20) DEFAULT 'system'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_inference_conflicts_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_inference_conflicts_family CHECK (((assertion_family)::text = ANY ((ARRAY['event_validation'::character varying, 'occurrence_validation'::character varying, 'event_geography'::character varying, 'event_topic'::character varying, 'event_entity'::character varying, 'event_source'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_inference_conflicts_reason_nonempty CHECK ((btrim((reason_code)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_inference_conflicts_resolution CHECK (((((state)::text = 'resolved'::text) AND (selected_assertion_id IS NOT NULL) AND (resolved_at IS NOT NULL)) OR (((state)::text <> 'resolved'::text) AND (selected_assertion_id IS NULL)))),
+    CONSTRAINT ck_intelligence_calendar_inference_conflicts_severity CHECK (((severity)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_inference_conflicts_snapshot_hash CHECK (((evidence_snapshot_hash)::text ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ck_intelligence_calendar_inference_conflicts_state CHECK (((state)::text = ANY ((ARRAY['detected'::character varying, 'resolving'::character varying, 'resolved'::character varying, 'unresolved'::character varying, 'superseded'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_inference_conflicts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_inference_conflicts_id_seq OWNED BY public.intelligence_calendar_inference_conflicts.id;
+
+
+--
+-- Name: intelligence_calendar_inference_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_inference_runs (
+    id bigint NOT NULL,
+    public_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    trigger character varying(50) NOT NULL,
+    pipeline_version character varying(100) NOT NULL,
+    ruleset_version character varying(100) NOT NULL,
+    strategy_version character varying(100) NOT NULL,
+    status character varying(20) NOT NULL,
+    evidence_snapshot_hash character varying(64) NOT NULL,
+    error text,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    actor_kind character varying(20) DEFAULT 'system'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_inference_runs_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_inference_runs_completion CHECK (((((status)::text = 'running'::text) AND (completed_at IS NULL)) OR (((status)::text <> 'running'::text) AND (completed_at IS NOT NULL) AND (completed_at >= started_at)))),
+    CONSTRAINT ck_intelligence_calendar_inference_runs_snapshot_hash CHECK (((evidence_snapshot_hash)::text ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ck_intelligence_calendar_inference_runs_status CHECK (((status)::text = ANY ((ARRAY['running'::character varying, 'succeeded'::character varying, 'partial'::character varying, 'failed'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_inference_runs_trigger_nonempty CHECK ((btrim((trigger)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_inference_runs_versions_nonempty CHECK (((btrim((pipeline_version)::text) <> ''::text) AND (btrim((ruleset_version)::text) <> ''::text) AND (btrim((strategy_version)::text) <> ''::text)))
+);
+
+
+--
+-- Name: intelligence_calendar_inference_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_inference_runs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_inference_runs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_inference_runs_id_seq OWNED BY public.intelligence_calendar_inference_runs.id;
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_override_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_occurrence_policy_override_history (
+    id bigint NOT NULL,
+    policy_id bigint NOT NULL,
+    occurrence_id bigint NOT NULL,
+    action_kind character varying(20) NOT NULL,
+    old_monitoring_priority character varying(20),
+    new_monitoring_priority character varying(20),
+    old_expected_news_importance character varying(20),
+    new_expected_news_importance character varying(20),
+    old_is_watched boolean,
+    new_is_watched boolean,
+    reason text NOT NULL,
+    actor_kind character varying(20) DEFAULT 'system'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    changed_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_occurrence_policy_override_his_1e06 CHECK ((btrim(reason) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_occurrence_policy_override_his_6a76 CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_policy_override_his_afbc CHECK (((action_kind)::text = ANY ((ARRAY['create'::character varying, 'update'::character varying, 'delete'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_override_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_occurrence_policy_override_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_override_history_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_occurrence_policy_override_history_id_seq OWNED BY public.intelligence_calendar_occurrence_policy_override_history.id;
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_occurrence_policy_overrides (
+    id bigint NOT NULL,
+    policy_id bigint NOT NULL,
+    occurrence_id bigint NOT NULL,
+    monitoring_priority character varying(20),
+    expected_news_importance character varying(20),
+    is_watched boolean,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_occurrence_policy_overrides_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_policy_overrides_ex_0077 CHECK (((expected_news_importance IS NULL) OR ((expected_news_importance)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[])))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_policy_overrides_mo_88ee CHECK (((monitoring_priority IS NULL) OR ((monitoring_priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))))
+);
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_occurrence_policy_overrides_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_occurrence_policy_overrides_id_seq OWNED BY public.intelligence_calendar_occurrence_policy_overrides.id;
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_occurrence_schedule_revisions (
+    id bigint NOT NULL,
+    occurrence_id bigint NOT NULL,
+    revision_number integer NOT NULL,
+    temporal_mode character varying(20) NOT NULL,
+    scheduled_start_at timestamp with time zone,
+    scheduled_end_at timestamp with time zone,
+    start_date date,
+    end_date_exclusive date,
+    timezone_name character varying(255),
+    utc_offset_original character varying(10),
+    date_precision character varying(20) NOT NULL,
+    time_precision character varying(20) NOT NULL,
+    all_day boolean DEFAULT false NOT NULL,
+    original_text text,
+    original_language_tag character varying(255),
+    normalization_method character varying(50) DEFAULT 'manual'::character varying NOT NULL,
+    normalization_reference_at timestamp with time zone,
+    change_reason text,
+    sealed_at timestamp with time zone DEFAULT now() NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__0a53 CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__1e22 CHECK (((date_precision)::text = ANY ((ARRAY['exact'::character varying, 'range'::character varying, 'month'::character varying, 'quarter'::character varying, 'year'::character varying, 'approximate'::character varying, 'unknown'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__23e2 CHECK (((((temporal_mode)::text = 'timed'::text) AND ((time_precision)::text <> 'not_applicable'::text)) OR ((temporal_mode)::text <> 'timed'::text))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__2686 CHECK (((((temporal_mode)::text = 'date'::text) AND ((time_precision)::text = 'not_applicable'::text)) OR ((temporal_mode)::text <> 'date'::text))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__4862 CHECK (((time_precision)::text = ANY ((ARRAY['exact'::character varying, 'approximate'::character varying, 'part_of_day'::character varying, 'unknown'::character varying, 'not_applicable'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__5417 CHECK (((temporal_mode)::text = ANY ((ARRAY['timed'::character varying, 'date'::character varying, 'unknown'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__a151 CHECK (((((temporal_mode)::text = 'timed'::text) AND (scheduled_start_at IS NOT NULL) AND (start_date IS NULL) AND (end_date_exclusive IS NULL) AND (timezone_name IS NOT NULL) AND (NOT all_day)) OR (((temporal_mode)::text = 'date'::text) AND (scheduled_start_at IS NULL) AND (scheduled_end_at IS NULL) AND (start_date IS NOT NULL) AND (end_date_exclusive IS NOT NULL) AND all_day) OR (((temporal_mode)::text = 'unknown'::text) AND (scheduled_start_at IS NULL) AND (scheduled_end_at IS NULL) AND (start_date IS NULL) AND (end_date_exclusive IS NULL) AND (NOT all_day)))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__aaff CHECK (((scheduled_end_at IS NULL) OR (scheduled_end_at > scheduled_start_at))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__bc1f CHECK ((revision_number > 0)),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__caee CHECK (((((temporal_mode)::text = 'unknown'::text) AND ((date_precision)::text = 'unknown'::text) AND ((time_precision)::text = 'unknown'::text)) OR ((temporal_mode)::text <> 'unknown'::text))),
+    CONSTRAINT ck_intelligence_calendar_occurrence_schedule_revisions__d8bc CHECK (((end_date_exclusive IS NULL) OR (end_date_exclusive > start_date)))
+);
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_occurrence_schedule_revisions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_occurrence_schedule_revisions_id_seq OWNED BY public.intelligence_calendar_occurrence_schedule_revisions.id;
+
+
+--
+-- Name: intelligence_calendar_operator_overrides; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_operator_overrides (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    assertion_id bigint NOT NULL,
+    conflict_id bigint,
+    action_kind character varying(20) NOT NULL,
+    supersedes_override_id bigint,
+    reason text NOT NULL,
+    activated_at timestamp with time zone DEFAULT now() NOT NULL,
+    actor_kind character varying(20) NOT NULL,
+    actor_ref character varying(255) NOT NULL,
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_operator_overrides_action CHECK (((action_kind)::text = ANY ((ARRAY['assert'::character varying, 'select'::character varying, 'deny'::character varying, 'withdraw'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_operator_overrides_not_self CHECK (((supersedes_override_id IS NULL) OR (supersedes_override_id <> id))),
+    CONSTRAINT ck_intelligence_calendar_operator_overrides_operator CHECK ((((actor_kind)::text = 'operator'::text) AND (btrim((actor_ref)::text) <> ''::text))),
+    CONSTRAINT ck_intelligence_calendar_operator_overrides_reason_nonempty CHECK ((btrim(reason) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_operator_overrides_withdraw_target CHECK ((((action_kind)::text <> 'withdraw'::text) OR (supersedes_override_id IS NOT NULL)))
+);
+
+
+--
+-- Name: intelligence_calendar_operator_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_operator_overrides_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_operator_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_operator_overrides_id_seq OWNED BY public.intelligence_calendar_operator_overrides.id;
+
+
+--
+-- Name: intelligence_calendar_policy_content_formats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_policy_content_formats (
+    policy_id bigint NOT NULL,
+    content_format_slug character varying(50) NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_policy_content_formats_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_policy_document_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_policy_document_types (
+    policy_id bigint NOT NULL,
+    document_type_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_policy_document_types_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_policy_search_terms; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_policy_search_terms (
+    id bigint NOT NULL,
+    policy_id bigint NOT NULL,
+    term character varying(500) NOT NULL,
+    language_tag character varying(255) NOT NULL,
+    term_type character varying(30) NOT NULL,
+    weight numeric(5,2) DEFAULT 1 NOT NULL,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_policy_search_terms_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_policy_search_terms_term_nonempty CHECK ((btrim((term)::text) <> ''::text)),
+    CONSTRAINT ck_intelligence_calendar_policy_search_terms_term_type CHECK (((term_type)::text = ANY ((ARRAY['keyword'::character varying, 'exact_phrase'::character varying, 'regex'::character varying, 'entity_alias'::character varying, 'topic_term'::character varying, 'semantic_query'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_policy_search_terms_weight CHECK (((weight > (0)::numeric) AND (weight <= (10)::numeric)))
+);
+
+
+--
+-- Name: intelligence_calendar_policy_search_terms_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_policy_search_terms_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_policy_search_terms_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_policy_search_terms_id_seq OWNED BY public.intelligence_calendar_policy_search_terms.id;
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_policy_watch_sources (
+    id bigint NOT NULL,
+    policy_id bigint NOT NULL,
+    source_id bigint NOT NULL,
+    source_endpoint_id bigint,
+    purpose character varying(50) NOT NULL,
+    polling_priority character varying(20) DEFAULT 'normal'::character varying NOT NULL,
+    activation_at timestamp with time zone,
+    deactivation_at timestamp with time zone,
+    actor_kind character varying(20) DEFAULT 'operator'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_policy_watch_sources_activatio_99de CHECK (((deactivation_at IS NULL) OR (deactivation_at > activation_at))),
+    CONSTRAINT ck_intelligence_calendar_policy_watch_sources_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_policy_watch_sources_polling_priority CHECK (((polling_priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[])))
+);
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_policy_watch_sources_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_policy_watch_sources_id_seq OWNED BY public.intelligence_calendar_policy_watch_sources.id;
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_resolution_attempts (
+    id bigint NOT NULL,
+    event_id bigint NOT NULL,
+    conflict_id bigint NOT NULL,
+    reasoning_ordinal smallint,
+    infrastructure_attempt_number integer DEFAULT 1 NOT NULL,
+    actor_kind character varying(20) NOT NULL,
+    strategy_slug character varying(100) NOT NULL,
+    strategy_version character varying(100) NOT NULL,
+    provider character varying(100),
+    model character varying(255),
+    model_version character varying(255),
+    router_decision_id character varying(255),
+    input_hash character varying(64) NOT NULL,
+    output_hash character varying(64),
+    status character varying(20) NOT NULL,
+    outcome character varying(20),
+    selected_assertion_id bigint,
+    rationale jsonb DEFAULT '{}'::jsonb NOT NULL,
+    failure_code character varying(100),
+    failure_detail text,
+    started_at timestamp with time zone NOT NULL,
+    completed_at timestamp with time zone NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_actor_kind CHECK (((actor_kind)::text = ANY ((ARRAY['internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_actor_ordinal CHECK ((((reasoning_ordinal = ANY (ARRAY[1, 2])) AND ((actor_kind)::text = 'internal_agent'::text)) OR ((reasoning_ordinal = 3) AND ((actor_kind)::text = 'external_model'::text)) OR (reasoning_ordinal IS NULL))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_completion CHECK (((((status)::text = 'completed'::text) AND (reasoning_ordinal IS NOT NULL) AND (outcome IS NOT NULL) AND (output_hash IS NOT NULL) AND (failure_code IS NULL)) OR (((status)::text <> 'completed'::text) AND (reasoning_ordinal IS NULL) AND (outcome IS NULL) AND (selected_assertion_id IS NULL) AND (failure_code IS NOT NULL)))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_external_p_fe23 CHECK ((((actor_kind)::text <> 'external_model'::text) OR ((router_decision_id IS NOT NULL) AND ((((status)::text = 'completed'::text) AND (provider IS NOT NULL) AND (model IS NOT NULL)) OR ((status)::text = ANY ((ARRAY['failed'::character varying, 'unavailable'::character varying, 'ineligible'::character varying])::text[])))))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_hashes CHECK ((((input_hash)::text ~ '^[0-9a-f]{64}$'::text) AND ((output_hash IS NULL) OR ((output_hash)::text ~ '^[0-9a-f]{64}$'::text)))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_infrastruc_6356 CHECK ((infrastructure_attempt_number > 0)),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_interval CHECK ((completed_at >= started_at)),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_ordinal CHECK (((reasoning_ordinal IS NULL) OR ((reasoning_ordinal >= 1) AND (reasoning_ordinal <= 3)))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_outcome CHECK (((outcome IS NULL) OR ((outcome)::text = ANY ((ARRAY['resolved'::character varying, 'unresolved'::character varying])::text[])))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_selection CHECK (((((outcome)::text = 'resolved'::text) AND (selected_assertion_id IS NOT NULL)) OR ((outcome)::text IS DISTINCT FROM 'resolved'::text))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_status CHECK (((status)::text = ANY ((ARRAY['completed'::character varying, 'failed'::character varying, 'unavailable'::character varying, 'ineligible'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_resolution_attempts_strategy_nonempty CHECK (((btrim((strategy_slug)::text) <> ''::text) AND (btrim((strategy_version)::text) <> ''::text)))
+);
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_resolution_attempts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_resolution_attempts_id_seq OWNED BY public.intelligence_calendar_resolution_attempts.id;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_source_authority_assessments (
+    id bigint NOT NULL,
+    series_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    event_id bigint NOT NULL,
+    occurrence_id bigint,
+    source_id bigint,
+    document_id bigint,
+    subject_evidence_id bigint,
+    inference_run_id bigint,
+    authority_score numeric(5,4) NOT NULL,
+    assessment_confidence numeric(5,4) NOT NULL,
+    assignment_method character varying(50) NOT NULL,
+    supersedes_assessment_id bigint,
+    valid_from timestamp with time zone DEFAULT now() NOT NULL,
+    valid_to timestamp with time zone,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    actor_kind character varying(20) DEFAULT 'system'::character varying NOT NULL,
+    actor_ref character varying(255),
+    actor_label character varying(255),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_a_a5e0 CHECK (((actor_kind)::text = ANY ((ARRAY['operator'::character varying, 'system'::character varying, 'import'::character varying, 'internal_agent'::character varying, 'external_model'::character varying])::text[]))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_authority CHECK (((authority_score >= (0)::numeric) AND (authority_score <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_c_9af8 CHECK (((assessment_confidence >= (0)::numeric) AND (assessment_confidence <= (1)::numeric))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_e_9cb7 CHECK (((((actor_kind)::text = 'external_model'::text) AND ((assignment_method)::text = 'external_ai_model'::text)) OR (((actor_kind)::text <> 'external_model'::text) AND ((assignment_method)::text <> 'external_ai_model'::text)))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_i_04ce CHECK ((((assignment_method)::text <> 'internal_autonomous_agent'::text) OR ((actor_kind)::text = 'internal_agent'::text))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_m_0be9 CHECK ((((actor_kind)::text = 'operator'::text) OR (inference_run_id IS NOT NULL))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_m_2e8e CHECK (((((actor_kind)::text = 'operator'::text) AND ((assignment_method)::text = 'manual'::text)) OR (((actor_kind)::text <> 'operator'::text) AND ((assignment_method)::text <> 'manual'::text)))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_not_self CHECK (((supersedes_assessment_id IS NULL) OR (supersedes_assessment_id <> id))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_subject CHECK (((source_id IS NOT NULL) OR (document_id IS NOT NULL) OR (subject_evidence_id IS NOT NULL))),
+    CONSTRAINT ck_intelligence_calendar_source_authority_assessments_v_85d8 CHECK (((valid_to IS NULL) OR (valid_to >= valid_from)))
+);
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.intelligence_calendar_source_authority_assessments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.intelligence_calendar_source_authority_assessments_id_seq OWNED BY public.intelligence_calendar_source_authority_assessments.id;
+
+
+--
+-- Name: intelligence_calendar_source_authority_evidence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intelligence_calendar_source_authority_evidence (
+    event_id bigint NOT NULL,
+    assessment_id bigint NOT NULL,
+    evidence_id bigint NOT NULL,
+    use_kind character varying(20) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_intelligence_calendar_source_authority_evidence_use_kind CHECK (((use_kind)::text = ANY ((ARRAY['supports'::character varying, 'contradicts'::character varying, 'corrects'::character varying])::text[])))
+);
+
+
+--
 -- Name: language_tag_aliases; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1310,6 +4068,294 @@ CREATE TABLE public.language_tags (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: monitor_alert_destinations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_alert_destinations (
+    monitor_id bigint NOT NULL,
+    destination_id bigint NOT NULL,
+    is_enabled boolean DEFAULT true NOT NULL,
+    priority character varying(20),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_monitor_alert_destinations_priority CHECK (((priority IS NULL) OR ((priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))))
+);
+
+
+--
+-- Name: monitor_evaluation_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_evaluation_runs (
+    id bigint NOT NULL,
+    monitor_id bigint NOT NULL,
+    monitor_revision_id bigint NOT NULL,
+    document_id bigint,
+    trigger_type character varying(30) NOT NULL,
+    status character varying(20) DEFAULT 'running'::character varying NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    candidate_count integer DEFAULT 0 NOT NULL,
+    matched_count integer DEFAULT 0 NOT NULL,
+    new_match_count integer DEFAULT 0 NOT NULL,
+    error text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT ck_monitor_evaluation_runs_completed_after_started CHECK (((completed_at IS NULL) OR (completed_at >= started_at))),
+    CONSTRAINT ck_monitor_evaluation_runs_completion_state CHECK (((((status)::text = 'running'::text) AND (completed_at IS NULL)) OR (((status)::text <> 'running'::text) AND (completed_at IS NOT NULL)))),
+    CONSTRAINT ck_monitor_evaluation_runs_count_order CHECK (((matched_count <= candidate_count) AND (new_match_count <= matched_count))),
+    CONSTRAINT ck_monitor_evaluation_runs_counts_nonnegative CHECK (((candidate_count >= 0) AND (matched_count >= 0) AND (new_match_count >= 0))),
+    CONSTRAINT ck_monitor_evaluation_runs_status CHECK (((status)::text = ANY ((ARRAY['running'::character varying, 'succeeded'::character varying, 'failed'::character varying])::text[]))),
+    CONSTRAINT ck_monitor_evaluation_runs_trigger_type CHECK (((trigger_type)::text = ANY ((ARRAY['activation_backfill'::character varying, 'manual_backfill'::character varying, 'manual_document'::character varying, 'ingestion'::character varying, 'enrichment'::character varying])::text[])))
+);
+
+
+--
+-- Name: monitor_evaluation_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.monitor_evaluation_runs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monitor_evaluation_runs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.monitor_evaluation_runs_id_seq OWNED BY public.monitor_evaluation_runs.id;
+
+
+--
+-- Name: monitor_matches; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_matches (
+    id bigint NOT NULL,
+    monitor_id bigint NOT NULL,
+    document_id bigint NOT NULL,
+    first_monitor_revision_id bigint NOT NULL,
+    last_monitor_revision_id bigint NOT NULL,
+    first_evaluation_run_id bigint,
+    last_evaluation_run_id bigint,
+    first_matched_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_matched_at timestamp with time zone DEFAULT now() NOT NULL,
+    observation_count integer DEFAULT 1 NOT NULL,
+    CONSTRAINT ck_monitor_matches_last_after_first CHECK ((last_matched_at >= first_matched_at)),
+    CONSTRAINT ck_monitor_matches_observation_count_positive CHECK ((observation_count > 0))
+);
+
+
+--
+-- Name: monitor_matches_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.monitor_matches_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monitor_matches_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.monitor_matches_id_seq OWNED BY public.monitor_matches.id;
+
+
+--
+-- Name: monitor_revision_content_formats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_content_formats (
+    revision_id bigint NOT NULL,
+    content_format_slug character varying(50) NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_document_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_document_types (
+    revision_id bigint NOT NULL,
+    document_type_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_entities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_entities (
+    revision_id bigint NOT NULL,
+    entity_id bigint NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_entity_roles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_entity_roles (
+    revision_id bigint NOT NULL,
+    entity_role character varying(50) NOT NULL,
+    CONSTRAINT ck_monitor_revision_entity_roles_entity_role_nonempty CHECK ((btrim((entity_role)::text) <> ''::text))
+);
+
+
+--
+-- Name: monitor_revision_geographies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_geographies (
+    revision_id bigint NOT NULL,
+    geography_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_languages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_languages (
+    revision_id bigint NOT NULL,
+    language_tag character varying(255) NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_source_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_source_types (
+    revision_id bigint NOT NULL,
+    source_type_slug character varying(50) NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_sources (
+    revision_id bigint NOT NULL,
+    source_id bigint NOT NULL
+);
+
+
+--
+-- Name: monitor_revision_topics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revision_topics (
+    revision_id bigint NOT NULL,
+    topic_id bigint NOT NULL,
+    include_descendants boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: monitor_revisions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitor_revisions (
+    id bigint NOT NULL,
+    monitor_id bigint NOT NULL,
+    revision_number integer NOT NULL,
+    criteria_version integer DEFAULT 1 NOT NULL,
+    minimum_confidence numeric(5,4),
+    effective_from timestamp with time zone,
+    text_query text,
+    match_all_in_profile boolean DEFAULT false NOT NULL,
+    change_reason text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    sealed_at timestamp with time zone,
+    CONSTRAINT ck_monitor_revisions_criteria_version CHECK ((criteria_version = 1)),
+    CONSTRAINT ck_monitor_revisions_minimum_confidence_range CHECK (((minimum_confidence IS NULL) OR ((minimum_confidence >= (0)::numeric) AND (minimum_confidence <= (1)::numeric)))),
+    CONSTRAINT ck_monitor_revisions_revision_positive CHECK ((revision_number > 0)),
+    CONSTRAINT ck_monitor_revisions_text_query CHECK (((text_query IS NULL) OR ((btrim(text_query) <> ''::text) AND (length(text_query) <= 500))))
+);
+
+
+--
+-- Name: monitor_revisions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.monitor_revisions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monitor_revisions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.monitor_revisions_id_seq OWNED BY public.monitor_revisions.id;
+
+
+--
+-- Name: monitors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.monitors (
+    id bigint NOT NULL,
+    slug character varying(255) NOT NULL,
+    name character varying(255) NOT NULL,
+    description text,
+    coverage_profile_id bigint NOT NULL,
+    status character varying(20) DEFAULT 'draft'::character varying NOT NULL,
+    current_revision_number integer DEFAULT 1 NOT NULL,
+    match_existing_on_activation boolean DEFAULT false NOT NULL,
+    expires_at timestamp with time zone,
+    activated_at timestamp with time zone,
+    paused_at timestamp with time zone,
+    expired_at timestamp with time zone,
+    archived_at timestamp with time zone,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_monitors_active_timestamp CHECK ((((status)::text <> 'active'::text) OR (activated_at IS NOT NULL))),
+    CONSTRAINT ck_monitors_archived_timestamp CHECK ((((status)::text <> 'archived'::text) OR (archived_at IS NOT NULL))),
+    CONSTRAINT ck_monitors_current_revision_positive CHECK ((current_revision_number > 0)),
+    CONSTRAINT ck_monitors_expired_timestamp CHECK ((((status)::text <> 'expired'::text) OR (expired_at IS NOT NULL))),
+    CONSTRAINT ck_monitors_name_nonempty CHECK ((btrim((name)::text) <> ''::text)),
+    CONSTRAINT ck_monitors_paused_timestamp CHECK ((((status)::text <> 'paused'::text) OR (paused_at IS NOT NULL))),
+    CONSTRAINT ck_monitors_slug_format CHECK (((slug)::text ~ '^[a-z0-9]+(_[a-z0-9]+)*$'::text)),
+    CONSTRAINT ck_monitors_status CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'paused'::character varying, 'expired'::character varying, 'archived'::character varying])::text[])))
+);
+
+
+--
+-- Name: monitors_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.monitors_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monitors_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.monitors_id_seq OWNED BY public.monitors.id;
 
 
 --
@@ -1556,6 +4602,34 @@ ALTER TABLE ONLY public.acquisition_methods ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
+-- Name: alert_deliveries id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_deliveries ALTER COLUMN id SET DEFAULT nextval('public.alert_deliveries_id_seq'::regclass);
+
+
+--
+-- Name: alert_delivery_attempts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_delivery_attempts ALTER COLUMN id SET DEFAULT nextval('public.alert_delivery_attempts_id_seq'::regclass);
+
+
+--
+-- Name: alert_destinations id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_destinations ALTER COLUMN id SET DEFAULT nextval('public.alert_destinations_id_seq'::regclass);
+
+
+--
+-- Name: alerts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alerts ALTER COLUMN id SET DEFAULT nextval('public.alerts_id_seq'::regclass);
+
+
+--
 -- Name: classification_runs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1724,6 +4798,237 @@ ALTER TABLE ONLY public.ingestion_runs ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: intelligence_calendar_administrative_exception_actions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exception_actions ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_administrative_exception_actions_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exceptions ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_administrative_exceptions_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_assertion_ledger_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_aliases id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_aliases ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_aliases_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_coverage_policies ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_coverage_policies_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_documents id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_documents ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_documents_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_entities id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_entities ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_entities_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_evidence id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_evidence_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_geographies id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_geographies ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_geographies_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_merge_history id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_merge_history ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_merge_history_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_monitors id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_monitors ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_monitors_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_occurrences id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_occurrences_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_exceptions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_recurrence_exceptions ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_recurrence_exceptions_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_recurrence_rules ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_recurrence_rules_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_revisions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_revisions ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_revisions_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_sources id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_sources ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_sources_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_state_transitions ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_state_transitions_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_event_topics id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_topics ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_event_topics_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_events id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_events ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_events_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_conflicts ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_inference_conflicts_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_inference_runs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_runs ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_inference_runs_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_override_history id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_override_history ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_occurrence_policy_override_history_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_overrides ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_occurrence_policy_overrides_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_schedule_revisions ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_occurrence_schedule_revisions_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_operator_overrides id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_operator_overrides_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_policy_search_terms id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_search_terms ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_policy_search_terms_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_watch_sources ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_policy_watch_sources_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_resolution_attempts ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_resolution_attempts_id_seq'::regclass);
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments ALTER COLUMN id SET DEFAULT nextval('public.intelligence_calendar_source_authority_assessments_id_seq'::regclass);
+
+
+--
+-- Name: monitor_evaluation_runs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs ALTER COLUMN id SET DEFAULT nextval('public.monitor_evaluation_runs_id_seq'::regclass);
+
+
+--
+-- Name: monitor_matches id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches ALTER COLUMN id SET DEFAULT nextval('public.monitor_matches_id_seq'::regclass);
+
+
+--
+-- Name: monitor_revisions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions ALTER COLUMN id SET DEFAULT nextval('public.monitor_revisions_id_seq'::regclass);
+
+
+--
+-- Name: monitors id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitors ALTER COLUMN id SET DEFAULT nextval('public.monitors_id_seq'::regclass);
+
+
+--
 -- Name: platforms id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1772,6 +5077,38 @@ ALTER TABLE ONLY public.alembic_version
 
 ALTER TABLE ONLY public.acquisition_methods
     ADD CONSTRAINT pk_acquisition_methods PRIMARY KEY (id);
+
+
+--
+-- Name: alert_deliveries pk_alert_deliveries; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_deliveries
+    ADD CONSTRAINT pk_alert_deliveries PRIMARY KEY (id);
+
+
+--
+-- Name: alert_delivery_attempts pk_alert_delivery_attempts; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_delivery_attempts
+    ADD CONSTRAINT pk_alert_delivery_attempts PRIMARY KEY (id);
+
+
+--
+-- Name: alert_destinations pk_alert_destinations; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_destinations
+    ADD CONSTRAINT pk_alert_destinations PRIMARY KEY (id);
+
+
+--
+-- Name: alerts pk_alerts; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alerts
+    ADD CONSTRAINT pk_alerts PRIMARY KEY (id);
 
 
 --
@@ -2063,6 +5400,278 @@ ALTER TABLE ONLY public.ingestion_runs
 
 
 --
+-- Name: intelligence_calendar_administrative_exception_actions pk_intelligence_calendar_administrative_exception_actions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exception_actions
+    ADD CONSTRAINT pk_intelligence_calendar_administrative_exception_actions PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions pk_intelligence_calendar_administrative_exceptions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exceptions
+    ADD CONSTRAINT pk_intelligence_calendar_administrative_exceptions PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_assertion_evidence pk_intelligence_calendar_assertion_evidence; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_evidence
+    ADD CONSTRAINT pk_intelligence_calendar_assertion_evidence PRIMARY KEY (assertion_id, evidence_id, use_kind);
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger pk_intelligence_calendar_assertion_ledger; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT pk_intelligence_calendar_assertion_ledger PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_conflict_assertions pk_intelligence_calendar_conflict_assertions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_conflict_assertions
+    ADD CONSTRAINT pk_intelligence_calendar_conflict_assertions PRIMARY KEY (conflict_id, assertion_id);
+
+
+--
+-- Name: intelligence_calendar_event_aliases pk_intelligence_calendar_event_aliases; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_aliases
+    ADD CONSTRAINT pk_intelligence_calendar_event_aliases PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies pk_intelligence_calendar_event_coverage_policies; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_coverage_policies
+    ADD CONSTRAINT pk_intelligence_calendar_event_coverage_policies PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_documents pk_intelligence_calendar_event_documents; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_documents
+    ADD CONSTRAINT pk_intelligence_calendar_event_documents PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_entities pk_intelligence_calendar_event_entities; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_entities
+    ADD CONSTRAINT pk_intelligence_calendar_event_entities PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_evidence pk_intelligence_calendar_event_evidence; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence
+    ADD CONSTRAINT pk_intelligence_calendar_event_evidence PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_geographies pk_intelligence_calendar_event_geographies; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_geographies
+    ADD CONSTRAINT pk_intelligence_calendar_event_geographies PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_merge_history pk_intelligence_calendar_event_merge_history; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_merge_history
+    ADD CONSTRAINT pk_intelligence_calendar_event_merge_history PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_monitors pk_intelligence_calendar_event_monitors; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_monitors
+    ADD CONSTRAINT pk_intelligence_calendar_event_monitors PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_occurrences pk_intelligence_calendar_event_occurrences; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences
+    ADD CONSTRAINT pk_intelligence_calendar_event_occurrences PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_exceptions pk_intelligence_calendar_event_recurrence_exceptions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_recurrence_exceptions
+    ADD CONSTRAINT pk_intelligence_calendar_event_recurrence_exceptions PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules pk_intelligence_calendar_event_recurrence_rules; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_recurrence_rules
+    ADD CONSTRAINT pk_intelligence_calendar_event_recurrence_rules PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_revisions pk_intelligence_calendar_event_revisions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_revisions
+    ADD CONSTRAINT pk_intelligence_calendar_event_revisions PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_sources pk_intelligence_calendar_event_sources; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_sources
+    ADD CONSTRAINT pk_intelligence_calendar_event_sources PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions pk_intelligence_calendar_event_state_transitions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_state_transitions
+    ADD CONSTRAINT pk_intelligence_calendar_event_state_transitions PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_event_topics pk_intelligence_calendar_event_topics; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_topics
+    ADD CONSTRAINT pk_intelligence_calendar_event_topics PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_events pk_intelligence_calendar_events; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_events
+    ADD CONSTRAINT pk_intelligence_calendar_events PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts pk_intelligence_calendar_inference_conflicts; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_conflicts
+    ADD CONSTRAINT pk_intelligence_calendar_inference_conflicts PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_inference_runs pk_intelligence_calendar_inference_runs; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_runs
+    ADD CONSTRAINT pk_intelligence_calendar_inference_runs PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_override_history pk_intelligence_calendar_occurrence_policy_override_history; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_override_history
+    ADD CONSTRAINT pk_intelligence_calendar_occurrence_policy_override_history PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides pk_intelligence_calendar_occurrence_policy_overrides; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_overrides
+    ADD CONSTRAINT pk_intelligence_calendar_occurrence_policy_overrides PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions pk_intelligence_calendar_occurrence_schedule_revisions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_schedule_revisions
+    ADD CONSTRAINT pk_intelligence_calendar_occurrence_schedule_revisions PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_operator_overrides pk_intelligence_calendar_operator_overrides; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides
+    ADD CONSTRAINT pk_intelligence_calendar_operator_overrides PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_policy_content_formats pk_intelligence_calendar_policy_content_formats; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_content_formats
+    ADD CONSTRAINT pk_intelligence_calendar_policy_content_formats PRIMARY KEY (policy_id, content_format_slug);
+
+
+--
+-- Name: intelligence_calendar_policy_document_types pk_intelligence_calendar_policy_document_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_document_types
+    ADD CONSTRAINT pk_intelligence_calendar_policy_document_types PRIMARY KEY (policy_id, document_type_id);
+
+
+--
+-- Name: intelligence_calendar_policy_search_terms pk_intelligence_calendar_policy_search_terms; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_search_terms
+    ADD CONSTRAINT pk_intelligence_calendar_policy_search_terms PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources pk_intelligence_calendar_policy_watch_sources; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_watch_sources
+    ADD CONSTRAINT pk_intelligence_calendar_policy_watch_sources PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts pk_intelligence_calendar_resolution_attempts; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_resolution_attempts
+    ADD CONSTRAINT pk_intelligence_calendar_resolution_attempts PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments pk_intelligence_calendar_source_authority_assessments; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT pk_intelligence_calendar_source_authority_assessments PRIMARY KEY (id);
+
+
+--
+-- Name: intelligence_calendar_source_authority_evidence pk_intelligence_calendar_source_authority_evidence; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_evidence
+    ADD CONSTRAINT pk_intelligence_calendar_source_authority_evidence PRIMARY KEY (assessment_id, evidence_id, use_kind);
+
+
+--
 -- Name: language_tag_aliases pk_language_tag_aliases; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2076,6 +5685,118 @@ ALTER TABLE ONLY public.language_tag_aliases
 
 ALTER TABLE ONLY public.language_tags
     ADD CONSTRAINT pk_language_tags PRIMARY KEY (tag);
+
+
+--
+-- Name: monitor_alert_destinations pk_monitor_alert_destinations; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_alert_destinations
+    ADD CONSTRAINT pk_monitor_alert_destinations PRIMARY KEY (monitor_id, destination_id);
+
+
+--
+-- Name: monitor_evaluation_runs pk_monitor_evaluation_runs; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs
+    ADD CONSTRAINT pk_monitor_evaluation_runs PRIMARY KEY (id);
+
+
+--
+-- Name: monitor_matches pk_monitor_matches; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT pk_monitor_matches PRIMARY KEY (id);
+
+
+--
+-- Name: monitor_revision_content_formats pk_monitor_revision_content_formats; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_content_formats
+    ADD CONSTRAINT pk_monitor_revision_content_formats PRIMARY KEY (revision_id, content_format_slug);
+
+
+--
+-- Name: monitor_revision_document_types pk_monitor_revision_document_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_document_types
+    ADD CONSTRAINT pk_monitor_revision_document_types PRIMARY KEY (revision_id, document_type_id);
+
+
+--
+-- Name: monitor_revision_entities pk_monitor_revision_entities; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entities
+    ADD CONSTRAINT pk_monitor_revision_entities PRIMARY KEY (revision_id, entity_id);
+
+
+--
+-- Name: monitor_revision_entity_roles pk_monitor_revision_entity_roles; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entity_roles
+    ADD CONSTRAINT pk_monitor_revision_entity_roles PRIMARY KEY (revision_id, entity_role);
+
+
+--
+-- Name: monitor_revision_geographies pk_monitor_revision_geographies; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_geographies
+    ADD CONSTRAINT pk_monitor_revision_geographies PRIMARY KEY (revision_id, geography_id);
+
+
+--
+-- Name: monitor_revision_languages pk_monitor_revision_languages; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_languages
+    ADD CONSTRAINT pk_monitor_revision_languages PRIMARY KEY (revision_id, language_tag);
+
+
+--
+-- Name: monitor_revision_source_types pk_monitor_revision_source_types; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_source_types
+    ADD CONSTRAINT pk_monitor_revision_source_types PRIMARY KEY (revision_id, source_type_slug);
+
+
+--
+-- Name: monitor_revision_sources pk_monitor_revision_sources; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_sources
+    ADD CONSTRAINT pk_monitor_revision_sources PRIMARY KEY (revision_id, source_id);
+
+
+--
+-- Name: monitor_revision_topics pk_monitor_revision_topics; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_topics
+    ADD CONSTRAINT pk_monitor_revision_topics PRIMARY KEY (revision_id, topic_id);
+
+
+--
+-- Name: monitor_revisions pk_monitor_revisions; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions
+    ADD CONSTRAINT pk_monitor_revisions PRIMARY KEY (id);
+
+
+--
+-- Name: monitors pk_monitors; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitors
+    ADD CONSTRAINT pk_monitors PRIMARY KEY (id);
 
 
 --
@@ -2140,6 +5861,302 @@ ALTER TABLE ONLY public.topics
 
 ALTER TABLE ONLY public.acquisition_methods
     ADD CONSTRAINT uq_acquisition_methods_slug UNIQUE (slug);
+
+
+--
+-- Name: alert_deliveries uq_alert_deliveries_alert_destination; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_deliveries
+    ADD CONSTRAINT uq_alert_deliveries_alert_destination UNIQUE (alert_id, destination_id);
+
+
+--
+-- Name: alert_delivery_attempts uq_alert_delivery_attempts_delivery_claim; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_delivery_attempts
+    ADD CONSTRAINT uq_alert_delivery_attempts_delivery_claim UNIQUE (delivery_id, claim_token);
+
+
+--
+-- Name: alert_delivery_attempts uq_alert_delivery_attempts_delivery_number; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_delivery_attempts
+    ADD CONSTRAINT uq_alert_delivery_attempts_delivery_number UNIQUE (delivery_id, attempt_number);
+
+
+--
+-- Name: alert_destinations uq_alert_destinations_endpoint; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_destinations
+    ADD CONSTRAINT uq_alert_destinations_endpoint UNIQUE (channel, base_url, topic);
+
+
+--
+-- Name: alert_destinations uq_alert_destinations_slug; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_destinations
+    ADD CONSTRAINT uq_alert_destinations_slug UNIQUE (slug);
+
+
+--
+-- Name: alerts uq_alerts_monitor_match; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alerts
+    ADD CONSTRAINT uq_alerts_monitor_match UNIQUE (monitor_match_id);
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions uq_calendar_administrative_exceptions_conflict; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exceptions
+    ADD CONSTRAINT uq_calendar_administrative_exceptions_conflict UNIQUE (conflict_id);
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions uq_calendar_administrative_exceptions_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exceptions
+    ADD CONSTRAINT uq_calendar_administrative_exceptions_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger uq_calendar_assertion_ledger_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT uq_calendar_assertion_ledger_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger uq_calendar_assertion_ledger_supersedes; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT uq_calendar_assertion_ledger_supersedes UNIQUE (supersedes_assertion_id);
+
+
+--
+-- Name: intelligence_calendar_event_aliases uq_calendar_event_aliases_normalized; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_aliases
+    ADD CONSTRAINT uq_calendar_event_aliases_normalized UNIQUE (event_id, language_tag, normalized_alias);
+
+
+--
+-- Name: intelligence_calendar_event_documents uq_calendar_event_documents_relationship; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_documents
+    ADD CONSTRAINT uq_calendar_event_documents_relationship UNIQUE (event_id, document_id, relationship_type);
+
+
+--
+-- Name: intelligence_calendar_event_evidence uq_calendar_event_evidence_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence
+    ADD CONSTRAINT uq_calendar_event_evidence_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_event_evidence uq_calendar_event_evidence_fingerprint; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence
+    ADD CONSTRAINT uq_calendar_event_evidence_fingerprint UNIQUE (event_id, fingerprint);
+
+
+--
+-- Name: intelligence_calendar_event_merge_history uq_calendar_event_merge_history_loser; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_merge_history
+    ADD CONSTRAINT uq_calendar_event_merge_history_loser UNIQUE (loser_event_id);
+
+
+--
+-- Name: intelligence_calendar_event_monitors uq_calendar_event_monitors_purpose; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_monitors
+    ADD CONSTRAINT uq_calendar_event_monitors_purpose UNIQUE (event_id, monitor_id, purpose);
+
+
+--
+-- Name: intelligence_calendar_event_revisions uq_calendar_event_revisions_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_revisions
+    ADD CONSTRAINT uq_calendar_event_revisions_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_event_revisions uq_calendar_event_revisions_event_number; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_revisions
+    ADD CONSTRAINT uq_calendar_event_revisions_event_number UNIQUE (event_id, revision_number);
+
+
+--
+-- Name: intelligence_calendar_events uq_calendar_events_current_revision; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_events
+    ADD CONSTRAINT uq_calendar_events_current_revision UNIQUE (id, current_revision_id);
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts uq_calendar_inference_conflicts_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_conflicts
+    ADD CONSTRAINT uq_calendar_inference_conflicts_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_inference_runs uq_calendar_inference_runs_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_runs
+    ADD CONSTRAINT uq_calendar_inference_runs_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides uq_calendar_occurrence_policy_overrides; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_overrides
+    ADD CONSTRAINT uq_calendar_occurrence_policy_overrides UNIQUE (policy_id, occurrence_id);
+
+
+--
+-- Name: intelligence_calendar_event_occurrences uq_calendar_occurrences_current_schedule; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences
+    ADD CONSTRAINT uq_calendar_occurrences_current_schedule UNIQUE (id, current_schedule_revision_id);
+
+
+--
+-- Name: intelligence_calendar_event_occurrences uq_calendar_occurrences_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences
+    ADD CONSTRAINT uq_calendar_occurrences_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_event_occurrences uq_calendar_occurrences_event_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences
+    ADD CONSTRAINT uq_calendar_occurrences_event_key UNIQUE (event_id, recurrence_key);
+
+
+--
+-- Name: intelligence_calendar_operator_overrides uq_calendar_operator_overrides_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides
+    ADD CONSTRAINT uq_calendar_operator_overrides_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_operator_overrides uq_calendar_operator_overrides_supersedes; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides
+    ADD CONSTRAINT uq_calendar_operator_overrides_supersedes UNIQUE (supersedes_override_id);
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies uq_calendar_policies_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_coverage_policies
+    ADD CONSTRAINT uq_calendar_policies_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies uq_calendar_policies_event_profile; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_coverage_policies
+    ADD CONSTRAINT uq_calendar_policies_event_profile UNIQUE (event_id, profile_id);
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies uq_calendar_policies_profile_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_coverage_policies
+    ADD CONSTRAINT uq_calendar_policies_profile_id UNIQUE (profile_id, id);
+
+
+--
+-- Name: intelligence_calendar_policy_search_terms uq_calendar_policy_search_terms; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_search_terms
+    ADD CONSTRAINT uq_calendar_policy_search_terms UNIQUE (policy_id, language_tag, term_type, term);
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_exceptions uq_calendar_recurrence_exceptions_rule_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_recurrence_exceptions
+    ADD CONSTRAINT uq_calendar_recurrence_exceptions_rule_key UNIQUE (recurrence_rule_id, recurrence_key);
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules uq_calendar_recurrence_rules_event_version; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_recurrence_rules
+    ADD CONSTRAINT uq_calendar_recurrence_rules_event_version UNIQUE (event_id, version_number);
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions uq_calendar_schedule_revisions_occurrence_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_schedule_revisions
+    ADD CONSTRAINT uq_calendar_schedule_revisions_occurrence_id UNIQUE (occurrence_id, id);
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions uq_calendar_schedule_revisions_occurrence_number; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_schedule_revisions
+    ADD CONSTRAINT uq_calendar_schedule_revisions_occurrence_number UNIQUE (occurrence_id, revision_number);
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments uq_calendar_source_authority_event_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT uq_calendar_source_authority_event_id UNIQUE (event_id, id);
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments uq_calendar_source_authority_supersedes; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT uq_calendar_source_authority_supersedes UNIQUE (supersedes_assessment_id);
 
 
 --
@@ -2279,6 +6296,94 @@ ALTER TABLE ONLY public.geographies
 
 
 --
+-- Name: intelligence_calendar_administrative_exceptions uq_intelligence_calendar_administrative_exceptions_public_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exceptions
+    ADD CONSTRAINT uq_intelligence_calendar_administrative_exceptions_public_id UNIQUE (public_id);
+
+
+--
+-- Name: intelligence_calendar_event_occurrences uq_intelligence_calendar_event_occurrences_public_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences
+    ADD CONSTRAINT uq_intelligence_calendar_event_occurrences_public_id UNIQUE (public_id);
+
+
+--
+-- Name: intelligence_calendar_events uq_intelligence_calendar_events_public_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_events
+    ADD CONSTRAINT uq_intelligence_calendar_events_public_id UNIQUE (public_id);
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts uq_intelligence_calendar_inference_conflicts_public_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_conflicts
+    ADD CONSTRAINT uq_intelligence_calendar_inference_conflicts_public_id UNIQUE (public_id);
+
+
+--
+-- Name: intelligence_calendar_inference_runs uq_intelligence_calendar_inference_runs_public_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_runs
+    ADD CONSTRAINT uq_intelligence_calendar_inference_runs_public_id UNIQUE (public_id);
+
+
+--
+-- Name: monitor_evaluation_runs uq_monitor_evaluation_runs_monitor_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs
+    ADD CONSTRAINT uq_monitor_evaluation_runs_monitor_id UNIQUE (monitor_id, id);
+
+
+--
+-- Name: monitor_matches uq_monitor_matches_monitor_document; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT uq_monitor_matches_monitor_document UNIQUE (monitor_id, document_id);
+
+
+--
+-- Name: monitor_matches uq_monitor_matches_monitor_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT uq_monitor_matches_monitor_id UNIQUE (monitor_id, id);
+
+
+--
+-- Name: monitor_revisions uq_monitor_revisions_monitor_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions
+    ADD CONSTRAINT uq_monitor_revisions_monitor_id UNIQUE (monitor_id, id);
+
+
+--
+-- Name: monitor_revisions uq_monitor_revisions_monitor_number; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions
+    ADD CONSTRAINT uq_monitor_revisions_monitor_number UNIQUE (monitor_id, revision_number);
+
+
+--
+-- Name: monitors uq_monitors_slug; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitors
+    ADD CONSTRAINT uq_monitors_slug UNIQUE (slug);
+
+
+--
 -- Name: platforms uq_platforms_slug; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2331,6 +6436,146 @@ ALTER TABLE ONLY public.topics
 --
 
 CREATE INDEX ix_acquisition_methods_active ON public.acquisition_methods USING btree (is_active);
+
+
+--
+-- Name: ix_alert_deliveries_claim_expiry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_alert_deliveries_claim_expiry ON public.alert_deliveries USING btree (status, claim_expires_at);
+
+
+--
+-- Name: ix_alert_deliveries_destination_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_alert_deliveries_destination_status ON public.alert_deliveries USING btree (destination_id, status);
+
+
+--
+-- Name: ix_alert_deliveries_due; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_alert_deliveries_due ON public.alert_deliveries USING btree (status, next_attempt_at);
+
+
+--
+-- Name: ix_alert_delivery_attempts_delivery_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_alert_delivery_attempts_delivery_started ON public.alert_delivery_attempts USING btree (delivery_id, started_at);
+
+
+--
+-- Name: ix_alert_destinations_active_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_alert_destinations_active_name ON public.alert_destinations USING btree (is_active, name);
+
+
+--
+-- Name: ix_alerts_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_alerts_created ON public.alerts USING btree (created_at);
+
+
+--
+-- Name: ix_alerts_monitor_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_alerts_monitor_created ON public.alerts USING btree (monitor_id, created_at);
+
+
+--
+-- Name: ix_calendar_administrative_exceptions_queue; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_administrative_exceptions_queue ON public.intelligence_calendar_administrative_exceptions USING btree (state, severity, created_at);
+
+
+--
+-- Name: ix_calendar_assertion_ledger_event_family; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_assertion_ledger_event_family ON public.intelligence_calendar_assertion_ledger USING btree (event_id, assertion_family, created_at);
+
+
+--
+-- Name: ix_calendar_assertion_ledger_series; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_assertion_ledger_series ON public.intelligence_calendar_assertion_ledger USING btree (series_id, created_at);
+
+
+--
+-- Name: ix_calendar_events_state_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_events_state_created ON public.intelligence_calendar_events USING btree (identity_state, created_at);
+
+
+--
+-- Name: ix_calendar_inference_conflicts_state_severity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_inference_conflicts_state_severity ON public.intelligence_calendar_inference_conflicts USING btree (state, severity, detected_at);
+
+
+--
+-- Name: ix_calendar_inference_runs_event_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_inference_runs_event_started ON public.intelligence_calendar_inference_runs USING btree (event_id, started_at);
+
+
+--
+-- Name: ix_calendar_inference_runs_status_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_inference_runs_status_started ON public.intelligence_calendar_inference_runs USING btree (status, started_at);
+
+
+--
+-- Name: ix_calendar_occurrence_policy_history_scope; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_occurrence_policy_history_scope ON public.intelligence_calendar_occurrence_policy_override_history USING btree (policy_id, occurrence_id, changed_at);
+
+
+--
+-- Name: ix_calendar_occurrences_event_state; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_occurrences_event_state ON public.intelligence_calendar_event_occurrences USING btree (event_id, schedule_state);
+
+
+--
+-- Name: ix_calendar_operator_overrides_event_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_operator_overrides_event_created ON public.intelligence_calendar_operator_overrides USING btree (event_id, created_at);
+
+
+--
+-- Name: ix_calendar_schedule_revisions_date_start; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_schedule_revisions_date_start ON public.intelligence_calendar_occurrence_schedule_revisions USING btree (start_date);
+
+
+--
+-- Name: ix_calendar_schedule_revisions_timed_start; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_schedule_revisions_timed_start ON public.intelligence_calendar_occurrence_schedule_revisions USING btree (scheduled_start_at);
+
+
+--
+-- Name: ix_calendar_source_authority_event_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_calendar_source_authority_event_created ON public.intelligence_calendar_source_authority_assessments USING btree (event_id, created_at);
 
 
 --
@@ -2803,6 +7048,55 @@ CREATE INDEX ix_language_tags_script_subtag ON public.language_tags USING btree 
 
 
 --
+-- Name: ix_monitor_evaluation_runs_monitor_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_evaluation_runs_monitor_started ON public.monitor_evaluation_runs USING btree (monitor_id, started_at);
+
+
+--
+-- Name: ix_monitor_evaluation_runs_status_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_evaluation_runs_status_started ON public.monitor_evaluation_runs USING btree (status, started_at);
+
+
+--
+-- Name: ix_monitor_matches_document; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_matches_document ON public.monitor_matches USING btree (document_id);
+
+
+--
+-- Name: ix_monitor_matches_monitor_last; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_matches_monitor_last ON public.monitor_matches USING btree (monitor_id, last_matched_at);
+
+
+--
+-- Name: ix_monitor_revisions_monitor_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitor_revisions_monitor_created ON public.monitor_revisions USING btree (monitor_id, created_at);
+
+
+--
+-- Name: ix_monitors_profile_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitors_profile_status ON public.monitors USING btree (coverage_profile_id, status);
+
+
+--
+-- Name: ix_monitors_status_expires; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_monitors_status_expires ON public.monitors USING btree (status, expires_at);
+
+
+--
 -- Name: ix_platforms_active; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2929,6 +7223,69 @@ CREATE INDEX ix_topics_parent_sort_order ON public.topics USING btree (parent_id
 
 
 --
+-- Name: uq_calendar_event_entities_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_event_entities_active ON public.intelligence_calendar_event_entities USING btree (event_id, entity_id, role) WHERE (retracted_at IS NULL);
+
+
+--
+-- Name: uq_calendar_event_geographies_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_event_geographies_active ON public.intelligence_calendar_event_geographies USING btree (event_id, geography_id, role) WHERE (retracted_at IS NULL);
+
+
+--
+-- Name: uq_calendar_event_sources_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_event_sources_active ON public.intelligence_calendar_event_sources USING btree (event_id, source_id, role) WHERE (retracted_at IS NULL);
+
+
+--
+-- Name: uq_calendar_event_topics_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_event_topics_active ON public.intelligence_calendar_event_topics USING btree (event_id, topic_id, role) WHERE (retracted_at IS NULL);
+
+
+--
+-- Name: uq_calendar_policy_watch_sources_endpoint; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_policy_watch_sources_endpoint ON public.intelligence_calendar_policy_watch_sources USING btree (policy_id, source_endpoint_id) WHERE (source_endpoint_id IS NOT NULL);
+
+
+--
+-- Name: uq_calendar_policy_watch_sources_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_policy_watch_sources_source ON public.intelligence_calendar_policy_watch_sources USING btree (policy_id, source_id) WHERE (source_endpoint_id IS NULL);
+
+
+--
+-- Name: uq_calendar_recurrence_rules_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_recurrence_rules_active ON public.intelligence_calendar_event_recurrence_rules USING btree (event_id) WHERE ((status)::text = 'active'::text);
+
+
+--
+-- Name: uq_calendar_resolution_attempt_completed_idempotency; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_resolution_attempt_completed_idempotency ON public.intelligence_calendar_resolution_attempts USING btree (conflict_id, input_hash, actor_kind, strategy_slug, strategy_version) WHERE ((status)::text = 'completed'::text);
+
+
+--
+-- Name: uq_calendar_resolution_attempt_reasoning_ordinal; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendar_resolution_attempt_reasoning_ordinal ON public.intelligence_calendar_resolution_attempts USING btree (conflict_id, reasoning_ordinal) WHERE (reasoning_ordinal IS NOT NULL);
+
+
+--
 -- Name: uq_coverage_profiles_default; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3027,6 +7384,27 @@ CREATE UNIQUE INDEX uq_geographies_iso_alpha3 ON public.geographies USING btree 
 
 
 --
+-- Name: alert_delivery_attempts alert_delivery_attempts_preserve_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER alert_delivery_attempts_preserve_history BEFORE DELETE OR UPDATE ON public.alert_delivery_attempts FOR EACH ROW EXECUTE FUNCTION public.preserve_completed_alert_attempt();
+
+
+--
+-- Name: alerts alerts_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER alerts_preserve_immutability BEFORE DELETE OR UPDATE ON public.alerts FOR EACH ROW EXECUTE FUNCTION public.preserve_alert_event();
+
+
+--
+-- Name: alerts alerts_require_match_provenance; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER alerts_require_match_provenance AFTER INSERT OR UPDATE OF monitor_id, monitor_match_id, monitor_revision_id, document_id ON public.alerts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_alert_match_provenance();
+
+
+--
 -- Name: entity_type_hierarchy_edges ck_entity_type_hierarchy_edges_acyclic; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3038,6 +7416,716 @@ CREATE CONSTRAINT TRIGGER ck_entity_type_hierarchy_edges_acyclic AFTER INSERT OR
 --
 
 CREATE CONSTRAINT TRIGGER coverage_profiles_require_default AFTER INSERT OR DELETE OR UPDATE ON public.coverage_profiles DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_default_coverage_profile();
+
+
+--
+-- Name: intelligence_calendar_administrative_exception_actions intelligence_calendar_administrative_exception_actions_preserve; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_administrative_exception_actions_preserve BEFORE DELETE OR UPDATE ON public.intelligence_calendar_administrative_exception_actions FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_assertion_evidence intelligence_calendar_assertion_evidence_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_assertion_evidence_preserve_immutability BEFORE DELETE OR UPDATE ON public.intelligence_calendar_assertion_evidence FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger intelligence_calendar_assertion_ledger_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_assertion_ledger_preserve_immutability BEFORE DELETE OR UPDATE ON public.intelligence_calendar_assertion_ledger FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_conflict_assertions intelligence_calendar_conflict_assertions_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_conflict_assertions_preserve_immutability BEFORE DELETE OR UPDATE ON public.intelligence_calendar_conflict_assertions FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_override_history intelligence_calendar_occurrence_policy_override_history_preser; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_occurrence_policy_override_history_preser BEFORE DELETE OR UPDATE ON public.intelligence_calendar_occurrence_policy_override_history FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_operator_overrides intelligence_calendar_operator_overrides_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_operator_overrides_preserve_immutability BEFORE DELETE OR UPDATE ON public.intelligence_calendar_operator_overrides FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts intelligence_calendar_resolution_attempts_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_resolution_attempts_preserve_immutability BEFORE DELETE OR UPDATE ON public.intelligence_calendar_resolution_attempts FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments intelligence_calendar_source_authority_assessments_preserve_imm; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_source_authority_assessments_preserve_imm BEFORE DELETE OR UPDATE ON public.intelligence_calendar_source_authority_assessments FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_source_authority_evidence intelligence_calendar_source_authority_evidence_preserve_immuta; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER intelligence_calendar_source_authority_evidence_preserve_immuta BEFORE DELETE OR UPDATE ON public.intelligence_calendar_source_authority_evidence FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_reject_mutation();
+
+
+--
+-- Name: monitor_matches matches_preserve_alert_provenance; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER matches_preserve_alert_provenance AFTER UPDATE OF monitor_id, document_id, first_monitor_revision_id ON public.monitor_matches DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_alert_match_provenance();
+
+
+--
+-- Name: monitor_revision_content_formats monitor_revision_content_formats_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_content_formats_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_content_formats FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_document_types monitor_revision_document_types_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_document_types_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_document_types FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_entities monitor_revision_entities_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_entities_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_entities FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_entity_roles monitor_revision_entity_roles_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_entity_roles_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_entity_roles FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_geographies monitor_revision_geographies_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_geographies_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_geographies FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_languages monitor_revision_languages_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_languages_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_languages FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_source_types monitor_revision_source_types_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_source_types_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_source_types FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_sources monitor_revision_sources_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_sources_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_sources FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revision_topics monitor_revision_topics_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revision_topics_preserve_immutability BEFORE INSERT OR DELETE OR UPDATE ON public.monitor_revision_topics FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_selectors();
+
+
+--
+-- Name: monitor_revisions monitor_revisions_preserve_immutability; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER monitor_revisions_preserve_immutability BEFORE DELETE OR UPDATE ON public.monitor_revisions FOR EACH ROW EXECUTE FUNCTION public.preserve_monitor_revision_immutability();
+
+
+--
+-- Name: monitor_revisions monitor_revisions_require_seal; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER monitor_revisions_require_seal AFTER INSERT OR UPDATE OF sealed_at ON public.monitor_revisions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_monitor_revisions_sealed();
+
+
+--
+-- Name: monitors monitors_require_current_revision; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER monitors_require_current_revision AFTER INSERT OR UPDATE OF id, current_revision_number ON public.monitors DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_monitor_current_revision();
+
+
+--
+-- Name: monitor_revisions revisions_preserve_monitor_current; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER revisions_preserve_monitor_current AFTER DELETE OR UPDATE OF monitor_id, revision_number ON public.monitor_revisions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.require_monitor_current_revision();
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger trg_calendar_assertion_supersession; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_assertion_supersession BEFORE INSERT ON public.intelligence_calendar_assertion_ledger FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_assertion_supersession();
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts trg_calendar_attempt_resolution_reference; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_attempt_resolution_reference BEFORE INSERT ON public.intelligence_calendar_resolution_attempts FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_resolution_reference();
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments trg_calendar_authority_assessment; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_authority_assessment BEFORE INSERT ON public.intelligence_calendar_source_authority_assessments FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_authority_assessment();
+
+
+--
+-- Name: intelligence_calendar_conflict_assertions trg_calendar_conflict_assertion_scope; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_conflict_assertion_scope BEFORE INSERT ON public.intelligence_calendar_conflict_assertions FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_conflict_assertion();
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts trg_calendar_conflict_resolution_reference; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_conflict_resolution_reference BEFORE INSERT OR UPDATE OF selected_assertion_id ON public.intelligence_calendar_inference_conflicts FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_resolution_reference();
+
+
+--
+-- Name: intelligence_calendar_events trg_calendar_events_forward_revision; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_events_forward_revision AFTER UPDATE ON public.intelligence_calendar_events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_require_forward_revision();
+
+
+--
+-- Name: intelligence_calendar_events trg_calendar_events_state_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_events_state_history AFTER UPDATE ON public.intelligence_calendar_events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_require_state_history();
+
+
+--
+-- Name: intelligence_calendar_event_evidence trg_calendar_evidence_source; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_evidence_source BEFORE INSERT ON public.intelligence_calendar_event_evidence FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_evidence_source();
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions trg_calendar_exception_action_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_exception_action_history AFTER UPDATE OF state ON public.intelligence_calendar_administrative_exceptions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_require_exception_action();
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions trg_calendar_exception_eligibility; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_exception_eligibility BEFORE INSERT ON public.intelligence_calendar_administrative_exceptions FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_exception_eligibility();
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions trg_calendar_exception_resolution_reference; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_exception_resolution_reference BEFORE INSERT OR UPDATE OF proposed_assertion_id ON public.intelligence_calendar_administrative_exceptions FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_resolution_reference();
+
+
+--
+-- Name: intelligence_calendar_event_merge_history trg_calendar_merge_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_merge_history BEFORE INSERT ON public.intelligence_calendar_event_merge_history FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_merge();
+
+
+--
+-- Name: intelligence_calendar_event_monitors trg_calendar_monitor_profile; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_monitor_profile BEFORE INSERT OR UPDATE ON public.intelligence_calendar_event_monitors FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_monitor_profile();
+
+
+--
+-- Name: intelligence_calendar_event_occurrences trg_calendar_occurrences_forward_revision; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_occurrences_forward_revision AFTER UPDATE ON public.intelligence_calendar_event_occurrences DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_require_forward_revision();
+
+
+--
+-- Name: intelligence_calendar_event_occurrences trg_calendar_occurrences_state_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_occurrences_state_history AFTER UPDATE ON public.intelligence_calendar_event_occurrences DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_require_state_history();
+
+
+--
+-- Name: intelligence_calendar_operator_overrides trg_calendar_operator_override; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_operator_override BEFORE INSERT ON public.intelligence_calendar_operator_overrides FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_operator_override();
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides trg_calendar_policy_override_event; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_policy_override_event BEFORE INSERT OR UPDATE ON public.intelligence_calendar_occurrence_policy_overrides FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_policy_override();
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides trg_calendar_policy_override_history; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_calendar_policy_override_history AFTER INSERT OR DELETE OR UPDATE ON public.intelligence_calendar_occurrence_policy_overrides DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_require_policy_override_history();
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules trg_calendar_recurrence_rules_sealed; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_recurrence_rules_sealed BEFORE UPDATE ON public.intelligence_calendar_event_recurrence_rules FOR EACH ROW EXECUTE FUNCTION public.calendar_restrict_recurrence_rule_mutation();
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts trg_calendar_resolution_attempt_order; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_resolution_attempt_order BEFORE INSERT ON public.intelligence_calendar_resolution_attempts FOR EACH ROW EXECUTE FUNCTION public.calendar_phase2_validate_resolution_attempt();
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources trg_calendar_watch_endpoint_source; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_watch_endpoint_source BEFORE INSERT OR UPDATE ON public.intelligence_calendar_policy_watch_sources FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_watch_endpoint();
+
+
+--
+-- Name: intelligence_calendar_event_entities trg_intelligence_calendar_event_entities_retraction_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_entities_retraction_only BEFORE DELETE OR UPDATE ON public.intelligence_calendar_event_entities FOR EACH ROW EXECUTE FUNCTION public.calendar_restrict_assertion_mutation();
+
+
+--
+-- Name: intelligence_calendar_event_evidence trg_intelligence_calendar_event_evidence_append_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_evidence_append_only BEFORE DELETE OR UPDATE ON public.intelligence_calendar_event_evidence FOR EACH ROW EXECUTE FUNCTION public.calendar_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_event_geographies trg_intelligence_calendar_event_geographies_retraction_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_geographies_retraction_only BEFORE DELETE OR UPDATE ON public.intelligence_calendar_event_geographies FOR EACH ROW EXECUTE FUNCTION public.calendar_restrict_assertion_mutation();
+
+
+--
+-- Name: intelligence_calendar_event_merge_history trg_intelligence_calendar_event_merge_history_append_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_merge_history_append_only BEFORE DELETE OR UPDATE ON public.intelligence_calendar_event_merge_history FOR EACH ROW EXECUTE FUNCTION public.calendar_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_event_occurrences trg_intelligence_calendar_event_occurrences_shape; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_intelligence_calendar_event_occurrences_shape AFTER INSERT OR DELETE OR UPDATE ON public.intelligence_calendar_event_occurrences DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_event_shape();
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules trg_intelligence_calendar_event_recurrence_rules_shape; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_intelligence_calendar_event_recurrence_rules_shape AFTER INSERT OR DELETE OR UPDATE ON public.intelligence_calendar_event_recurrence_rules DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_event_shape();
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules trg_intelligence_calendar_event_recurrence_rules_timezone; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_recurrence_rules_timezone BEFORE INSERT OR UPDATE ON public.intelligence_calendar_event_recurrence_rules FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_timezone();
+
+
+--
+-- Name: intelligence_calendar_event_revisions trg_intelligence_calendar_event_revisions_append_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_revisions_append_only BEFORE DELETE OR UPDATE ON public.intelligence_calendar_event_revisions FOR EACH ROW EXECUTE FUNCTION public.calendar_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_event_sources trg_intelligence_calendar_event_sources_retraction_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_sources_retraction_only BEFORE DELETE OR UPDATE ON public.intelligence_calendar_event_sources FOR EACH ROW EXECUTE FUNCTION public.calendar_restrict_assertion_mutation();
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions trg_intelligence_calendar_event_state_transitions_append_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_state_transitions_append_only BEFORE DELETE OR UPDATE ON public.intelligence_calendar_event_state_transitions FOR EACH ROW EXECUTE FUNCTION public.calendar_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_event_topics trg_intelligence_calendar_event_topics_retraction_only; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_event_topics_retraction_only BEFORE DELETE OR UPDATE ON public.intelligence_calendar_event_topics FOR EACH ROW EXECUTE FUNCTION public.calendar_restrict_assertion_mutation();
+
+
+--
+-- Name: intelligence_calendar_events trg_intelligence_calendar_events_shape; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER trg_intelligence_calendar_events_shape AFTER INSERT OR DELETE OR UPDATE ON public.intelligence_calendar_events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_event_shape();
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions trg_intelligence_calendar_occurrence_schedule_revisions_append_; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_occurrence_schedule_revisions_append_ BEFORE DELETE OR UPDATE ON public.intelligence_calendar_occurrence_schedule_revisions FOR EACH ROW EXECUTE FUNCTION public.calendar_reject_mutation();
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions trg_intelligence_calendar_occurrence_schedule_revisions_timezon; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intelligence_calendar_occurrence_schedule_revisions_timezon BEFORE INSERT OR UPDATE ON public.intelligence_calendar_occurrence_schedule_revisions FOR EACH ROW EXECUTE FUNCTION public.calendar_validate_timezone();
+
+
+--
+-- Name: alert_deliveries fk_alert_deliveries_alert_id_alerts; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_deliveries
+    ADD CONSTRAINT fk_alert_deliveries_alert_id_alerts FOREIGN KEY (alert_id) REFERENCES public.alerts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: alert_deliveries fk_alert_deliveries_destination_id_alert_destinations; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_deliveries
+    ADD CONSTRAINT fk_alert_deliveries_destination_id_alert_destinations FOREIGN KEY (destination_id) REFERENCES public.alert_destinations(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: alert_delivery_attempts fk_alert_delivery_attempts_delivery_id_alert_deliveries; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alert_delivery_attempts
+    ADD CONSTRAINT fk_alert_delivery_attempts_delivery_id_alert_deliveries FOREIGN KEY (delivery_id) REFERENCES public.alert_deliveries(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: alerts fk_alerts_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alerts
+    ADD CONSTRAINT fk_alerts_document_id_documents FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: alerts fk_alerts_monitor_match; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alerts
+    ADD CONSTRAINT fk_alerts_monitor_match FOREIGN KEY (monitor_id, monitor_match_id) REFERENCES public.monitor_matches(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: alerts fk_alerts_monitor_revision; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alerts
+    ADD CONSTRAINT fk_alerts_monitor_revision FOREIGN KEY (monitor_id, monitor_revision_id) REFERENCES public.monitor_revisions(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions fk_calendar_administrative_exceptions_conflict; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exceptions
+    ADD CONSTRAINT fk_calendar_administrative_exceptions_conflict FOREIGN KEY (event_id, conflict_id) REFERENCES public.intelligence_calendar_inference_conflicts(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_administrative_exceptions fk_calendar_administrative_exceptions_proposed_assertion; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exceptions
+    ADD CONSTRAINT fk_calendar_administrative_exceptions_proposed_assertion FOREIGN KEY (event_id, proposed_assertion_id) REFERENCES public.intelligence_calendar_assertion_ledger(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_assertion_evidence fk_calendar_assertion_evidence_assertion; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_evidence
+    ADD CONSTRAINT fk_calendar_assertion_evidence_assertion FOREIGN KEY (event_id, assertion_id) REFERENCES public.intelligence_calendar_assertion_ledger(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_assertion_evidence fk_calendar_assertion_evidence_evidence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_evidence
+    ADD CONSTRAINT fk_calendar_assertion_evidence_evidence FOREIGN KEY (event_id, evidence_id) REFERENCES public.intelligence_calendar_event_evidence(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_calendar_assertion_ledger_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_calendar_assertion_ledger_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_calendar_assertion_ledger_run; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_calendar_assertion_ledger_run FOREIGN KEY (event_id, inference_run_id) REFERENCES public.intelligence_calendar_inference_runs(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_calendar_assertion_ledger_supersedes; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_calendar_assertion_ledger_supersedes FOREIGN KEY (event_id, supersedes_assertion_id) REFERENCES public.intelligence_calendar_assertion_ledger(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments fk_calendar_authority_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT fk_calendar_authority_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments fk_calendar_authority_run; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT fk_calendar_authority_run FOREIGN KEY (event_id, inference_run_id) REFERENCES public.intelligence_calendar_inference_runs(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments fk_calendar_authority_subject_evidence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT fk_calendar_authority_subject_evidence FOREIGN KEY (event_id, subject_evidence_id) REFERENCES public.intelligence_calendar_event_evidence(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments fk_calendar_authority_supersedes; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT fk_calendar_authority_supersedes FOREIGN KEY (event_id, supersedes_assessment_id) REFERENCES public.intelligence_calendar_source_authority_assessments(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_conflict_assertions fk_calendar_conflict_assertions_assertion; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_conflict_assertions
+    ADD CONSTRAINT fk_calendar_conflict_assertions_assertion FOREIGN KEY (event_id, assertion_id) REFERENCES public.intelligence_calendar_assertion_ledger(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_conflict_assertions fk_calendar_conflict_assertions_conflict; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_conflict_assertions
+    ADD CONSTRAINT fk_calendar_conflict_assertions_conflict FOREIGN KEY (event_id, conflict_id) REFERENCES public.intelligence_calendar_inference_conflicts(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_documents fk_calendar_event_documents_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_documents
+    ADD CONSTRAINT fk_calendar_event_documents_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_monitors fk_calendar_event_monitors_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_monitors
+    ADD CONSTRAINT fk_calendar_event_monitors_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_monitors fk_calendar_event_monitors_policy; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_monitors
+    ADD CONSTRAINT fk_calendar_event_monitors_policy FOREIGN KEY (event_id, policy_id) REFERENCES public.intelligence_calendar_event_coverage_policies(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_events fk_calendar_events_current_revision; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_events
+    ADD CONSTRAINT fk_calendar_events_current_revision FOREIGN KEY (id, current_revision_id) REFERENCES public.intelligence_calendar_event_revisions(event_id, id) DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: intelligence_calendar_event_evidence fk_calendar_evidence_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence
+    ADD CONSTRAINT fk_calendar_evidence_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts fk_calendar_inference_conflicts_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_conflicts
+    ADD CONSTRAINT fk_calendar_inference_conflicts_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts fk_calendar_inference_conflicts_run; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_conflicts
+    ADD CONSTRAINT fk_calendar_inference_conflicts_run FOREIGN KEY (event_id, detection_run_id) REFERENCES public.intelligence_calendar_inference_runs(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts fk_calendar_inference_conflicts_selected_assertion; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_conflicts
+    ADD CONSTRAINT fk_calendar_inference_conflicts_selected_assertion FOREIGN KEY (event_id, selected_assertion_id) REFERENCES public.intelligence_calendar_assertion_ledger(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_inference_runs fk_calendar_inference_runs_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_runs
+    ADD CONSTRAINT fk_calendar_inference_runs_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_occurrences fk_calendar_occurrences_current_schedule; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences
+    ADD CONSTRAINT fk_calendar_occurrences_current_schedule FOREIGN KEY (id, current_schedule_revision_id) REFERENCES public.intelligence_calendar_occurrence_schedule_revisions(occurrence_id, id) DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: intelligence_calendar_operator_overrides fk_calendar_operator_overrides_assertion; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides
+    ADD CONSTRAINT fk_calendar_operator_overrides_assertion FOREIGN KEY (event_id, assertion_id) REFERENCES public.intelligence_calendar_assertion_ledger(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_operator_overrides fk_calendar_operator_overrides_conflict; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides
+    ADD CONSTRAINT fk_calendar_operator_overrides_conflict FOREIGN KEY (event_id, conflict_id) REFERENCES public.intelligence_calendar_inference_conflicts(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_operator_overrides fk_calendar_operator_overrides_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides
+    ADD CONSTRAINT fk_calendar_operator_overrides_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_operator_overrides fk_calendar_operator_overrides_supersedes; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides
+    ADD CONSTRAINT fk_calendar_operator_overrides_supersedes FOREIGN KEY (event_id, supersedes_override_id) REFERENCES public.intelligence_calendar_operator_overrides(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts fk_calendar_resolution_attempts_conflict; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_resolution_attempts
+    ADD CONSTRAINT fk_calendar_resolution_attempts_conflict FOREIGN KEY (event_id, conflict_id) REFERENCES public.intelligence_calendar_inference_conflicts(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_resolution_attempts fk_calendar_resolution_attempts_selected_assertion; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_resolution_attempts
+    ADD CONSTRAINT fk_calendar_resolution_attempts_selected_assertion FOREIGN KEY (event_id, selected_assertion_id) REFERENCES public.intelligence_calendar_assertion_ledger(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_source_authority_evidence fk_calendar_source_authority_evidence_assessment; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_evidence
+    ADD CONSTRAINT fk_calendar_source_authority_evidence_assessment FOREIGN KEY (event_id, assessment_id) REFERENCES public.intelligence_calendar_source_authority_assessments(event_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_source_authority_evidence fk_calendar_source_authority_evidence_evidence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_evidence
+    ADD CONSTRAINT fk_calendar_source_authority_evidence_evidence FOREIGN KEY (event_id, evidence_id) REFERENCES public.intelligence_calendar_event_evidence(event_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions fk_calendar_transitions_occurrence; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_state_transitions
+    ADD CONSTRAINT fk_calendar_transitions_occurrence FOREIGN KEY (event_id, occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(event_id, id) ON DELETE CASCADE;
 
 
 --
@@ -3553,11 +8641,779 @@ ALTER TABLE ONLY public.ingestion_runs
 
 
 --
+-- Name: intelligence_calendar_administrative_exception_actions fk_intelligence_calendar_administrative_exception_actio_7635; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exception_actions
+    ADD CONSTRAINT fk_intelligence_calendar_administrative_exception_actio_7635 FOREIGN KEY (exception_id) REFERENCES public.intelligence_calendar_administrative_exceptions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_administrative_exception_actions fk_intelligence_calendar_administrative_exception_actio_aad9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_administrative_exception_actions
+    ADD CONSTRAINT fk_intelligence_calendar_administrative_exception_actio_aad9 FOREIGN KEY (override_id) REFERENCES public.intelligence_calendar_operator_overrides(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_intelligence_calendar_assertion_ledger_assignment_me_5a93; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_intelligence_calendar_assertion_ledger_assignment_me_5a93 FOREIGN KEY (assignment_method) REFERENCES public.semantic_assignment_methods(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_intelligence_calendar_assertion_ledger_entity_id_entities; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_intelligence_calendar_assertion_ledger_entity_id_entities FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_intelligence_calendar_assertion_ledger_event_id_inte_8ed6; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_intelligence_calendar_assertion_ledger_event_id_inte_8ed6 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_intelligence_calendar_assertion_ledger_geography_id__aca4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_intelligence_calendar_assertion_ledger_geography_id__aca4 FOREIGN KEY (geography_id) REFERENCES public.geographies(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_intelligence_calendar_assertion_ledger_source_id_sources; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_intelligence_calendar_assertion_ledger_source_id_sources FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_assertion_ledger fk_intelligence_calendar_assertion_ledger_topic_id_topics; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_assertion_ledger
+    ADD CONSTRAINT fk_intelligence_calendar_assertion_ledger_topic_id_topics FOREIGN KEY (topic_id) REFERENCES public.topics(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_aliases fk_intelligence_calendar_event_aliases_event_id_intelli_8867; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_aliases
+    ADD CONSTRAINT fk_intelligence_calendar_event_aliases_event_id_intelli_8867 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_aliases fk_intelligence_calendar_event_aliases_language_tag_lan_cc60; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_aliases
+    ADD CONSTRAINT fk_intelligence_calendar_event_aliases_language_tag_lan_cc60 FOREIGN KEY (language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies fk_intelligence_calendar_event_coverage_policies_event__c662; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_coverage_policies
+    ADD CONSTRAINT fk_intelligence_calendar_event_coverage_policies_event__c662 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_coverage_policies fk_intelligence_calendar_event_coverage_policies_profil_be9c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_coverage_policies
+    ADD CONSTRAINT fk_intelligence_calendar_event_coverage_policies_profil_be9c FOREIGN KEY (profile_id) REFERENCES public.coverage_profiles(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_documents fk_intelligence_calendar_event_documents_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_documents
+    ADD CONSTRAINT fk_intelligence_calendar_event_documents_document_id_documents FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_documents fk_intelligence_calendar_event_documents_event_id_intel_12c2; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_documents
+    ADD CONSTRAINT fk_intelligence_calendar_event_documents_event_id_intel_12c2 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_documents fk_intelligence_calendar_event_documents_evidence_id_in_421a; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_documents
+    ADD CONSTRAINT fk_intelligence_calendar_event_documents_evidence_id_in_421a FOREIGN KEY (evidence_id) REFERENCES public.intelligence_calendar_event_evidence(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_entities fk_intelligence_calendar_event_entities_entity_id_entities; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_entities
+    ADD CONSTRAINT fk_intelligence_calendar_event_entities_entity_id_entities FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_entities fk_intelligence_calendar_event_entities_event_id_intell_eb68; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_entities
+    ADD CONSTRAINT fk_intelligence_calendar_event_entities_event_id_intell_eb68 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_entities fk_intelligence_calendar_event_entities_evidence_id_int_ef35; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_entities
+    ADD CONSTRAINT fk_intelligence_calendar_event_entities_evidence_id_int_ef35 FOREIGN KEY (evidence_id) REFERENCES public.intelligence_calendar_event_evidence(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_evidence fk_intelligence_calendar_event_evidence_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence
+    ADD CONSTRAINT fk_intelligence_calendar_event_evidence_document_id_documents FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_evidence fk_intelligence_calendar_event_evidence_event_id_intell_5a59; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence
+    ADD CONSTRAINT fk_intelligence_calendar_event_evidence_event_id_intell_5a59 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_evidence fk_intelligence_calendar_event_evidence_language_tag_la_f8ed; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence
+    ADD CONSTRAINT fk_intelligence_calendar_event_evidence_language_tag_la_f8ed FOREIGN KEY (language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_evidence fk_intelligence_calendar_event_evidence_source_id_sources; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_evidence
+    ADD CONSTRAINT fk_intelligence_calendar_event_evidence_source_id_sources FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_geographies fk_intelligence_calendar_event_geographies_event_id_int_f4e8; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_geographies
+    ADD CONSTRAINT fk_intelligence_calendar_event_geographies_event_id_int_f4e8 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_geographies fk_intelligence_calendar_event_geographies_evidence_id__ff42; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_geographies
+    ADD CONSTRAINT fk_intelligence_calendar_event_geographies_evidence_id__ff42 FOREIGN KEY (evidence_id) REFERENCES public.intelligence_calendar_event_evidence(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_geographies fk_intelligence_calendar_event_geographies_geography_id_30d7; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_geographies
+    ADD CONSTRAINT fk_intelligence_calendar_event_geographies_geography_id_30d7 FOREIGN KEY (geography_id) REFERENCES public.geographies(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_merge_history fk_intelligence_calendar_event_merge_history_evidence_i_3ae9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_merge_history
+    ADD CONSTRAINT fk_intelligence_calendar_event_merge_history_evidence_i_3ae9 FOREIGN KEY (evidence_id) REFERENCES public.intelligence_calendar_event_evidence(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_merge_history fk_intelligence_calendar_event_merge_history_loser_even_c9fb; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_merge_history
+    ADD CONSTRAINT fk_intelligence_calendar_event_merge_history_loser_even_c9fb FOREIGN KEY (loser_event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_merge_history fk_intelligence_calendar_event_merge_history_winner_eve_1ede; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_merge_history
+    ADD CONSTRAINT fk_intelligence_calendar_event_merge_history_winner_eve_1ede FOREIGN KEY (winner_event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_monitors fk_intelligence_calendar_event_monitors_event_id_intell_4949; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_monitors
+    ADD CONSTRAINT fk_intelligence_calendar_event_monitors_event_id_intell_4949 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_monitors fk_intelligence_calendar_event_monitors_monitor_id_monitors; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_monitors
+    ADD CONSTRAINT fk_intelligence_calendar_event_monitors_monitor_id_monitors FOREIGN KEY (monitor_id) REFERENCES public.monitors(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_occurrences fk_intelligence_calendar_event_occurrences_event_id_int_4ce4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences
+    ADD CONSTRAINT fk_intelligence_calendar_event_occurrences_event_id_int_4ce4 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_occurrences fk_intelligence_calendar_event_occurrences_recurrence_r_e258; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_occurrences
+    ADD CONSTRAINT fk_intelligence_calendar_event_occurrences_recurrence_r_e258 FOREIGN KEY (recurrence_rule_id) REFERENCES public.intelligence_calendar_event_recurrence_rules(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_exceptions fk_intelligence_calendar_event_recurrence_exceptions_re_4c0f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_recurrence_exceptions
+    ADD CONSTRAINT fk_intelligence_calendar_event_recurrence_exceptions_re_4c0f FOREIGN KEY (recurrence_rule_id) REFERENCES public.intelligence_calendar_event_recurrence_rules(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_recurrence_rules fk_intelligence_calendar_event_recurrence_rules_event_i_61e6; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_recurrence_rules
+    ADD CONSTRAINT fk_intelligence_calendar_event_recurrence_rules_event_i_61e6 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_revisions fk_intelligence_calendar_event_revisions_event_id_intel_34bc; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_revisions
+    ADD CONSTRAINT fk_intelligence_calendar_event_revisions_event_id_intel_34bc FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_revisions fk_intelligence_calendar_event_revisions_original_langu_c709; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_revisions
+    ADD CONSTRAINT fk_intelligence_calendar_event_revisions_original_langu_c709 FOREIGN KEY (original_language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_sources fk_intelligence_calendar_event_sources_event_id_intelli_26e9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_sources
+    ADD CONSTRAINT fk_intelligence_calendar_event_sources_event_id_intelli_26e9 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_sources fk_intelligence_calendar_event_sources_evidence_id_inte_4e77; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_sources
+    ADD CONSTRAINT fk_intelligence_calendar_event_sources_evidence_id_inte_4e77 FOREIGN KEY (evidence_id) REFERENCES public.intelligence_calendar_event_evidence(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_sources fk_intelligence_calendar_event_sources_source_id_sources; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_sources
+    ADD CONSTRAINT fk_intelligence_calendar_event_sources_source_id_sources FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions fk_intelligence_calendar_event_state_transitions_event__92c5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_state_transitions
+    ADD CONSTRAINT fk_intelligence_calendar_event_state_transitions_event__92c5 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_state_transitions fk_intelligence_calendar_event_state_transitions_eviden_6af0; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_state_transitions
+    ADD CONSTRAINT fk_intelligence_calendar_event_state_transitions_eviden_6af0 FOREIGN KEY (evidence_id) REFERENCES public.intelligence_calendar_event_evidence(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_topics fk_intelligence_calendar_event_topics_event_id_intellig_c547; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_topics
+    ADD CONSTRAINT fk_intelligence_calendar_event_topics_event_id_intellig_c547 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_event_topics fk_intelligence_calendar_event_topics_evidence_id_intel_32ce; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_topics
+    ADD CONSTRAINT fk_intelligence_calendar_event_topics_evidence_id_intel_32ce FOREIGN KEY (evidence_id) REFERENCES public.intelligence_calendar_event_evidence(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_event_topics fk_intelligence_calendar_event_topics_topic_id_topics; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_event_topics
+    ADD CONSTRAINT fk_intelligence_calendar_event_topics_topic_id_topics FOREIGN KEY (topic_id) REFERENCES public.topics(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_events fk_intelligence_calendar_events_merged_into_event_id_in_143e; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_events
+    ADD CONSTRAINT fk_intelligence_calendar_events_merged_into_event_id_in_143e FOREIGN KEY (merged_into_event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_inference_conflicts fk_intelligence_calendar_inference_conflicts_event_id_i_d425; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_conflicts
+    ADD CONSTRAINT fk_intelligence_calendar_inference_conflicts_event_id_i_d425 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_inference_runs fk_intelligence_calendar_inference_runs_event_id_intell_bec9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_inference_runs
+    ADD CONSTRAINT fk_intelligence_calendar_inference_runs_event_id_intell_bec9 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_override_history fk_intelligence_calendar_occurrence_policy_override_his_aaba; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_override_history
+    ADD CONSTRAINT fk_intelligence_calendar_occurrence_policy_override_his_aaba FOREIGN KEY (occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_override_history fk_intelligence_calendar_occurrence_policy_override_his_adbf; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_override_history
+    ADD CONSTRAINT fk_intelligence_calendar_occurrence_policy_override_his_adbf FOREIGN KEY (policy_id) REFERENCES public.intelligence_calendar_event_coverage_policies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides fk_intelligence_calendar_occurrence_policy_overrides_oc_65ec; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_overrides
+    ADD CONSTRAINT fk_intelligence_calendar_occurrence_policy_overrides_oc_65ec FOREIGN KEY (occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_occurrence_policy_overrides fk_intelligence_calendar_occurrence_policy_overrides_po_4c89; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_policy_overrides
+    ADD CONSTRAINT fk_intelligence_calendar_occurrence_policy_overrides_po_4c89 FOREIGN KEY (policy_id) REFERENCES public.intelligence_calendar_event_coverage_policies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions fk_intelligence_calendar_occurrence_schedule_revisions__dd61; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_schedule_revisions
+    ADD CONSTRAINT fk_intelligence_calendar_occurrence_schedule_revisions__dd61 FOREIGN KEY (occurrence_id) REFERENCES public.intelligence_calendar_event_occurrences(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_occurrence_schedule_revisions fk_intelligence_calendar_occurrence_schedule_revisions__fc15; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_occurrence_schedule_revisions
+    ADD CONSTRAINT fk_intelligence_calendar_occurrence_schedule_revisions__fc15 FOREIGN KEY (original_language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_operator_overrides fk_intelligence_calendar_operator_overrides_event_id_in_81ad; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_operator_overrides
+    ADD CONSTRAINT fk_intelligence_calendar_operator_overrides_event_id_in_81ad FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_policy_content_formats fk_intelligence_calendar_policy_content_formats_content_eb04; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_content_formats
+    ADD CONSTRAINT fk_intelligence_calendar_policy_content_formats_content_eb04 FOREIGN KEY (content_format_slug) REFERENCES public.content_formats(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_policy_content_formats fk_intelligence_calendar_policy_content_formats_policy__1c33; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_content_formats
+    ADD CONSTRAINT fk_intelligence_calendar_policy_content_formats_policy__1c33 FOREIGN KEY (policy_id) REFERENCES public.intelligence_calendar_event_coverage_policies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_policy_document_types fk_intelligence_calendar_policy_document_types_document_a6ec; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_document_types
+    ADD CONSTRAINT fk_intelligence_calendar_policy_document_types_document_a6ec FOREIGN KEY (document_type_id) REFERENCES public.document_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_policy_document_types fk_intelligence_calendar_policy_document_types_policy_i_35fb; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_document_types
+    ADD CONSTRAINT fk_intelligence_calendar_policy_document_types_policy_i_35fb FOREIGN KEY (policy_id) REFERENCES public.intelligence_calendar_event_coverage_policies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_policy_search_terms fk_intelligence_calendar_policy_search_terms_language_t_3961; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_search_terms
+    ADD CONSTRAINT fk_intelligence_calendar_policy_search_terms_language_t_3961 FOREIGN KEY (language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_policy_search_terms fk_intelligence_calendar_policy_search_terms_policy_id__7125; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_search_terms
+    ADD CONSTRAINT fk_intelligence_calendar_policy_search_terms_policy_id__7125 FOREIGN KEY (policy_id) REFERENCES public.intelligence_calendar_event_coverage_policies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources fk_intelligence_calendar_policy_watch_sources_policy_id_f86d; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_watch_sources
+    ADD CONSTRAINT fk_intelligence_calendar_policy_watch_sources_policy_id_f86d FOREIGN KEY (policy_id) REFERENCES public.intelligence_calendar_event_coverage_policies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources fk_intelligence_calendar_policy_watch_sources_source_en_d5b5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_watch_sources
+    ADD CONSTRAINT fk_intelligence_calendar_policy_watch_sources_source_en_d5b5 FOREIGN KEY (source_endpoint_id) REFERENCES public.source_endpoints(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_policy_watch_sources fk_intelligence_calendar_policy_watch_sources_source_id_sources; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_policy_watch_sources
+    ADD CONSTRAINT fk_intelligence_calendar_policy_watch_sources_source_id_sources FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments fk_intelligence_calendar_source_authority_assessments_a_50e0; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT fk_intelligence_calendar_source_authority_assessments_a_50e0 FOREIGN KEY (assignment_method) REFERENCES public.semantic_assignment_methods(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments fk_intelligence_calendar_source_authority_assessments_d_39d1; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT fk_intelligence_calendar_source_authority_assessments_d_39d1 FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments fk_intelligence_calendar_source_authority_assessments_e_f5e1; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT fk_intelligence_calendar_source_authority_assessments_e_f5e1 FOREIGN KEY (event_id) REFERENCES public.intelligence_calendar_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: intelligence_calendar_source_authority_assessments fk_intelligence_calendar_source_authority_assessments_s_a572; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intelligence_calendar_source_authority_assessments
+    ADD CONSTRAINT fk_intelligence_calendar_source_authority_assessments_s_a572 FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: language_tag_aliases fk_language_tag_aliases_canonical_tag_language_tags; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.language_tag_aliases
     ADD CONSTRAINT fk_language_tag_aliases_canonical_tag_language_tags FOREIGN KEY (canonical_tag) REFERENCES public.language_tags(tag) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_alert_destinations fk_monitor_alert_destinations_destination_id_alert_destinations; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_alert_destinations
+    ADD CONSTRAINT fk_monitor_alert_destinations_destination_id_alert_destinations FOREIGN KEY (destination_id) REFERENCES public.alert_destinations(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_alert_destinations fk_monitor_alert_destinations_monitor_id_monitors; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_alert_destinations
+    ADD CONSTRAINT fk_monitor_alert_destinations_monitor_id_monitors FOREIGN KEY (monitor_id) REFERENCES public.monitors(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_evaluation_runs fk_monitor_evaluation_runs_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs
+    ADD CONSTRAINT fk_monitor_evaluation_runs_document_id_documents FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: monitor_evaluation_runs fk_monitor_evaluation_runs_revision; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_evaluation_runs
+    ADD CONSTRAINT fk_monitor_evaluation_runs_revision FOREIGN KEY (monitor_id, monitor_revision_id) REFERENCES public.monitor_revisions(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_document_id_documents; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_document_id_documents FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_first_evaluation_run; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_first_evaluation_run FOREIGN KEY (monitor_id, first_evaluation_run_id) REFERENCES public.monitor_evaluation_runs(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_first_revision; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_first_revision FOREIGN KEY (monitor_id, first_monitor_revision_id) REFERENCES public.monitor_revisions(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_last_evaluation_run; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_last_evaluation_run FOREIGN KEY (monitor_id, last_evaluation_run_id) REFERENCES public.monitor_evaluation_runs(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_last_revision; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_last_revision FOREIGN KEY (monitor_id, last_monitor_revision_id) REFERENCES public.monitor_revisions(monitor_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_matches fk_monitor_matches_monitor_id_monitors; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_matches
+    ADD CONSTRAINT fk_monitor_matches_monitor_id_monitors FOREIGN KEY (monitor_id) REFERENCES public.monitors(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_content_formats fk_monitor_revision_content_formats_content_format_slug_43bc; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_content_formats
+    ADD CONSTRAINT fk_monitor_revision_content_formats_content_format_slug_43bc FOREIGN KEY (content_format_slug) REFERENCES public.content_formats(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_content_formats fk_monitor_revision_content_formats_revision_id_monitor_75cb; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_content_formats
+    ADD CONSTRAINT fk_monitor_revision_content_formats_revision_id_monitor_75cb FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_document_types fk_monitor_revision_document_types_document_type_id_doc_62ae; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_document_types
+    ADD CONSTRAINT fk_monitor_revision_document_types_document_type_id_doc_62ae FOREIGN KEY (document_type_id) REFERENCES public.document_types(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_document_types fk_monitor_revision_document_types_revision_id_monitor__1e9e; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_document_types
+    ADD CONSTRAINT fk_monitor_revision_document_types_revision_id_monitor__1e9e FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_entities fk_monitor_revision_entities_entity_id_entities; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entities
+    ADD CONSTRAINT fk_monitor_revision_entities_entity_id_entities FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_entities fk_monitor_revision_entities_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entities
+    ADD CONSTRAINT fk_monitor_revision_entities_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_entity_roles fk_monitor_revision_entity_roles_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_entity_roles
+    ADD CONSTRAINT fk_monitor_revision_entity_roles_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_geographies fk_monitor_revision_geographies_geography_id_geographies; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_geographies
+    ADD CONSTRAINT fk_monitor_revision_geographies_geography_id_geographies FOREIGN KEY (geography_id) REFERENCES public.geographies(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_geographies fk_monitor_revision_geographies_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_geographies
+    ADD CONSTRAINT fk_monitor_revision_geographies_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_languages fk_monitor_revision_languages_language_tag_language_tags; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_languages
+    ADD CONSTRAINT fk_monitor_revision_languages_language_tag_language_tags FOREIGN KEY (language_tag) REFERENCES public.language_tags(tag) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_languages fk_monitor_revision_languages_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_languages
+    ADD CONSTRAINT fk_monitor_revision_languages_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_source_types fk_monitor_revision_source_types_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_source_types
+    ADD CONSTRAINT fk_monitor_revision_source_types_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_source_types fk_monitor_revision_source_types_source_type_slug_source_types; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_source_types
+    ADD CONSTRAINT fk_monitor_revision_source_types_source_type_slug_source_types FOREIGN KEY (source_type_slug) REFERENCES public.source_types(slug) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_sources fk_monitor_revision_sources_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_sources
+    ADD CONSTRAINT fk_monitor_revision_sources_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_sources fk_monitor_revision_sources_source_id_sources; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_sources
+    ADD CONSTRAINT fk_monitor_revision_sources_source_id_sources FOREIGN KEY (source_id) REFERENCES public.sources(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revision_topics fk_monitor_revision_topics_revision_id_monitor_revisions; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_topics
+    ADD CONSTRAINT fk_monitor_revision_topics_revision_id_monitor_revisions FOREIGN KEY (revision_id) REFERENCES public.monitor_revisions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitor_revision_topics fk_monitor_revision_topics_topic_id_topics; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revision_topics
+    ADD CONSTRAINT fk_monitor_revision_topics_topic_id_topics FOREIGN KEY (topic_id) REFERENCES public.topics(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: monitor_revisions fk_monitor_revisions_monitor_id_monitors; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitor_revisions
+    ADD CONSTRAINT fk_monitor_revisions_monitor_id_monitors FOREIGN KEY (monitor_id) REFERENCES public.monitors(id) ON DELETE CASCADE;
+
+
+--
+-- Name: monitors fk_monitors_coverage_profile_id_coverage_profiles; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.monitors
+    ADD CONSTRAINT fk_monitors_coverage_profile_id_coverage_profiles FOREIGN KEY (coverage_profile_id) REFERENCES public.coverage_profiles(id) ON DELETE RESTRICT;
 
 
 --
@@ -3652,5 +9508,5 @@ ALTER TABLE ONLY public.topics
 -- PostgreSQL database dump complete
 --
 
-\unrestrict AXDyd9iyuHSS8Vp1PoCQF3Ek4J5SJk4W9QiqFmNFps23SpCGRsYgvnFPboHr5HY
+\unrestrict 8Y1OcZWeyqrAc5e4UkKQ8BCLToCDDBUaduw27PpZcNhQeCVrPobBu2AcgpXcybN
 

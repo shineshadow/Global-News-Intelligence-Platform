@@ -3,7 +3,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Source, SourceEndpoint
+from app.models import AcquisitionEndpointConfiguration, Source, SourceEndpoint
 
 
 async def get_source_endpoint_by_id(
@@ -104,11 +104,7 @@ async def get_source_endpoint_by_id_for_update(
 ) -> SourceEndpoint | None:
     """Return and lock an endpoint for the current transaction."""
 
-    statement = (
-        select(SourceEndpoint)
-        .where(SourceEndpoint.id == endpoint_id)
-        .with_for_update()
-    )
+    statement = select(SourceEndpoint).where(SourceEndpoint.id == endpoint_id).with_for_update()
 
     return await session.scalar(statement)
 
@@ -125,19 +121,36 @@ async def list_due_source_endpoint_ids(
     immediately eligible.
     """
 
+    dispatches = await list_due_source_endpoint_dispatches(session, limit=limit)
+    return [endpoint_id for endpoint_id, _ in dispatches]
+
+
+async def list_due_source_endpoint_dispatches(
+    session: AsyncSession,
+    *,
+    limit: int = 500,
+) -> list[tuple[int, str | None]]:
+    """Return due endpoints with the Phase 3 configuration seen at dispatch."""
+
     statement = (
-        select(SourceEndpoint.id)
+        select(
+            SourceEndpoint.id,
+            AcquisitionEndpointConfiguration.configuration_version,
+        )
         .join(
             Source,
             Source.id == SourceEndpoint.source_id,
+        )
+        .outerjoin(
+            AcquisitionEndpointConfiguration,
+            (AcquisitionEndpointConfiguration.source_endpoint_id == SourceEndpoint.id)
+            & (AcquisitionEndpointConfiguration.status == "active"),
         )
         .where(
             Source.status == "active",
             SourceEndpoint.status == "active",
             SourceEndpoint.endpoint_type == "feed",
-            SourceEndpoint.endpoint_format.in_(
-                ("rss", "atom")
-            ),
+            SourceEndpoint.endpoint_format.in_(("rss", "atom")),
             SourceEndpoint.acquisition_method == "feed_parser",
             or_(
                 SourceEndpoint.next_poll_at.is_(None),
@@ -151,6 +164,4 @@ async def list_due_source_endpoint_ids(
         .limit(limit)
     )
 
-    result = await session.scalars(statement)
-
-    return list(result.all())
+    return [(row.id, row.configuration_version) for row in (await session.execute(statement))]

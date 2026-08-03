@@ -1,0 +1,28 @@
+id: CMP-0001
+name: Application Shell
+status: Experimental
+category: workflow-page-foundation
+description: Shared HTML document, assets, theme, and page frame.
+owner: ui-foundation
+backup_owner: application-maintainer
+source_location:
+  package: app.web
+  module: templates/base.html
+  component: base template
+documentation_location: docs/architecture/WEB_UI_IMPLEMENTATION_STRATEGY.md
+introduced: pre-governance
+last_reviewed: "2026-08-03"
+supported_devices: {desktop: unreviewed, laptop: unreviewed, tablet: unreviewed, mobile: unreviewed}
+mobile_scope: {supported_workflows: [], limitations: [formal review incomplete]}
+variants: [dark]
+states: [default, server-error, permission-denied]
+preferences: {supported: false, keys: []}
+lazy_loading: {supported: false, trigger: not_applicable, loading_indicator: not_applicable, failure_behavior: not_applicable, retry_behavior: not_applicable, caching_behavior: not_applicable}
+dependencies: {framework: [Jinja2, Tabler, HTMX], internal_components: [CMP-0002], external_packages: []}
+api_contracts: []
+consuming_workflows: [all-web-workflows]
+related_decisions: [UXD-0001, UXD-0003]
+related_exceptions: []
+known_limitations: [Lite mode not implemented, device acceptance incomplete]
+deprecation: {deprecated: false, replacement: not_applicable, removal_target: not_applicable}
+notes: Existing pre-governance component; not yet Approved.

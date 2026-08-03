@@ -12,6 +12,12 @@ This document should capture implementation details for the Intelligence Operati
 
 Architectural rationale, component boundaries, and technology-selection decisions are defined in `WEB_UI_IMPLEMENTATION_STRATEGY.md`.
 
+Shared component layers, ownership, preference resolution, device contracts,
+prototype review, UX decisions, exceptions, and acceptance are defined by the
+Draft governance candidate in
+`../architecture/GNI_UI_FOUNDATION_AND_UX_GOVERNANCE.md`. Approved focused
+standards and domain specifications retain precedence.
+
 Primary stack:
 
 ```text
@@ -24,6 +30,37 @@ Tabulator
 FullCalendar
 Apache ECharts
 ```
+
+## Date and Time Display
+
+All operator-facing dates and times are governed by
+`../specifications/AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`.
+
+The required date display is `MM/DD` during the current User-local year and
+`MM/DD/YY` otherwise. Time is hidden by default and appears only when the
+component documents why it is necessary. When shown, it uses `hh:mm am/pm`.
+The default User timezone is initially `America/New_York`. Seconds, 24-hour
+time, uppercase meridiems, and punctuated meridiems are prohibited in UI
+display. Timezone labels appear only when omission could be ambiguous or
+misleading.
+
+PostgreSQL continues to store timezone-aware instants. Conversion and
+formatting occur through one shared display formatter; templates and
+components must not define feature-specific date formatting.
+
+When User UI development begins, expose date/time display settings on the User
+profile. The shared formatter receives the effective User preference, with
+`America/New_York` and the approved American display preset as deterministic
+installation defaults. Do not infer these settings from the browser, Source,
+content language, or incoming timestamp. Changing them is a display-only User
+preference and never rewrites database timestamps.
+
+Current corrective target: `app/web/templating.py` still exposes the legacy
+`datetime_utc` filter as `YYYY-MM-DD HH:MM:SS UTC`. The Phase 1 feed reader and
+other templates using that filter are noncompliant with the governing
+standard. Replace it with the shared User-local formatter, default to hiding
+time, and add direct boundary/DST tests before treating date/time display as
+complete.
 
 ---
 
@@ -93,6 +130,44 @@ observed Event relationship
 merge/split tools
 ```
 
+Priority presentation:
+
+```text
+[High] +7 [12]
+```
+
+`[High]` is the colored priority rectangle, `+7` is the within-band rank, and
+`[12]` is the translucent, priority-bordered active item count of the
+priority-driving Story. Story and member cards show a Story icon with the item
+count in an upper-right bubble. Standalone items omit the bubble.
+
+The Story icon is grey/outlined when unassigned and green/filled when assigned.
+It has no visible label or tooltip. Activating it opens a quick Story selector
+or existing memberships; complex work continues in the full Story editor.
+
+## Attention UI Placeholder
+
+Content cards and detail views may provide:
+
+```text
+Relevant / Not relevant
+Dismiss
+My Priority: Automatic / Low / Normal / High / Critical
+Watch
+Story membership
+Translate / Summarize / Process when applicable
+```
+
+Priority Inbox sorts by the continuous `0–39` Attention score. Admin exposes
+versioned hard floors, weights, decay, processing actions, and a recent-content
+preview before activation.
+
+## Video UI Placeholder
+
+Video cards show metadata, subtitle/translation/summary status, Watch, Story,
+priority, and Process controls. Missing subtitles are explicit. Process opens
+the Video Processing workbench and does not itself download or transcribe.
+
 ---
 
 ## Source Acquisition UI Placeholder
@@ -126,3 +201,43 @@ failed schema outputs
 escalation rate
 benchmark results
 ```
+
+## Calendar Phase 2 Administrative Exceptions
+
+Normal Calendar views show effective validation and relationships directly;
+they do not wait for approval. Detail views may disclose machine state,
+operator state, confidence, evidence, and unresolved-conflict indicators.
+
+The Administrative Queue is implemented as a separate exception view limited
+to high/critical conflicts admitted only after autonomous resolution is
+exhausted. It supports state, severity, and assertion-family filters without
+presenting each row as required work. Each detail view shows:
+
+```text
+affected Event and optional Occurrence
+competing assertions
+source-authority assessments
+supporting and contradictory evidence
+two internal-agent attempts
+external-model attempt or recorded ineligibility/unavailability
+reason resolution failed
+proposed resolution when available
+operator action history
+```
+
+Available actions are explicit assertion or selection, denial, withdrawal,
+close, reopen, note, or no action. Every write requires an operator reference
+and reason. Merely viewing or leaving an exception creates no acceptance,
+rejection, deferral, or confirmation.
+
+Normal Event detail also shows a compact, read-only inference summary:
+effective and machine validation, active operator state when present,
+confidence/method, run and evidence snapshot, and unresolved/open counts.
+This does not add an approval step.
+
+The Event detail occurrence-policy table provides profile-scoped controls for
+priority, expected-news importance, and watch state. Blank values inherit the
+Event/Profile policy. Set, edit, and remove operations require operator
+identity and reason, display audited history, and are explicitly labeled as
+operational policy that cannot alter canonical Event truth or model-egress
+authority.
