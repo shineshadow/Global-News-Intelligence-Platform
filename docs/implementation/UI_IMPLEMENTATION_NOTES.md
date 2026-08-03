@@ -12,6 +12,12 @@ This document should capture implementation details for the Intelligence Operati
 
 Architectural rationale, component boundaries, and technology-selection decisions are defined in `WEB_UI_IMPLEMENTATION_STRATEGY.md`.
 
+Shared component layers, ownership, preference resolution, device contracts,
+prototype review, UX decisions, exceptions, and acceptance are defined by the
+Draft governance candidate in
+`../architecture/GNI_UI_FOUNDATION_AND_UX_GOVERNANCE.md`. Approved focused
+standards and domain specifications retain precedence.
+
 Primary stack:
 
 ```text
@@ -30,10 +36,13 @@ Apache ECharts
 All operator-facing dates and times are governed by
 `../specifications/AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`.
 
-The required display is `M-D h:mm am` during the current owner-local year and
-`M-D-YYYY h:mm am` otherwise. The owner timezone is initially
-`America/New_York`. Seconds, UTC labels, 24-hour time, leading zeros, uppercase
-meridiems, and punctuated meridiems are prohibited in ordinary UI display.
+The required date display is `MM/DD` during the current User-local year and
+`MM/DD/YY` otherwise. Time is hidden by default and appears only when the
+component documents why it is necessary. When shown, it uses `hh:mm am/pm`.
+The default User timezone is initially `America/New_York`. Seconds, 24-hour
+time, uppercase meridiems, and punctuated meridiems are prohibited in UI
+display. Timezone labels appear only when omission could be ambiguous or
+misleading.
 
 PostgreSQL continues to store timezone-aware instants. Conversion and
 formatting occur through one shared display formatter; templates and
@@ -41,7 +50,7 @@ components must not define feature-specific date formatting.
 
 When User UI development begins, expose date/time display settings on the User
 profile. The shared formatter receives the effective User preference, with
-`America/New_York` and the American display preset as deterministic
+`America/New_York` and the approved American display preset as deterministic
 installation defaults. Do not infer these settings from the browser, Source,
 content language, or incoming timestamp. Changing them is a display-only User
 preference and never rewrites database timestamps.
@@ -49,8 +58,9 @@ preference and never rewrites database timestamps.
 Current corrective target: `app/web/templating.py` still exposes the legacy
 `datetime_utc` filter as `YYYY-MM-DD HH:MM:SS UTC`. The Phase 1 feed reader and
 other templates using that filter are noncompliant with the governing
-standard. Replace it with the shared owner-local formatter and direct
-boundary/DST tests before treating date/time display as complete.
+standard. Replace it with the shared User-local formatter, default to hiding
+time, and add direct boundary/DST tests before treating date/time display as
+complete.
 
 ---
 

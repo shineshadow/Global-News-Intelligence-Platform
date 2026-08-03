@@ -130,9 +130,11 @@ deleting feedback history, and inspect high-level decision reasons.
 
 ## 7. Administration Boundary
 
-Installation policy defines system-wide defaults and hard invariants.
-Attention Profile settings define personal weights and presentation choices
-within permitted bounds. The UI must make the scope of a change explicit.
+Installation policy defines system-wide defaults and hard invariants. User
+settings define personal UI and display preferences within permitted bounds.
+Attention Profile settings define personal relevance weights and Attention
+behavior, not general UI presentation. The UI must make the scope of a change
+explicit.
 
 All configuration changes retain actor, before/after values, reason when
 supplied, activation time, and version.

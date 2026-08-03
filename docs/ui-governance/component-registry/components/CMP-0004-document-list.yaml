@@ -1,0 +1,28 @@
+id: CMP-0004
+name: Document List
+status: Experimental
+category: domain-data-presentation
+description: Dense filtered document/feed results and item metadata.
+owner: document-browser
+backup_owner: ui-platform
+source_location:
+  package: app.web
+  module: templates/partials/document_list.html
+  component: document list partial
+documentation_location: docs/implementation/UI_IMPLEMENTATION_NOTES.md
+introduced: pre-governance
+last_reviewed: "2026-08-03"
+supported_devices: {desktop: unreviewed, laptop: unreviewed, tablet: unreviewed, mobile: unreviewed}
+mobile_scope: {supported_workflows: [], limitations: [mobile contract not defined]}
+variants: [filtered-results]
+states: [default, empty, partially-populated, server-error]
+preferences: {supported: false, keys: []}
+lazy_loading: {supported: false, trigger: not_applicable, loading_indicator: not_applicable, failure_behavior: page error, retry_behavior: browser reload, caching_behavior: server-defined}
+dependencies: {framework: [Jinja2, HTMX, Tabler], internal_components: [CMP-0009], external_packages: []}
+api_contracts: [document-browser-service]
+consuming_workflows: [news-feed, document-browser]
+related_decisions: [UXD-0003]
+related_exceptions: []
+known_limitations: [legacy UTC formatter, device acceptance incomplete]
+deprecation: {deprecated: false, replacement: not_applicable, removal_target: not_applicable}
+notes: Existing pre-governance component; date display is noncompliant until CMP-0009 is implemented.

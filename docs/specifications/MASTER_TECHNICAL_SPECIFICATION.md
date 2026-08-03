@@ -19,12 +19,13 @@ Broad acquisition serves that objective; profile-specific Attention decisions,
 Story convergence, operator judgment, and selective enrichment reduce the
 resulting noise.
 
-All operator-facing dates and times follow the owner-approved American display
-standard in `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`. Canonical instants remain
-timezone-aware in storage and machine interfaces, but UI display converts them
-to the owner's configured IANA timezone, initially `America/New_York`, and uses
-`M-D h:mm am` for the current local year or `M-D-YYYY h:mm am` otherwise.
-Seconds, UTC labels, and 24-hour time are not shown in ordinary operator UI.
+All User-facing dates and times follow the owner-approved UI-only American
+display standard in `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`. Canonical
+instants remain timezone-aware in storage and machine interfaces. UI display
+converts them to the User's configured IANA timezone, initially
+`America/New_York`, and uses `MM/DD` for the current local year or `MM/DD/YY`
+otherwise. Time is hidden by default; when necessary it uses `hh:mm am/pm`.
+Seconds and 24-hour time are never shown in the UI.
 
 The fundamental unit of the system is not merely an article or feed item. The system will distinguish between:
 

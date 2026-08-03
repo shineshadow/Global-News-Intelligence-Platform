@@ -1,0 +1,28 @@
+id: CMP-0006
+name: Endpoint Health Table
+status: Experimental
+category: domain-data-presentation
+description: Presents SourceEndpoint health and acquisition status.
+owner: source-management
+backup_owner: ui-platform
+source_location:
+  package: app.web
+  module: templates/partials/endpoint_health_table.html
+  component: endpoint health table partial
+documentation_location: docs/implementation/UI_IMPLEMENTATION_NOTES.md
+introduced: pre-governance
+last_reviewed: "2026-08-03"
+supported_devices: {desktop: unreviewed, laptop: unreviewed, tablet: unreviewed, mobile: unreviewed}
+mobile_scope: {supported_workflows: [basic-administration], limitations: [formal review incomplete]}
+variants: [standard]
+states: [default, empty, partially-populated, warning, success, server-error]
+preferences: {supported: false, keys: []}
+lazy_loading: {supported: true, trigger: page-or-HTMX-load, loading_indicator: unreviewed, failure_behavior: unreviewed, retry_behavior: unreviewed, caching_behavior: server-defined}
+dependencies: {framework: [Jinja2, HTMX, Tabler], internal_components: [CMP-0003, CMP-0009], external_packages: []}
+api_contracts: [source-endpoint-service]
+consuming_workflows: [source-management, source-health]
+related_decisions: [UXD-0003]
+related_exceptions: []
+known_limitations: [date display and device acceptance incomplete]
+deprecation: {deprecated: false, replacement: not_applicable, removal_target: not_applicable}
+notes: Existing pre-governance component.

@@ -1,0 +1,28 @@
+id: CMP-0009
+name: Date and Time Display
+status: Proposed
+category: data-presentation
+description: Renders canonical dates and instants through the approved UI-only American display preset.
+owner: ui-platform
+backup_owner: application-maintainer
+source_location:
+  package: app.web
+  module: templating.py
+  component: replacement for datetime_utc filter
+documentation_location: docs/specifications/AMERICAN_DATE_TIME_DISPLAY_STANDARD.md
+introduced: not_implemented
+last_reviewed: "2026-08-03"
+supported_devices: {desktop: full, laptop: full, tablet: full, mobile: full}
+mobile_scope: {supported_workflows: [all], limitations: []}
+variants: [date, date-time, date-time-with-timezone]
+states: [date-only-default, time-necessary, timezone-necessary, empty, invalid]
+preferences: {supported: true, keys: [display.timezone, display.date_time_preset]}
+lazy_loading: {supported: false, trigger: not_applicable, loading_indicator: not_applicable, failure_behavior: deterministic-empty-or-error-state, retry_behavior: not_applicable, caching_behavior: not_applicable}
+dependencies: {framework: [Jinja2, IANA-timezone-database], internal_components: [], external_packages: []}
+api_contracts: [user-display-preferences]
+consuming_workflows: [all-date-time-displays]
+related_decisions: [UXD-0003]
+related_exceptions: []
+known_limitations: [legacy datetime_utc implementation is noncompliant, User preference persistence not implemented, consuming components have not documented time necessity]
+deprecation: {deprecated: false, replacement: not_applicable, removal_target: not_applicable}
+notes: Time is hidden by default. A consuming component documents why time is necessary, whether other-year values are possible, whether a timezone label is necessary, and the underlying typed sort/filter field.

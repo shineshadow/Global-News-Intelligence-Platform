@@ -1,0 +1,28 @@
+id: CMP-0002
+name: Primary Navigation Header
+status: Experimental
+category: interaction-navigation
+description: Shared product header and primary workflow navigation.
+owner: ui-foundation
+backup_owner: application-maintainer
+source_location:
+  package: app.web
+  module: themes/dark_operations/header.html and templates/base.html
+  component: header and primary navigation
+documentation_location: docs/architecture/WEB_UI_IMPLEMENTATION_STRATEGY.md
+introduced: pre-governance
+last_reviewed: "2026-08-03"
+supported_devices: {desktop: unreviewed, laptop: unreviewed, tablet: unreviewed, mobile: unreviewed}
+mobile_scope: {supported_workflows: [alerts, calendar-review, story-review, basic-administration], limitations: [formal review incomplete]}
+variants: [dark]
+states: [default, active, selected, permission-denied]
+preferences: {supported: false, keys: []}
+lazy_loading: {supported: false, trigger: not_applicable, loading_indicator: not_applicable, failure_behavior: not_applicable, retry_behavior: not_applicable, caching_behavior: not_applicable}
+dependencies: {framework: [Jinja2, Tabler], internal_components: [CMP-0001], external_packages: []}
+api_contracts: []
+consuming_workflows: [all-web-workflows]
+related_decisions: [UXD-0001]
+related_exceptions: []
+known_limitations: [responsive behavior unaccepted, Lite variant missing]
+deprecation: {deprecated: false, replacement: not_applicable, removal_target: not_applicable}
+notes: Product appearance labels must map through UXD-0001 when controls exist.

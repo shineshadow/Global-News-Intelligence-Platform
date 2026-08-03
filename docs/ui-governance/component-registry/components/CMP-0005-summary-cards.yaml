@@ -1,0 +1,28 @@
+id: CMP-0005
+name: Summary Cards
+status: Experimental
+category: data-presentation
+description: Shared dashboard summary metrics presented as cards.
+owner: ui-platform
+backup_owner: application-maintainer
+source_location:
+  package: app.web
+  module: templates/partials/summary_cards.html
+  component: summary cards partial
+documentation_location: not_applicable
+introduced: pre-governance
+last_reviewed: "2026-08-03"
+supported_devices: {desktop: unreviewed, laptop: unreviewed, tablet: unreviewed, mobile: unreviewed}
+mobile_scope: {supported_workflows: [basic-administration], limitations: [formal review incomplete]}
+variants: [standard]
+states: [default, loading, empty, partially-populated, server-error]
+preferences: {supported: false, keys: []}
+lazy_loading: {supported: true, trigger: page-or-HTMX-load, loading_indicator: unreviewed, failure_behavior: unreviewed, retry_behavior: unreviewed, caching_behavior: server-defined}
+dependencies: {framework: [Jinja2, HTMX, Tabler], internal_components: [], external_packages: []}
+api_contracts: [web-ui-service]
+consuming_workflows: [dashboard]
+related_decisions: []
+related_exceptions: []
+known_limitations: [lazy-loading states and device behavior unaccepted]
+deprecation: {deprecated: false, replacement: not_applicable, removal_target: not_applicable}
+notes: Existing pre-governance component.

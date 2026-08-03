@@ -1,169 +1,259 @@
-# American Date and Time Display Standard
+# GNI UI Date and Time Display Standard
 
-**Status:** OWNER-APPROVED PROJECT STANDARD  
-**Date:** 2026-07-31  
-**Applies to:** All future GNI development and every operator-facing surface
+**Status:** OWNER-APPROVED PROJECT STANDARD
+**Approved:** August 3, 2026
+**Applies to:** Dates and times displayed in the GNI user interface
+**Source:** Owner-supplied 9-page PDF, SHA-256 `bd3e6d9e9a8c026d00f25869b4f2f9cb18b7438d81d2d457f51d7d8a8597eb4a`
+**Decision:** `UXD-0003`
 
-## 1. Governing Rule
+## 1. Scope
 
-GNI is an American-operated project. Every date and time shown to the operator
-must use the American, owner-local format defined here, regardless of the
-source country, source language, incoming date syntax, or stored timezone.
+This standard governs only dates and times displayed to GNI Users. It applies
+to page content, tables, cards, dialogs, menus, tooltips, Calendar views,
+Alerts, Story review, administrative views, user-facing notifications, and
+user-facing exports that reproduce a GNI UI view.
 
-The required timestamp display is:
+It does not govern database storage, API values, serialized data, logs,
+configuration, source-document content, imported metadata, internal framework
+values, developer records, or governance record dates. Those layers use the
+canonical formats best supported by PostgreSQL, Python, protocols, standards,
+and external integrations.
+
+The required boundary is:
 
 ```text
-current local year:     M-D h:mm am
-different local year:   M-D-YYYY h:mm am
+canonical internal date or timezone-aware instant
+        ↓
+resolve the current User's effective display timezone
+        ↓
+apply the shared GNI UI formatter
+        ↓
+render the approved American display form
+```
+
+## 2. Date Display
+
+Dates use American month-first order with leading-zero month and day.
+
+### Current-Year Dates
+
+When the date belongs to the current year in the User's effective timezone,
+omit the year:
+
+```text
+MM/DD
+```
+
+Examples during 2026:
+
+```text
+08/03
+12/25
+01/07
+```
+
+Do not display `08/03/26` or `08/03/2026` for a current-year date.
+
+### Dates Outside the Current Year
+
+When the localized date does not belong to the current year, include a
+two-digit year:
+
+```text
+MM/DD/YY
 ```
 
 Examples:
 
 ```text
-Published 7-30 1:50 pm
-Published 12-5-2025 9:04 am
-Retrieved 1-2 12:00 am
+08/03/25
+01/15/27
+12/31/24
 ```
 
-The exact presentation rules are:
+Standard UI views do not display a four-digit year.
 
-- month precedes day;
-- month and day have no leading zero;
-- the year is omitted when it matches the current year in the owner's local
-  timezone;
-- a non-current year is displayed as four digits after the day;
-- hours use the 12-hour clock and have no leading zero;
+## 3. Dynamic Year Omission
+
+The formatter compares the displayed date's localized year with the current
+localized year at render time. UTC must not control the comparison near a year
+boundary.
+
+For example:
+
+```text
+during 2026: 08/03/2026 → 08/03
+during 2026: 08/03/2025 → 08/03/25
+during 2027: 08/03/2027 → 08/03
+during 2027: 08/03/2026 → 08/03/26
+```
+
+A long-lived view reformats when it refreshes or rerenders after the year
+changes. Tests inject the current instant rather than depending on wall time.
+
+## 4. Time Is Hidden by Default
+
+A UI view displays time only when it is necessary to understand, compare,
+sort, review, or act on the information. Valid examples include breaking-news
+chronology, Alert delivery, scheduled Calendar events, publication sequencing,
+monitor activity, deadlines, timelines, audit/activity views, and multiple
+same-date records.
+
+The component record, workflow, prototype, or Approved UX Decision documents
+why time is necessary. A table does not display time merely because its
+underlying value is a timestamp.
+
+## 5. Time Format
+
+When time is necessary, use:
+
+```text
+hh:mm am
+hh:mm pm
+```
+
+Requirements:
+
+- hour uses two digits;
 - minutes always use two digits;
+- `am` and `pm` are lowercase and unpunctuated;
 - seconds are never displayed;
-- `am` and `pm` are lowercase, contain no punctuation, and are preceded by one
-  space;
-- `UTC`, numeric offsets, timezone abbreviations, and IANA timezone names are
-  not shown beside ordinary operator-facing timestamps.
+- the 12-hour clock is mandatory;
+- 24-hour time is prohibited in UI display.
 
-The canonical conversion example is:
+Examples:
 
 ```text
-stored instant:   2026-07-30 17:50:46 UTC
-owner display:    7-30 1:50 pm
-complete label:   Published 7-30 1:50 pm
+06:40 am
+12:05 pm
+03:15 pm
 ```
 
-This is a project-wide requirement, not a feed-reader-only preference.
-
-## 2. Storage and Display Boundary
-
-Incoming values must not be converted into formatted American strings before
-database insertion. GNI must:
+## 6. Combined Date and Time
 
 ```text
-parse the incoming value and its timezone
-        ↓
-retain source/original timestamp provenance where required
-        ↓
-normalize the instant into a timezone-aware PostgreSQL timestamptz value
-        ↓
-compare, sort, query, schedule, and calculate with the canonical instant
-        ↓
-convert to the current User's effective IANA timezone at the display boundary
-        ↓
-render the American format defined above
+current year: MM/DD hh:mm am
+other year:   MM/DD/YY hh:mm am
 ```
 
-UTC remains an internal storage and interchange representation. It is not the
-operator display timezone. Storing a formatted local string would discard
-timezone meaning, break daylight-saving transitions, weaken ordering and
-comparison, and make a future timezone change destructive.
-
-The initial installation display timezone is:
+Examples:
 
 ```text
-America/New_York
+Published 08/03 06:40 am
+Published 08/03/25 06:40 am
 ```
 
-The timezone must be represented by an IANA name and conversion must use the
-timezone database so Eastern Standard Time and Eastern Daylight Time are
-selected correctly for the instant being displayed.
+## 7. Timezone Labels
 
-### 2.1 Per-User UI Configuration
+A timezone label is hidden by default. Display it only when omission could make
+the value ambiguous or misleading, such as a multi-country event, explicitly
+foreign publication time, international schedule, or timeline combining
+several timezones.
 
-When User identity and the full UI are implemented, date/time display settings
-belong to the User profile rather than the installation, Source, Document, or
-incoming content. At minimum, each User can select their display timezone from
-valid IANA timezone names. The initial and default value is
-`America/New_York`.
+Examples:
 
-The UI and shared formatter must resolve a display-preference object from the
-current User instead of hardcoding one process-wide timezone. That preference
-boundary should be extensible to additional owner-approved date/time display
-options later without changing canonical timestamps or rewriting historical
-records. Until another format is explicitly approved, the American display
-shape in this document is the only supported preset.
+```text
+08/03 06:40 am EDT
+08/03 07:40 pm KST
+08/03/25 04:15 pm JST
+```
 
-Anonymous, unset, or newly created Users inherit the installation default;
-they must not fall back to browser locale, source locale, UTC display, or an
-implicitly detected timezone. User preference changes affect rendering only.
+Adding a timezone label does not alter the date, year, or time rules.
 
-## 3. Current-Year Decision
+## 8. Tables, Lists, and Calendar Views
 
-Whether to show the year is decided after conversion into the User's effective
-timezone.
-The timestamp's localized year is compared with the current localized year.
-The UTC year must not control this decision near New Year's Eve or New Year's
-Day.
+Tables and lists show only the date unless time is necessary for that view.
+Same-date records may add time when sequencing matters.
 
-The current time used for this comparison should be injected or otherwise
-controllable in tests. Rendering tests must not depend on the wall clock.
+Calendar rules:
 
-## 4. Incoming Formats
+- current-year dates omit the year;
+- other-year dates use `MM/DD/YY`;
+- all-day entries omit time;
+- scheduled entries use `hh:mm am/pm`;
+- seconds never appear;
+- year is not repeated when surrounding Calendar context establishes it.
 
-Adapters may receive RFC 3339, RFC 2822, ISO 8601, Unix timestamps, localized
-publisher strings, or provider-specific values. Adapter parsing converts
-these formats into a timezone-aware instant; it does not determine their UI
-appearance.
+## 9. Relative Dates
 
-An input without enough information to establish an instant must not silently
-be treated as UTC or as the owner timezone. The adapter must use an explicit,
-documented source timezone rule or retain the value as unresolved provenance.
-The display layer must never invent timezone certainty.
+`Today`, `Yesterday`, and `Tomorrow` may be used when they improve immediate
+understanding. An exact American-formatted date remains available when needed.
+Relative labels never replace necessary exact time in chronology-sensitive
+views.
 
-Date-only domain values, including true all-day Calendar dates, remain dates.
-They must not be shifted through UTC. Their American display is `M-D` in the
-current year or `M-D-YYYY` in another year.
+## 10. Sorting and Filtering
 
-## 5. Required Implementation Boundary
+Sorting and filtering use the complete underlying typed date or timestamp,
+never the abbreviated rendered string. Date-filter controls use American
+month-first presentation.
 
-All server-rendered templates must use one shared user-local formatter.
-Client-side components, charts, tables, notifications, human-readable exports,
-and future applications must implement the same contract. Individual features
-must not introduce private `strftime`, JavaScript locale, UTC, ISO, 24-hour,
-or seconds-bearing display formats.
+## 11. Framework and Locale Precedence
 
-Machine interfaces remain typed and unambiguous:
+This UI standard controls over browser locale, OS locale, device region,
+framework defaults, component-library defaults, internationalization-library
+defaults, widget defaults, and imported-source formatting. Framework-generated
+values are reformatted before display.
 
-- PostgreSQL uses timezone-aware timestamps;
-- APIs and machine exports use ISO 8601/RFC 3339 with an explicit offset;
-- worker identities, audit calculations, leases, schedules, and protocol
-  fields retain their canonical machine representation;
-- operator-facing text produced from those values uses this display standard.
+## 12. Per-User Configuration
 
-## 6. Acceptance Tests
+Date/time display preferences belong to User. The initial/default display
+timezone is `America/New_York`. Missing preferences inherit the installation
+default and never browser, Source, or content locale.
 
-Every shared formatter implementation must directly prove:
+The format described here is the only approved preset. Another preset requires
+an Approved UX Decision. User timezone changes affect rendering only and never
+rewrite canonical stored values.
 
-1. UTC converts to `America/New_York` with the correct date and hour.
-2. daylight-saving and standard-time offsets are selected by date.
-3. the current localized year is omitted.
-4. a different localized year is included.
-5. month, day, and hour have no leading zero.
-6. minutes retain two digits.
-7. seconds and timezone labels never appear.
-8. midnight renders `12:00 am` and noon renders `12:00 pm`.
-9. a UTC/local year-boundary case uses the localized year.
-10. `None` continues to render the approved empty-value marker.
-11. two Users can render the same stored instant in different configured IANA
-    timezones without changing the stored value.
-12. a missing User preference deterministically inherits the installation
-    default and never the browser or source locale.
+## 13. Component Contract
 
-Any new operator-facing timestamp format that conflicts with this document is
-a regression.
+Every date/time component documents:
+
+- whether date display is required;
+- whether time is necessary and why;
+- whether other-year values are possible;
+- whether a timezone label is necessary;
+- the underlying sort/filter value.
+
+Components use one shared formatter with this effective contract:
+
+```yaml
+current_year_date: MM/DD
+other_year_date: MM/DD/YY
+current_year_date_time: MM/DD hh:mm am/pm
+other_year_date_time: MM/DD/YY hh:mm am/pm
+show_time_by_default: false
+show_seconds: false
+hour_cycle: 12
+hour_digits: 2
+minute_digits: 2
+meridiem_case: lowercase
+```
+
+Recommended options default to `showTime: false` and `showTimeZone: false`.
+A component explicitly requests either display.
+
+## 14. Acceptance Tests
+
+The shared formatter and consuming components prove:
+
+1. the rule affects UI rendering only;
+2. time is hidden by default;
+3. every displayed time has a documented reason;
+4. time uses two-digit `hh:mm am/pm`;
+5. seconds and 24-hour time never appear;
+6. current-year dates use `MM/DD`;
+7. other-year dates use `MM/DD/YY`;
+8. standard UI does not display four-digit years;
+9. year comparison occurs after User-timezone conversion;
+10. timezone labels appear only when necessary;
+11. tables do not display time merely because a timestamp exists;
+12. sorting/filtering uses the complete underlying value;
+13. browser/framework defaults cannot override formatting;
+14. DST conversion is correct;
+15. two Users can render one stored instant in different timezones without
+    changing it;
+16. missing User preference deterministically inherits the installation
+    default;
+17. `None` renders the approved empty marker.
+
+Any conflicting UI display is a regression.

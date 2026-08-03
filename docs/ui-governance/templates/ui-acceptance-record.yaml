@@ -1,0 +1,64 @@
+id: UAR-0000
+title: Feature Acceptance
+status: Draft
+feature:
+  name:
+  version:
+  route:
+  source_reference:
+  pull_request:
+  release:
+ownership:
+  feature_owner:
+  ui_owner:
+  backend_owner:
+  final_approver:
+review_dates:
+  started:
+  completed:
+prototype:
+  reference:
+  approved_version:
+related_components: []
+related_decisions: []
+related_exceptions: []
+devices:
+  desktop: {tested: false, result: null, notes: null}
+  laptop: {tested: false, identical_to_desktop: false, result: null, notes: null}
+  tablet:
+    tested: false
+    functionality_matches_desktop: false
+    result:
+    software_limitations: []
+    exception_records: []
+    notes:
+  mobile:
+    tested: false
+    required_for_workflow: false
+    result:
+    supported_actions: []
+    unavailable_actions: []
+    notes:
+appearance:
+  lite: {tested: false, result: null, notes: null}
+  dark: {tested: false, result: null, notes: null}
+acceptance_sections:
+  scope_and_workflow: {result: null, failed_items: [], notes: null}
+  device_functionality: {result: null, failed_items: [], notes: null}
+  component_use: {result: null, failed_items: [], notes: null}
+  preferences_and_state: {result: null, failed_items: [], notes: null}
+  forms_and_validation: {result: null, failed_items: [], notes: null}
+  tables_and_high_density_data: {result: null, failed_items: [], notes: null}
+  lazy_loading: {result: null, failed_items: [], notes: null}
+  appearance: {result: null, failed_items: [], notes: null}
+  responsive_behavior: {result: null, failed_items: [], notes: null}
+  data_and_api_behavior: {result: null, failed_items: [], notes: null}
+  quality_and_maintenance: {result: null, failed_items: [], notes: null}
+open_issues: []
+follow_up_actions: []
+final_result:
+  outcome:
+  conditions: []
+  accepted_by:
+  acceptance_date:
+record_history: []

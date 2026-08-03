@@ -1,0 +1,28 @@
+id: CMP-0003
+name: Status Badge
+status: Experimental
+category: data-presentation
+description: Shared semantic badge rendering for recognized status values.
+owner: ui-platform
+backup_owner: application-maintainer
+source_location:
+  package: app.web
+  module: templates/macros/status.html
+  component: status_badge macro
+documentation_location: not_applicable
+introduced: pre-governance
+last_reviewed: "2026-08-03"
+supported_devices: {desktop: full, laptop: full, tablet: unreviewed, mobile: unreviewed}
+mobile_scope: {supported_workflows: [], limitations: [formal review incomplete]}
+variants: [semantic-status]
+states: [default, warning, success, server-error]
+preferences: {supported: false, keys: []}
+lazy_loading: {supported: false, trigger: not_applicable, loading_indicator: not_applicable, failure_behavior: not_applicable, retry_behavior: not_applicable, caching_behavior: not_applicable}
+dependencies: {framework: [Jinja2, Tabler], internal_components: [], external_packages: []}
+api_contracts: []
+consuming_workflows: [alerts, sources, monitors, calendar, administration]
+related_decisions: []
+related_exceptions: []
+known_limitations: [status vocabulary and color coverage need formal audit]
+deprecation: {deprecated: false, replacement: not_applicable, removal_target: not_applicable}
+notes: Color does not redefine underlying domain state.

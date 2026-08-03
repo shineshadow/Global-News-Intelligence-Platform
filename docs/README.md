@@ -3,7 +3,11 @@
 Generated files:
 
 - `AI_ROUTING_TECHNICAL_SPECIFICATION.md`
-- `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md` — owner-local American date/time display, canonical timestamp storage boundary, and formatter acceptance rules
+- `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md` — UI-only American date/time display, canonical machine-format boundary, and formatter acceptance rules
+- `GNI_UI_FOUNDATION_AND_UX_GOVERNANCE.md` — Draft shared UI layers, device contract, preference resolution, component ownership, prototype review, and acceptance governance
+- `ui-governance/` — operational component registry, permanent UX decisions, acceptance/exception records, reusable templates, and standards supplement
+- `change-reports/UI_FOUNDATION_AND_UX_GOVERNANCE_CONFLICT_AUDIT.md` — integration audit and approval questions for the owner-supplied governance draft
+- `change-reports/UI_DATE_TIME_CORRECTION_AUDIT.md` — adoption record for the 9-page UI-only standard and rejection of the 11-page universal proposal
 - `CONTENT_ATTENTION_AND_ENRICHMENT_POLICY.md` — profile-specific 0–39 attention scoring, Story floors, enrichment gates, operator precedence, and Admin configuration
 - `IDENTITY_PROFILE_AND_PREFERENCE_ARCHITECTURE.md` — future-safe User, Coverage Profile, Attention Profile, feedback, and preference ownership boundary
 - `SEMANTIC_WATCH_TECHNICAL_SPECIFICATION.md` — one-click item-derived semantic monitoring without changing frozen literal Monitor semantics

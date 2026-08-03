@@ -23,6 +23,10 @@ MASTER_TECHNICAL_SPECIFICATION.md
         │
         │ platform-wide architectural contract
         ▼
+GNI_UI_FOUNDATION_AND_UX_GOVERNANCE.md
+        │
+        │ shared UI behavior, ownership, review, and acceptance
+        ▼
 WEB_UI_IMPLEMENTATION_STRATEGY.md
         │
         │ Web UI architectural rationale and boundaries
@@ -37,6 +41,11 @@ app/web/
 The governing principle is:
 
 > **Build the intelligence application itself, but assemble the user interface from mature open-source components.**
+
+The governance package controls how that strategy is applied across
+components, devices, preferences, prototypes, decisions, exceptions, and
+acceptance. While the governance package remains Draft, it is a review
+candidate rather than a frozen architectural rule.
 
 The platform should not hand-build ordinary UI primitives that mature libraries already provide. It should spend custom-development effort on the intelligence workflows that make the system unique.
 

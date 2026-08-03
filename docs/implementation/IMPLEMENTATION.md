@@ -100,6 +100,7 @@ Phase 3 signature importer/deletion-first runtime    implemented candidate
 Phase 3 inspection sandbox/mandatory scanner         implemented candidate
 Phase 3 outbound egress guard                         implemented candidate
 Phase 3 leases/adapter registry/secrets/rate policy  implemented candidate
+UI foundation and UX governance                      draft candidate
 Phase 3 adapters and acquisition-health UI           after security boundary
 Phase 3 formal implementation review                 final gate
 ```
@@ -125,8 +126,8 @@ hierarchical rate-control candidate is recorded in
 ## Implementation Guardrails
 
 - PostgreSQL remains authoritative.
-- Canonical instants remain timezone-aware in storage. Every operator-facing
-  date/time must use the shared owner-local American formatter governed by
+- Canonical instants remain timezone-aware in storage. Every User-facing UI
+  date/time must use the shared User-local American formatter governed by
   `../specifications/AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`; features may not
   introduce private UTC, ISO, 24-hour, or seconds-bearing UI formats.
 - Migrations are additive and reversible where practical.
