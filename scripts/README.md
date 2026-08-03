@@ -136,9 +136,17 @@ both installation paths:
 ```bash
 ARTIFACT_STAGING_ROOT=/var/lib/gni/artifacts/staging
 ARTIFACT_CANONICAL_ROOT=/var/lib/gni/artifacts/canonical
+PHASE3_FEED_CUTOVER_LIMIT=1
 ```
 
 They must be distinct, non-nested directories on approved local storage. The
 runtime has no fallback path. Missing configuration prevents the Phase 3
 worker from starting, and a configured endpoint is never downgraded to the
 legacy poller.
+
+Keep the cohort limit at one for the first development canary. After the
+signature, inspection, egress, migration, and repository gates pass, use the
+Acquisition Health page to activate one eligible endpoint with an explicit
+operator and reason. A successful activation is only `pending` until its first
+Phase 3 run succeeds; review the run, Artifact, rejection, Document, and
+schedule evidence before expanding the cohort.

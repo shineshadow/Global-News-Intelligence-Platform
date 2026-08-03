@@ -102,8 +102,9 @@ Phase 3 outbound egress guard                         implemented candidate
 Phase 3 leases/adapter registry/secrets/rate policy  implemented candidate
 Phase 3 feed adapter/shared acquisition worker       implemented candidate
 UI foundation and UX governance                      draft candidate
-Phase 3 feed cutover/acquisition-health UI            next
-Phase 3 remaining acquisition adapters                after feed cutover proof
+Phase 3 controlled feed cutover/acquisition health   implemented candidate
+Phase 3 live feed canary/parity review                next
+Phase 3 remaining acquisition adapters                after canary proof
 Phase 3 formal implementation review                 final gate
 ```
 
@@ -127,6 +128,11 @@ inspection, and fail-closed cutover boundary are recorded in
 `../specifications/PHASE_3_FEED_ADAPTER_AND_SHARED_WORKER.md`. Its migration
 configures no endpoints; legacy RSS remains active only for endpoints without
 an explicit Phase 3 configuration.
+The bounded activation, rollback ledger, separate operational-state
+projection, Acquisition Health UI, and canary procedure are recorded in
+`../specifications/PHASE_3_CONTROLLED_FEED_CUTOVER_AND_ACQUISITION_HEALTH.md`.
+Its migration activates no endpoints and the installation cohort limit
+defaults to one.
 
 ---
 

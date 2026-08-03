@@ -17,11 +17,10 @@ class AcquisitionRuntimeConfigurationError(RuntimeError):
     """The installed Phase 3 runtime is not configured for safe activation."""
 
 
-def create_phase3_acquisition_worker(
+def _create_feed_artifact_runtime(
     *,
     runtime_settings: Settings = settings,
-) -> Phase3AcquisitionWorker:
-    """Compose the repository-approved Phase 3 runtime without unsafe defaults."""
+) -> DeletionFirstArtifactRuntime:
 
     staging_root = runtime_settings.artifact_staging_root
     canonical_root = runtime_settings.artifact_canonical_root
@@ -32,7 +31,7 @@ def create_phase3_acquisition_worker(
         )
 
     sandbox = BubblewrapInspectionSandbox()
-    artifact_runtime = DeletionFirstArtifactRuntime(
+    return DeletionFirstArtifactRuntime(
         session_factory=async_session_factory,
         staging_root=staging_root,
         canonical_root=canonical_root,
@@ -43,7 +42,26 @@ def create_phase3_acquisition_worker(
             "atom": BubblewrapFeedSafeParser(sandbox, expected_format="atom"),
         },
     )
+
+
+async def preflight_phase3_feed_runtime(
+    allowed_format_slugs: frozenset[str],
+    *,
+    runtime_settings: Settings = settings,
+) -> None:
+    """Prove the installed feed security runtime before endpoint activation."""
+
+    runtime = _create_feed_artifact_runtime(runtime_settings=runtime_settings)
+    await runtime.preflight(allowed_format_slugs)
+
+
+def create_phase3_acquisition_worker(
+    *,
+    runtime_settings: Settings = settings,
+) -> Phase3AcquisitionWorker:
+    """Compose the repository-approved Phase 3 runtime without unsafe defaults."""
+
     return Phase3AcquisitionWorker(
         adapters=(FeedParserAdapter(),),
-        artifact_runtime=artifact_runtime,
+        artifact_runtime=_create_feed_artifact_runtime(runtime_settings=runtime_settings),
     )

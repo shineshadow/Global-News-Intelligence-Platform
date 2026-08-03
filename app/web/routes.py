@@ -26,6 +26,7 @@ from app.services.web_ui_service import (
     list_run_overviews,
     list_source_overviews,
 )
+from app.web.acquisition_routes import router as acquisition_router
 from app.web.alert_routes import (
     router as alert_router,
 )
@@ -50,24 +51,15 @@ router = APIRouter(
 # Lifecycle routes contain fixed paths such as
 # /web/sources/new. Include them before dynamic
 # routes such as /web/sources/{source_id}.
-router.include_router(
-    alert_router
-)
-router.include_router(
-    lifecycle_router
-)
+router.include_router(alert_router)
+router.include_router(acquisition_router)
+router.include_router(lifecycle_router)
 
-router.include_router(
-    document_router
-)
+router.include_router(document_router)
 
-router.include_router(
-    monitor_router
-)
+router.include_router(monitor_router)
 
-router.include_router(
-    calendar_router
-)
+router.include_router(calendar_router)
 
 
 @router.get("/")
@@ -87,9 +79,7 @@ async def dashboard(
     request: Request,
     session: DatabaseSession,
 ) -> HTMLResponse:
-    summary = await get_ingestion_summary(
-        session
-    )
+    summary = await get_ingestion_summary(session)
 
     failures = await list_failing_feeds(
         session,
@@ -122,9 +112,7 @@ async def sources_page(
     request: Request,
     session: DatabaseSession,
 ) -> HTMLResponse:
-    sources = await list_source_overviews(
-        session
-    )
+    sources = await list_source_overviews(session)
 
     return templates.TemplateResponse(
         request=request,
@@ -146,11 +134,9 @@ async def source_detail(
     source_id: int,
     session: DatabaseSession,
 ) -> HTMLResponse:
-    source, stats, endpoints = (
-        await get_source_web_detail(
-            session,
-            source_id,
-        )
+    source, stats, endpoints = await get_source_web_detail(
+        session,
+        source_id,
     )
 
     return templates.TemplateResponse(
@@ -227,9 +213,7 @@ async def summary_partial(
     request: Request,
     session: DatabaseSession,
 ) -> HTMLResponse:
-    summary = await get_ingestion_summary(
-        session
-    )
+    summary = await get_ingestion_summary(session)
 
     return templates.TemplateResponse(
         request=request,
@@ -255,10 +239,7 @@ async def failures_partial(
 
     return templates.TemplateResponse(
         request=request,
-        name=(
-            "partials/"
-            "failing_feeds_table.html"
-        ),
+        name=("partials/failing_feeds_table.html"),
         context={
             "failures": failures,
         },
@@ -296,19 +277,14 @@ async def source_endpoints_partial(
     source_id: int,
     session: DatabaseSession,
 ) -> HTMLResponse:
-    source, _stats, endpoints = (
-        await get_source_web_detail(
-            session,
-            source_id,
-        )
+    source, _stats, endpoints = await get_source_web_detail(
+        session,
+        source_id,
     )
 
     return templates.TemplateResponse(
         request=request,
-        name=(
-            "partials/"
-            "endpoint_health_table.html"
-        ),
+        name=("partials/endpoint_health_table.html"),
         context={
             "source": source,
             "endpoints": endpoints,
@@ -335,10 +311,7 @@ async def poll_endpoint(
             endpoint_id,
         )
 
-        message = (
-            f"Queued task "
-            f"{queued.task_id[:8]}…"
-        )
+        message = f"Queued task {queued.task_id[:8]}…"
 
     except ResourceConflictError as exc:
         state = "warning"
@@ -363,8 +336,6 @@ async def poll_endpoint(
     )
 
     if state == "queued":
-        response.headers["HX-Trigger"] = (
-            "pollQueued"
-        )
+        response.headers["HX-Trigger"] = "pollQueued"
 
     return response

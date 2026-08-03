@@ -261,6 +261,56 @@ class AcquisitionEndpointConfiguration(Base):
     )
 
 
+class AcquisitionEndpointCutoverEvent(Base):
+    """Immutable operator evidence for Phase 3 activation and rollback."""
+
+    __tablename__ = "acquisition_endpoint_cutover_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('activated', 'rolled_back')",
+            name="event_type",
+        ),
+        CheckConstraint(
+            "from_path IN ('legacy', 'phase3') AND to_path IN ('legacy', 'phase3') "
+            "AND from_path <> to_path",
+            name="path_transition",
+        ),
+        CheckConstraint(
+            "btrim(actor) <> '' AND btrim(reason) <> ''",
+            name="audit_nonempty",
+        ),
+        CheckConstraint("jsonb_typeof(details) = 'object'", name="details_object"),
+        Index(
+            "ix_acquisition_endpoint_cutover_events_endpoint_recorded",
+            "source_endpoint_id",
+            "recorded_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    source_endpoint_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("source_endpoints.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    endpoint_configuration_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("acquisition_endpoint_configurations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    event_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    from_path: Mapped[str] = mapped_column(String(20), nullable=False)
+    to_path: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class AcquisitionLease(Base):
     __tablename__ = "acquisition_leases"
     __table_args__ = (

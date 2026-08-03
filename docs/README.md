@@ -6,6 +6,7 @@ Generated files:
 - `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md` — UI-only American date/time display, canonical machine-format boundary, and formatter acceptance rules
 - `GNI_UI_FOUNDATION_AND_UX_GOVERNANCE.md` — Draft shared UI layers, device contract, preference resolution, component ownership, prototype review, and acceptance governance
 - `specifications/PHASE_3_FEED_ADAPTER_AND_SHARED_WORKER.md` — Implemented-candidate RSS/Atom adapter, shared acquisition worker, structural inspection, and fail-closed cutover boundary
+- `specifications/PHASE_3_CONTROLLED_FEED_CUTOVER_AND_ACQUISITION_HEALTH.md` — Audited bounded feed activation, rollback, operational-state projection, and Acquisition Health UI
 - `ui-governance/` — operational component registry, permanent UX decisions, acceptance/exception records, reusable templates, and standards supplement
 - `change-reports/UI_FOUNDATION_AND_UX_GOVERNANCE_CONFLICT_AUDIT.md` — integration audit and approval questions for the owner-supplied governance draft
 - `change-reports/UI_DATE_TIME_CORRECTION_AUDIT.md` — adoption record for the 9-page UI-only standard and rejection of the 11-page universal proposal

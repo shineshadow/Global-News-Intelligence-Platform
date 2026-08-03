@@ -14,9 +14,7 @@ async def create_source(
             "country": "United States",
             "primary_language": "en",
             "source_type": "news",
-            "website_url": (
-                f"https://example.com/{token}"
-            ),
+            "website_url": (f"https://example.com/{token}"),
         },
     )
 
@@ -29,10 +27,7 @@ async def create_source(
         json={
             "name": "RSS",
             "endpoint_type": "rss",
-            "url": (
-                f"https://example.com/"
-                f"{token}/feed.xml"
-            ),
+            "url": (f"https://example.com/{token}/feed.xml"),
             "poll_interval_seconds": 900,
         },
     )
@@ -48,9 +43,7 @@ async def create_source(
 async def test_dashboard_page(
     client,
 ) -> None:
-    response = await client.get(
-        "/web/"
-    )
+    response = await client.get("/web/")
 
     assert response.status_code == 200
     assert "Operations Dashboard" in response.text
@@ -60,31 +53,21 @@ async def test_dashboard_page(
 async def test_sources_page(
     client,
 ) -> None:
-    source_id, _ = await create_source(
-        client
-    )
+    source_id, _ = await create_source(client)
 
-    response = await client.get(
-        "/web/sources"
-    )
+    response = await client.get("/web/sources")
 
     assert response.status_code == 200
     assert "Sources" in response.text
-    assert f"/web/sources/{source_id}" in (
-        response.text
-    )
+    assert f"/web/sources/{source_id}" in (response.text)
 
 
 async def test_source_detail_page(
     client,
 ) -> None:
-    source_id, _ = await create_source(
-        client
-    )
+    source_id, _ = await create_source(client)
 
-    response = await client.get(
-        f"/web/sources/{source_id}"
-    )
+    response = await client.get(f"/web/sources/{source_id}")
 
     assert response.status_code == 200
     assert "Endpoint Health" in response.text
@@ -94,9 +77,7 @@ async def test_source_detail_page(
 async def test_runs_page(
     client,
 ) -> None:
-    response = await client.get(
-        "/web/runs"
-    )
+    response = await client.get("/web/runs")
 
     assert response.status_code == 200
     assert "Ingestion Runs" in response.text
@@ -105,21 +86,62 @@ async def test_runs_page(
 async def test_failures_page(
     client,
 ) -> None:
-    response = await client.get(
-        "/web/failures"
-    )
+    response = await client.get("/web/failures")
 
     assert response.status_code == 200
     assert "Feed Diagnostics" in response.text
+
+
+async def test_acquisition_health_page(
+    client,
+) -> None:
+    response = await client.get("/web/acquisition-health")
+
+    assert response.status_code == 200
+    assert "Acquisition Health" in response.text
+    assert "Feed cutover is explicit, audited, reversible" in response.text
+
+
+async def test_acquisition_cutover_actions_require_explicit_operator_evidence(
+    client,
+    monkeypatch,
+) -> None:
+    _, endpoint_id = await create_source(client)
+    from app.web import acquisition_routes
+
+    calls = []
+
+    async def fake_activate(_session, requested_endpoint_id, *, actor, reason):
+        calls.append(("activate", requested_endpoint_id, actor, reason))
+
+    async def fake_rollback(_session, requested_endpoint_id, *, actor, reason):
+        calls.append(("rollback", requested_endpoint_id, actor, reason))
+
+    monkeypatch.setattr(acquisition_routes, "activate_feed_endpoint", fake_activate)
+    monkeypatch.setattr(acquisition_routes, "rollback_feed_endpoint", fake_rollback)
+
+    activated = await client.post(
+        f"/web/acquisition-health/{endpoint_id}/activate",
+        data={"actor": "owner", "reason": "bounded canary"},
+    )
+    rolled_back = await client.post(
+        f"/web/acquisition-health/{endpoint_id}/rollback",
+        data={"actor": "owner", "reason": "parity comparison"},
+    )
+
+    assert activated.status_code == 303
+    assert rolled_back.status_code == 303
+    assert calls == [
+        ("activate", endpoint_id, "owner", "bounded canary"),
+        ("rollback", endpoint_id, "owner", "parity comparison"),
+    ]
 
 
 async def test_web_manual_poll(
     client,
     monkeypatch,
 ) -> None:
-    _, endpoint_id = await create_source(
-        client
-    )
+    _, endpoint_id = await create_source(client)
 
     from app.web import routes
 
@@ -129,10 +151,7 @@ async def test_web_manual_poll(
     ):
         return SimpleNamespace(
             endpoint_id=requested_endpoint_id,
-            task_id=(
-                "1234567890"
-                "abcdef1234567890abcdef"
-            ),
+            task_id=("1234567890abcdef1234567890abcdef"),
         )
 
     monkeypatch.setattr(
@@ -142,8 +161,7 @@ async def test_web_manual_poll(
     )
 
     response = await client.post(
-        f"/web/source-endpoints/"
-        f"{endpoint_id}/poll",
+        f"/web/source-endpoints/{endpoint_id}/poll",
         headers={
             "HX-Request": "true",
         },
@@ -151,6 +169,4 @@ async def test_web_manual_poll(
 
     assert response.status_code == 200
     assert "Queued task" in response.text
-    assert response.headers.get(
-        "HX-Trigger"
-    ) == "pollQueued"
+    assert response.headers.get("HX-Trigger") == "pollQueued"

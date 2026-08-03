@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
 
     artifact_staging_root: Path | None = None
     artifact_canonical_root: Path | None = None
+    phase3_feed_cutover_limit: int = Field(default=1, ge=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",

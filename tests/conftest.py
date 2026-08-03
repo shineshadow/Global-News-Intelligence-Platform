@@ -109,6 +109,7 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            acquisition_endpoint_cutover_events,
             acquisition_rate_limit_reservation_buckets,
             acquisition_rate_limit_observations,
             acquisition_lease_events,
