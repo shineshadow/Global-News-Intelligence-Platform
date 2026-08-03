@@ -104,7 +104,9 @@ Phase 3 feed adapter/shared acquisition worker       implemented candidate
 UI foundation and UX governance                      draft candidate
 Phase 3 controlled feed cutover/acquisition health   implemented candidate
 Phase 3 live feed canary/parity review                passed
-Phase 3 remaining acquisition adapters                next
+Phase 3 RSSHub/RSS-Bridge adapters                    implemented candidate
+Phase 3 direct HTTP/listing extraction                next
+Phase 3 changedetection/Playwright fallback           after direct extraction
 Phase 3 formal implementation review                 final gate
 ```
 
@@ -139,6 +141,11 @@ reactivation proof are recorded in
 `../specifications/PHASE_3_LIVE_FEED_CANARY_PARITY_REVIEW.md`. The exact
 RSS/feed-parser canary passed; the cohort limit remains one and the result does
 not claim parity for unreviewed feeds or remaining adapter types.
+The installation-bound RSSHub and RSS-Bridge runtime adapters, exact registry
+seeds, internal-service egress identity, and non-activating migration are
+recorded in
+`../specifications/PHASE_3_RSSHUB_AND_RSS_BRIDGE_ADAPTERS.md`. No generated
+feed endpoint or internal service is configured by the repository candidate.
 
 ---
 

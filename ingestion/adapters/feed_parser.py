@@ -37,6 +37,16 @@ class FeedParserAdapter:
     def __init__(self, *, http_client: GuardedHTTPClient | None = None) -> None:
         self._http_client = http_client or GuardedHTTPClient()
 
+    def egress_request_policy(
+        self,
+        *,
+        configuration: dict[str, Any],
+    ) -> EgressRequestPolicy:
+        return EgressRequestPolicy(
+            adapter_slug=self.slug,
+            allowed_schemes=frozenset({"http", "https"}),
+        )
+
     def allowed_artifact_formats(
         self,
         endpoint: SourceEndpoint,
@@ -75,12 +85,10 @@ class FeedParserAdapter:
         if endpoint.last_modified:
             headers["If-Modified-Since"] = endpoint.last_modified
 
+        policy = self.egress_request_policy(configuration=configuration)
         response = await self._http_client.get(
             endpoint.url,
-            policy=EgressRequestPolicy(
-                adapter_slug=self.slug,
-                allowed_schemes=frozenset({"http", "https"}),
-            ),
+            policy=policy,
             headers=headers,
         )
         if response.status_code != 304 and not 200 <= response.status_code < 300:
@@ -89,6 +97,17 @@ class FeedParserAdapter:
         content_type = response.headers.get("Content-Type")
         declared_media_type = _normalized_media_type(content_type)
         not_modified = response.status_code == 304
+        provenance = {
+            "connected_address": response.connected_address,
+            "redirect_count": response.redirect_count,
+            "egress_policy": (
+                "installation-registered-internal-v1"
+                if policy.internal_service_identity is not None
+                else "ip-pinned-public-v1"
+            ),
+        }
+        if policy.internal_service_identity is not None:
+            provenance["internal_service_identity"] = policy.internal_service_identity
         return AdapterRetrieval(
             requested_url=response.requested_url,
             final_url=response.final_url,
@@ -100,11 +119,7 @@ class FeedParserAdapter:
             last_modified=response.headers.get("Last-Modified") or endpoint.last_modified,
             not_modified=not_modified,
             original_filename=_original_filename(response.final_url),
-            provenance={
-                "connected_address": response.connected_address,
-                "redirect_count": response.redirect_count,
-                "egress_policy": "ip-pinned-public-v1",
-            },
+            provenance=provenance,
         )
 
     async def normalize(self, retrieval: AdapterRetrieval) -> FeedPollResult:

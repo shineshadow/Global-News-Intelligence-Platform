@@ -8,6 +8,7 @@ Generated files:
 - `specifications/PHASE_3_FEED_ADAPTER_AND_SHARED_WORKER.md` — Implemented-candidate RSS/Atom adapter, shared acquisition worker, structural inspection, and fail-closed cutover boundary
 - `specifications/PHASE_3_CONTROLLED_FEED_CUTOVER_AND_ACQUISITION_HEALTH.md` — Audited bounded feed activation, rollback, operational-state projection, and Acquisition Health UI
 - `specifications/PHASE_3_LIVE_FEED_CANARY_PARITY_REVIEW.md` — Passed CISA RSS canary, Artifact/Document parity, scheduled acquisition, live rollback, and versioned reactivation record
+- `specifications/PHASE_3_RSSHUB_AND_RSS_BRIDGE_ADAPTERS.md` — Installation-bound generated-feed adapters using exact internal-service egress identities and the shared Artifact boundary
 - `ui-governance/` — operational component registry, permanent UX decisions, acceptance/exception records, reusable templates, and standards supplement
 - `change-reports/UI_FOUNDATION_AND_UX_GOVERNANCE_CONFLICT_AUDIT.md` — integration audit and approval questions for the owner-supplied governance draft
 - `change-reports/UI_DATE_TIME_CORRECTION_AUDIT.md` — adoption record for the 9-page UI-only standard and rejection of the 11-page universal proposal

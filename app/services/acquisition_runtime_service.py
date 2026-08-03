@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ipaddress
+
 from app.config import Settings, settings
 from app.database import async_session_factory
 from app.services.acquisition_worker_service import Phase3AcquisitionWorker
@@ -10,11 +12,45 @@ from app.services.artifact_inspection_sandbox import (
     BubblewrapInspectionSandbox,
 )
 from app.services.artifact_security_service import DeletionFirstArtifactRuntime
-from ingestion.adapters import FeedParserAdapter
+from app.services.outbound_egress_service import (
+    GuardedHTTPClient,
+    InternalServiceRegistration,
+    InternalServiceRegistry,
+    OutboundEgressGuard,
+)
+from ingestion.adapters import FeedParserAdapter, RSSBridgeAdapter, RSSHubAdapter
 
 
 class AcquisitionRuntimeConfigurationError(RuntimeError):
     """The installed Phase 3 runtime is not configured for safe activation."""
+
+
+def _create_internal_service_registry(
+    *,
+    runtime_settings: Settings = settings,
+) -> InternalServiceRegistry:
+    try:
+        registrations = tuple(
+            InternalServiceRegistration(
+                identity=entry.identity,
+                adapter_slug=entry.adapter_slug,
+                scheme=entry.scheme,
+                hostname=entry.hostname,
+                port=entry.port,
+                address_networks=tuple(
+                    ipaddress.ip_network(network, strict=False)
+                    for network in entry.address_networks
+                ),
+                tls_policy=entry.tls_policy,
+                purpose=entry.purpose,
+            )
+            for entry in runtime_settings.acquisition_internal_services
+        )
+    except (TypeError, ValueError) as exc:
+        raise AcquisitionRuntimeConfigurationError(
+            "ACQUISITION_INTERNAL_SERVICES contains an invalid registration."
+        ) from exc
+    return InternalServiceRegistry(registrations)
 
 
 def _create_feed_artifact_runtime(
@@ -61,7 +97,17 @@ def create_phase3_acquisition_worker(
 ) -> Phase3AcquisitionWorker:
     """Compose the repository-approved Phase 3 runtime without unsafe defaults."""
 
+    internal_services = _create_internal_service_registry(
+        runtime_settings=runtime_settings
+    )
+    guarded_http_client = GuardedHTTPClient(
+        guard=OutboundEgressGuard(internal_services=internal_services)
+    )
     return Phase3AcquisitionWorker(
-        adapters=(FeedParserAdapter(),),
+        adapters=(
+            FeedParserAdapter(http_client=guarded_http_client),
+            RSSHubAdapter(http_client=guarded_http_client),
+            RSSBridgeAdapter(http_client=guarded_http_client),
+        ),
         artifact_runtime=_create_feed_artifact_runtime(runtime_settings=runtime_settings),
     )

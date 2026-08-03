@@ -341,6 +341,78 @@ async def truncate_test_tables() -> None:
                 WHERE adapter.slug = 'feed_parser'
                   AND adapter.version = '1'
                   AND format.slug IN ('rss', 'atom');
+
+                INSERT INTO acquisition_adapters (
+                    slug, version, display_name, implementation, status,
+                    configuration_schema, provenance, activated_at
+                )
+                VALUES
+                    (
+                        'rsshub', '1', 'RSSHub Generated Feed',
+                        'ingestion.adapters.generated_feed:RSSHubAdapter',
+                        'active',
+                        jsonb_build_object(
+                            'type', 'object',
+                            'properties', jsonb_build_object(
+                                'internal_service_identity', jsonb_build_object(
+                                    'type', 'string', 'minLength', 1
+                                )
+                            ),
+                            'required', jsonb_build_array('internal_service_identity'),
+                            'additionalProperties', false
+                        ),
+                        jsonb_build_object(
+                            'migration', 'b7d9e1f3a5c2',
+                            'egress_policy', 'installation-registered-internal-v1',
+                            'activation_scope',
+                            'registry-only-no-service-or-endpoint-configuration'
+                        ),
+                        now()
+                    ),
+                    (
+                        'rss_bridge', '1', 'RSS-Bridge Generated Feed',
+                        'ingestion.adapters.generated_feed:RSSBridgeAdapter',
+                        'active',
+                        jsonb_build_object(
+                            'type', 'object',
+                            'properties', jsonb_build_object(
+                                'internal_service_identity', jsonb_build_object(
+                                    'type', 'string', 'minLength', 1
+                                )
+                            ),
+                            'required', jsonb_build_array('internal_service_identity'),
+                            'additionalProperties', false
+                        ),
+                        jsonb_build_object(
+                            'migration', 'b7d9e1f3a5c2',
+                            'egress_policy', 'installation-registered-internal-v1',
+                            'activation_scope',
+                            'registry-only-no-service-or-endpoint-configuration'
+                        ),
+                        now()
+                    );
+
+                INSERT INTO acquisition_adapter_compatibilities (
+                    adapter_id, endpoint_type, endpoint_format,
+                    acquisition_method, platform, platform_key
+                )
+                SELECT adapter.id, 'feed', format.slug, 'feed_parser', NULL, '*'
+                FROM acquisition_adapters AS adapter
+                CROSS JOIN (VALUES ('rss'), ('atom')) AS format(slug)
+                WHERE adapter.slug IN ('rsshub', 'rss_bridge')
+                  AND adapter.version = '1';
+
+                INSERT INTO acquisition_adapter_artifact_capabilities (
+                    adapter_id, artifact_format_id,
+                    identification_supported, safe_parser_supported,
+                    safe_extraction_supported
+                )
+                SELECT adapter.id, format.id, true, true, false
+                FROM acquisition_adapters AS adapter
+                CROSS JOIN artifact_formats AS format
+                WHERE adapter.slug IN ('rsshub', 'rss_bridge')
+                  AND adapter.version = '1'
+                  AND format.slug IN ('rss', 'atom');
                 """
             )
         )

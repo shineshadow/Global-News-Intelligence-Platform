@@ -1,8 +1,21 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class AcquisitionInternalServiceSettings(BaseModel):
+    """Installation-owned egress identity for one internal acquisition service."""
+
+    identity: str
+    adapter_slug: str
+    scheme: str
+    hostname: str
+    port: int
+    address_networks: tuple[str, ...]
+    tls_policy: str
+    purpose: str
 
 
 class Settings(BaseSettings):
@@ -27,6 +40,7 @@ class Settings(BaseSettings):
     artifact_staging_root: Path | None = None
     artifact_canonical_root: Path | None = None
     phase3_feed_cutover_limit: int = Field(default=1, ge=1)
+    acquisition_internal_services: tuple[AcquisitionInternalServiceSettings, ...] = ()
 
     model_config = SettingsConfigDict(
         env_file=".env",
