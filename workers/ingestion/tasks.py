@@ -1,10 +1,8 @@
-from dataclasses import asdict
+from datetime import datetime
 
 from celery import Task
 
-from app.services.ingestion_service import (
-    poll_source_endpoint,
-)
+from app.services.acquisition_dispatch_service import dispatch_source_endpoint_poll
 from workers.async_runner import run_async
 from workers.celery_app import celery_app
 from workers.locks import (
@@ -24,6 +22,8 @@ def poll_source_endpoint_task(
     self: Task,
     endpoint_id: int,
     trigger_type: str = "scheduled",
+    schedule_window: str | None = None,
+    configuration_version: str | None = None,
 ) -> dict:
     """
     Poll one endpoint through the existing ingestion service.
@@ -34,9 +34,7 @@ def poll_source_endpoint_task(
     task_id = self.request.id
 
     if not task_id:
-        raise RuntimeError(
-            "Celery did not provide a task ID."
-        )
+        raise RuntimeError("Celery did not provide a task ID.")
 
     lock_client = create_lock_client()
     owns_claim = False
@@ -66,14 +64,18 @@ def poll_source_endpoint_task(
                 "endpoint_id": endpoint_id,
             }
 
-        summary = run_async(
-            lambda: poll_source_endpoint(
+        parsed_schedule_window = (
+            datetime.fromisoformat(schedule_window) if schedule_window is not None else None
+        )
+        return run_async(
+            lambda: dispatch_source_endpoint_poll(
                 endpoint_id,
                 trigger_type=trigger_type,
+                task_id=task_id,
+                schedule_window=parsed_schedule_window,
+                expected_configuration_version=configuration_version,
             )
         )
-
-        return asdict(summary)
 
     finally:
         if owns_claim:

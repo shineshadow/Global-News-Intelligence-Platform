@@ -14,6 +14,8 @@ from app.models import (
 )
 from app.services.artifact_inspection_sandbox import (
     BubblewrapClamAVScanner,
+    BubblewrapFeedSafeParser,
+    BubblewrapFeedStructureDetector,
     BubblewrapInspectionSandbox,
     ClamAVSandboxConfiguration,
 )
@@ -519,3 +521,74 @@ async def test_runtime_acceptance_uses_sandboxed_mandatory_scanner(
         assert artifact.scanner_name == "ClamAV"
         assert artifact.scanner_version == "1.4.3"
         assert artifact.scanner_signature_version == "27777"
+
+
+async def test_runtime_accepts_structurally_identified_rss_with_sandbox_provenance(
+    database_session_factory,
+    tmp_path,
+) -> None:
+    scanner_path = tmp_path / "fake-clamscan"
+    scanner_path.write_bytes(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "fake_clamscan.py"
+        ).read_bytes()
+    )
+    scanner_path.chmod(0o755)
+    signatures = tmp_path / "signatures"
+    signatures.mkdir()
+    (signatures / "daily.cvd").write_bytes(b"test signatures")
+    sandbox = BubblewrapInspectionSandbox(
+        configuration=ClamAVSandboxConfiguration(
+            scanner_path=scanner_path,
+            signature_directory=signatures,
+        )
+    )
+    async with database_session_factory() as session, session.begin():
+        await import_repository_pinned_release(session)
+        endpoint_id, run_id = await _endpoint_and_run(session, suffix="rss")
+    runtime = DeletionFirstArtifactRuntime(
+        session_factory=database_session_factory,
+        staging_root=tmp_path / "staging",
+        canonical_root=tmp_path / "canonical",
+        scanner=FakeScanner(),
+        structural_detector=BubblewrapFeedStructureDetector(sandbox),
+        safe_parsers={
+            "rss": BubblewrapFeedSafeParser(sandbox, expected_format="rss"),
+        },
+    )
+    rss_bytes = (
+        b"<?xml version='1.0'?><rss version='2.0'><channel>"
+        b"<title>Exact RSS</title></channel></rss>"
+    )
+
+    await runtime.preflight(frozenset({"rss"}))
+    outcome = await runtime.ingest(
+        ArtifactIngestRequest(
+            source_endpoint_id=endpoint_id,
+            ingestion_run_id=run_id,
+            retrieval_identity="scheduled:rss:item-1",
+            resource_identity="provider:rss",
+            adapter_slug="feed_parser",
+            adapter_version="1",
+            configuration_version="1",
+            original_filename="feed.rss",
+            declared_media_type="application/rss+xml",
+            allowed_format_slugs=frozenset({"rss"}),
+            chunks=(rss_bytes,),
+            retrieval_provenance={"test": True},
+            original_locator="https://example.test/feed.rss",
+            max_bytes=1024,
+        )
+    )
+
+    assert outcome.accepted is True
+    assert outcome.format_slug == "rss"
+    async with database_session_factory() as session:
+        artifact = await session.get(AcquisitionArtifact, outcome.artifact_id)
+    assert artifact is not None
+    assert artifact.detector_name == "gni-sandbox-feed-structure"
+    assert artifact.safe_parser_name == "gni-sandbox-feed-parser"
+    assert artifact.identification_evidence["signature_identifiers"] == []
+    assert artifact.identification_evidence["detector"]["detected_format"] == "rss"

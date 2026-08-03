@@ -100,8 +100,10 @@ Phase 3 signature importer/deletion-first runtime    implemented candidate
 Phase 3 inspection sandbox/mandatory scanner         implemented candidate
 Phase 3 outbound egress guard                         implemented candidate
 Phase 3 leases/adapter registry/secrets/rate policy  implemented candidate
+Phase 3 feed adapter/shared acquisition worker       implemented candidate
 UI foundation and UX governance                      draft candidate
-Phase 3 adapters and acquisition-health UI           after security boundary
+Phase 3 feed cutover/acquisition-health UI            next
+Phase 3 remaining acquisition adapters                after feed cutover proof
 Phase 3 formal implementation review                 final gate
 ```
 
@@ -120,6 +122,11 @@ The IP-pinned outbound HTTP and SSRF boundary candidate is recorded in
 The PostgreSQL-authoritative adapter, lease, secret-reference, and
 hierarchical rate-control candidate is recorded in
 `../specifications/PHASE_3_ACQUISITION_CONTROL_RUNTIME.md`.
+The first exact RSS/Atom adapter, shared worker composition, structural feed
+inspection, and fail-closed cutover boundary are recorded in
+`../specifications/PHASE_3_FEED_ADAPTER_AND_SHARED_WORKER.md`. Its migration
+configures no endpoints; legacy RSS remains active only for endpoints without
+an explicit Phase 3 configuration.
 
 ---
 

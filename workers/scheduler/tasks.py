@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.config import settings
@@ -27,11 +28,11 @@ from workers.locks import (
 logger = logging.getLogger(__name__)
 
 
-async def _get_due_endpoint_ids() -> list[int]:
-    """Read due endpoint IDs from PostgreSQL."""
+async def _get_due_endpoint_dispatches() -> list[tuple[int, str | None]]:
+    """Read due endpoints and their dispatch-time configuration versions."""
 
     async with async_session_factory() as session:
-        return await source_endpoint_repository.list_due_source_endpoint_ids(
+        return await source_endpoint_repository.list_due_source_endpoint_dispatches(
             session,
             limit=settings.celery_dispatch_limit,
         )
@@ -114,8 +115,7 @@ def dispatch_pending_calendar_validations() -> dict[str, int]:
         except Exception:
             enqueue_failed += 1
             logger.exception(
-                "Could not enqueue Calendar validation for Event %s "
-                "Occurrence %s",
+                "Could not enqueue Calendar validation for Event %s Occurrence %s",
                 event_id,
                 occurrence_id,
             )
@@ -137,7 +137,7 @@ def dispatch_due_source_endpoints() -> dict[str, int]:
     the same endpoint again while it is queued or running.
     """
 
-    endpoint_ids = run_async(_get_due_endpoint_ids)
+    endpoint_dispatches = run_async(_get_due_endpoint_dispatches)
 
     lock_client = create_lock_client()
 
@@ -146,7 +146,8 @@ def dispatch_due_source_endpoints() -> dict[str, int]:
     enqueue_failed = 0
 
     try:
-        for endpoint_id in endpoint_ids:
+        schedule_window = datetime.now(UTC).replace(microsecond=0).isoformat()
+        for endpoint_id, configuration_version in endpoint_dispatches:
             task_id = uuid4().hex
 
             acquired = acquire_endpoint_claim(
@@ -164,6 +165,8 @@ def dispatch_due_source_endpoints() -> dict[str, int]:
                     args=[endpoint_id],
                     kwargs={
                         "trigger_type": "scheduled",
+                        "schedule_window": schedule_window,
+                        "configuration_version": configuration_version,
                     },
                     task_id=task_id,
                     queue="ingestion",
@@ -189,7 +192,7 @@ def dispatch_due_source_endpoints() -> dict[str, int]:
         lock_client.close()
 
     return {
-        "due": len(endpoint_ids),
+        "due": len(endpoint_dispatches),
         "queued": queued,
         "already_claimed": already_claimed,
         "enqueue_failed": enqueue_failed,

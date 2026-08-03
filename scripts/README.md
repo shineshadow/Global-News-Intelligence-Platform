@@ -127,3 +127,18 @@ and loopback-refusal smoke with:
 The command makes one bounded request to `https://example.com/`, reports the
 validated connected peer, and proves a direct loopback URL is refused before
 connection.
+
+## Phase 3 Feed Runtime Storage
+
+Before any feed endpoint receives an active Phase 3 adapter configuration, set
+both installation paths:
+
+```bash
+ARTIFACT_STAGING_ROOT=/var/lib/gni/artifacts/staging
+ARTIFACT_CANONICAL_ROOT=/var/lib/gni/artifacts/canonical
+```
+
+They must be distinct, non-nested directories on approved local storage. The
+runtime has no fallback path. Missing configuration prevents the Phase 3
+worker from starting, and a configured endpoint is never downgraded to the
+legacy poller.

@@ -104,8 +104,8 @@ async def test_repository_pinned_import_is_atomic_and_idempotent(
     assert counts == {
         "releases": 1,
         "signatures": 16,
-        "media_types": 15,
-        "extensions": 19,
+        "media_types": 22,
+        "extensions": 23,
     }
 
 

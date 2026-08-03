@@ -6,7 +6,7 @@ import shutil
 import stat
 import tempfile
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -78,6 +78,25 @@ class ExactSafeParser(Protocol):
 
 
 @dataclass(frozen=True)
+class StructuralDetectionResult:
+    identified: bool
+    format_slug: str | None
+    detector_name: str
+    detector_version: str
+    reason_code: str | None
+    evidence: Mapping[str, Any]
+
+
+class ExactStructuralDetector(Protocol):
+    async def detect(
+        self,
+        path: Path,
+        *,
+        allowed_format_slugs: frozenset[str],
+    ) -> StructuralDetectionResult: ...
+
+
+@dataclass(frozen=True)
 class ArtifactIngestRequest:
     source_endpoint_id: int
     ingestion_run_id: int
@@ -111,6 +130,9 @@ class _DetectedFormat:
     format_id: int
     format_slug: str
     signature_ids: tuple[str, ...]
+    detector_name: str = DETECTOR_NAME
+    detector_version: str = DETECTOR_VERSION
+    detector_evidence: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -159,10 +181,12 @@ class DeletionFirstArtifactRuntime:
         canonical_root: Path,
         scanner: MandatoryArtifactScanner,
         safe_parsers: Mapping[str, ExactSafeParser],
+        structural_detector: ExactStructuralDetector | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._scanner = scanner
         self._safe_parsers = dict(safe_parsers)
+        self._structural_detector = structural_detector
         self._staging_root = self._prepare_root(staging_root, mode=0o700)
         self._canonical_root = self._prepare_root(canonical_root, mode=0o750)
         if self._staging_root == self._canonical_root:
@@ -209,7 +233,11 @@ class DeletionFirstArtifactRuntime:
         scanner_result: ScannerResult | None = None
         parser_result: ParserResult | None = None
         try:
-            detected = await self._detect(staged.path, release.id)
+            detected = await self._detect(
+                staged.path,
+                release.id,
+                allowed_format_slugs=request.allowed_format_slugs,
+            )
             await self._validate_declared_evidence(request, detected)
             try:
                 scanner_result = await self._scanner.scan(staged.path)
@@ -251,9 +279,7 @@ class DeletionFirstArtifactRuntime:
                 content_hash=staged.content_hash,
                 byte_length=staged.byte_length,
                 format_slug=(
-                    rejection.detected.format_slug
-                    if rejection.detected is not None
-                    else None
+                    rejection.detected.format_slug if rejection.detected is not None else None
                 ),
                 rejection_id=rejection_id,
                 reason_code=rejection.reason_code,
@@ -291,6 +317,24 @@ class DeletionFirstArtifactRuntime:
             artifact_id=artifact_id,
         )
 
+    async def preflight(self, allowed_format_slugs: frozenset[str]) -> None:
+        """Prove mandatory inspection dependencies before outbound retrieval."""
+
+        if not allowed_format_slugs:
+            raise ValueError("Artifact preflight requires a non-empty format allowlist.")
+        missing_parsers = allowed_format_slugs - self._safe_parsers.keys()
+        if missing_parsers:
+            raise ArtifactSecurityUnavailable(
+                "Required safe parsers are unavailable for: "
+                + ", ".join(sorted(missing_parsers))
+                + "."
+            )
+        if allowed_format_slugs & {"rss", "atom"} and self._structural_detector is None:
+            raise ArtifactSecurityUnavailable(
+                "Required structural feed detector is unavailable before retrieval."
+            )
+        await self._require_infrastructure()
+
     @staticmethod
     def _validate_request(request: ArtifactIngestRequest) -> None:
         required_strings = (
@@ -327,10 +371,8 @@ class DeletionFirstArtifactRuntime:
             release = (
                 await session.execute(
                     select(ArtifactSignatureRelease).where(
-                        ArtifactSignatureRelease.authority_slug
-                        == pinned.authority_slug,
-                        ArtifactSignatureRelease.release_identifier
-                        == pinned.release_identifier,
+                        ArtifactSignatureRelease.authority_slug == pinned.authority_slug,
+                        ArtifactSignatureRelease.release_identifier == pinned.release_identifier,
                         ArtifactSignatureRelease.sha256 == pinned.sha256,
                         ArtifactSignatureRelease.byte_length == pinned.byte_length,
                         ArtifactSignatureRelease.status == "active",
@@ -408,6 +450,8 @@ class DeletionFirstArtifactRuntime:
         self,
         path: Path,
         release_id: int,
+        *,
+        allowed_format_slugs: frozenset[str],
     ) -> _DetectedFormat:
         async with self._session_factory() as session:
             rows = (
@@ -415,8 +459,7 @@ class DeletionFirstArtifactRuntime:
                     select(ArtifactFormatSignature, ArtifactFormat)
                     .join(
                         ArtifactFormat,
-                        ArtifactFormatSignature.artifact_format_id
-                        == ArtifactFormat.id,
+                        ArtifactFormatSignature.artifact_format_id == ArtifactFormat.id,
                     )
                     .where(
                         ArtifactFormatSignature.signature_release_id == release_id,
@@ -458,19 +501,16 @@ class DeletionFirstArtifactRuntime:
 
         matches: dict[int, tuple[ArtifactFormat, list[str]]] = {}
         for signature, artifact_format, sequences in parsed_patterns:
-            if all(
-                header[offset : offset + len(value)] == value
-                for offset, value in sequences
-            ):
+            if all(header[offset : offset + len(value)] == value for offset, value in sequences):
                 entry = matches.setdefault(
                     artifact_format.id,
                     (artifact_format, []),
                 )
                 entry[1].append(signature.signature_identifier)
         if not matches:
-            raise _SecurityRejection(
-                "unknown_format",
-                "No exact active signature identified the payload.",
+            return await self._detect_structural(
+                path,
+                allowed_format_slugs=allowed_format_slugs,
             )
         if len(matches) != 1:
             raise _SecurityRejection(
@@ -478,8 +518,7 @@ class DeletionFirstArtifactRuntime:
                 "Multiple incompatible Artifact identities matched the payload.",
                 metadata={
                     "candidate_format_slugs": sorted(
-                        artifact_format.slug
-                        for artifact_format, _ in matches.values()
+                        artifact_format.slug for artifact_format, _ in matches.values()
                     )
                 },
             )
@@ -488,6 +527,79 @@ class DeletionFirstArtifactRuntime:
             format_id=artifact_format.id,
             format_slug=artifact_format.slug,
             signature_ids=tuple(sorted(identifiers)),
+            detector_evidence={
+                "method": "repository_pinned_byte_signature",
+            },
+        )
+
+    async def _detect_structural(
+        self,
+        path: Path,
+        *,
+        allowed_format_slugs: frozenset[str],
+    ) -> _DetectedFormat:
+        if self._structural_detector is None:
+            raise _SecurityRejection(
+                "unknown_format",
+                "No exact active signature identified the payload.",
+            )
+        try:
+            result = await self._structural_detector.detect(
+                path,
+                allowed_format_slugs=allowed_format_slugs,
+            )
+        except Exception as exc:
+            raise _SecurityRejection(
+                "structural_detector_failure",
+                "Exact structural detector failed while inspecting staged bytes.",
+            ) from exc
+        if (
+            not isinstance(result, StructuralDetectionResult)
+            or not isinstance(result.identified, bool)
+            or not isinstance(result.detector_name, str)
+            or not result.detector_name.strip()
+            or not isinstance(result.detector_version, str)
+            or not result.detector_version.strip()
+        ):
+            raise _SecurityRejection(
+                "invalid_structural_detector_result",
+                "Exact structural detector returned invalid provenance.",
+            )
+        if not result.identified or result.format_slug is None:
+            raise _SecurityRejection(
+                result.reason_code or "unknown_format",
+                "No exact structural identity was established for the payload.",
+                metadata={"detector_evidence": dict(result.evidence or {})},
+            )
+        if result.format_slug not in allowed_format_slugs:
+            raise _SecurityRejection(
+                "adapter_structural_mismatch",
+                "Structurally detected format is outside the adapter allowlist.",
+                metadata={
+                    "format_slug": result.format_slug,
+                    "detector_evidence": dict(result.evidence or {}),
+                },
+            )
+        async with self._session_factory() as session:
+            artifact_format = await session.scalar(
+                select(ArtifactFormat).where(
+                    ArtifactFormat.slug == result.format_slug,
+                    ArtifactFormat.is_active.is_(True),
+                    ArtifactFormat.is_terminal.is_(True),
+                )
+            )
+        if artifact_format is None:
+            raise _SecurityRejection(
+                "structural_format_unavailable",
+                "Structurally detected format is not an active terminal format.",
+            )
+        return _DetectedFormat(
+            format_id=artifact_format.id,
+            format_slug=artifact_format.slug,
+            signature_ids=(),
+            detector_name=result.detector_name,
+            detector_version=result.detector_version,
+            detector_evidence=dict(result.evidence or {}),
         )
 
     @staticmethod
@@ -559,8 +671,7 @@ class DeletionFirstArtifactRuntime:
             extension_match = (
                 await session.execute(
                     select(ArtifactFormatExtension.id).where(
-                        ArtifactFormatExtension.artifact_format_id
-                        == detected.format_id,
+                        ArtifactFormatExtension.artifact_format_id == detected.format_id,
                         ArtifactFormatExtension.extension == extension,
                         ArtifactFormatExtension.is_active.is_(True),
                     )
@@ -569,10 +680,8 @@ class DeletionFirstArtifactRuntime:
             media_type_match = (
                 await session.execute(
                     select(ArtifactFormatMediaType.id).where(
-                        ArtifactFormatMediaType.artifact_format_id
-                        == detected.format_id,
-                        ArtifactFormatMediaType.media_type
-                        == request.declared_media_type,
+                        ArtifactFormatMediaType.artifact_format_id == detected.format_id,
+                        ArtifactFormatMediaType.media_type == request.declared_media_type,
                         ArtifactFormatMediaType.is_active.is_(True),
                     )
                 )
@@ -656,10 +765,7 @@ class DeletionFirstArtifactRuntime:
     @staticmethod
     def _verify_staged_identity(staged: _StagedPayload) -> None:
         current_hash, current_size = _hash_file(staged.path)
-        if (
-            current_hash != staged.content_hash
-            or current_size != staged.byte_length
-        ):
+        if current_hash != staged.content_hash or current_size != staged.byte_length:
             raise _SecurityRejection(
                 "changing_hash",
                 "Staged payload identity changed during inspection.",
@@ -672,10 +778,7 @@ class DeletionFirstArtifactRuntime:
         if final_path.exists():
             _require_regular_file(final_path)
             existing_hash, existing_size = _hash_file(final_path)
-            if (
-                existing_hash != staged.content_hash
-                or existing_size != staged.byte_length
-            ):
+            if existing_hash != staged.content_hash or existing_size != staged.byte_length:
                 self._delete_and_verify(staged.path)
                 raise ArtifactPromotionError(
                     "Canonical content-addressed path contains different bytes."
@@ -689,17 +792,15 @@ class DeletionFirstArtifactRuntime:
         )
         temporary = Path(raw_temporary)
         try:
-            with os.fdopen(descriptor, "wb", closefd=True) as target, staged.path.open(
-                "rb"
-            ) as source:
+            with (
+                os.fdopen(descriptor, "wb", closefd=True) as target,
+                staged.path.open("rb") as source,
+            ):
                 shutil.copyfileobj(source, target, length=1024 * 1024)
                 target.flush()
                 os.fsync(target.fileno())
             copied_hash, copied_size = _hash_file(temporary)
-            if (
-                copied_hash != staged.content_hash
-                or copied_size != staged.byte_length
-            ):
+            if copied_hash != staged.content_hash or copied_size != staged.byte_length:
                 raise ArtifactPromotionError("Promoted-byte hash verification failed.")
             os.chmod(temporary, 0o440)
             try:
@@ -708,10 +809,7 @@ class DeletionFirstArtifactRuntime:
             except FileExistsError:
                 _require_regular_file(final_path)
                 existing_hash, existing_size = _hash_file(final_path)
-                if (
-                    existing_hash != staged.content_hash
-                    or existing_size != staged.byte_length
-                ):
+                if existing_hash != staged.content_hash or existing_size != staged.byte_length:
                     raise ArtifactPromotionError(
                         "Concurrent canonical promotion produced different bytes."
                     )
@@ -774,10 +872,8 @@ class DeletionFirstArtifactRuntime:
             artifact = (
                 await session.execute(
                     select(AcquisitionArtifact).where(
-                        AcquisitionArtifact.source_endpoint_id
-                        == request.source_endpoint_id,
-                        AcquisitionArtifact.resource_identity
-                        == request.resource_identity,
+                        AcquisitionArtifact.source_endpoint_id == request.source_endpoint_id,
+                        AcquisitionArtifact.resource_identity == request.resource_identity,
                         AcquisitionArtifact.payload_id == payload.id,
                     )
                 )
@@ -788,14 +884,11 @@ class DeletionFirstArtifactRuntime:
                     await session.execute(
                         select(AcquisitionArtifact)
                         .where(
-                            AcquisitionArtifact.source_endpoint_id
-                            == request.source_endpoint_id,
-                            AcquisitionArtifact.resource_identity
-                            == request.resource_identity,
+                            AcquisitionArtifact.source_endpoint_id == request.source_endpoint_id,
+                            AcquisitionArtifact.resource_identity == request.resource_identity,
                             ~exists(
                                 select(newer.id).where(
-                                    newer.supersedes_artifact_id
-                                    == AcquisitionArtifact.id
+                                    newer.supersedes_artifact_id == AcquisitionArtifact.id
                                 )
                             ),
                         )
@@ -812,8 +905,8 @@ class DeletionFirstArtifactRuntime:
                     adapter_version=request.adapter_version,
                     configuration_version=request.configuration_version,
                     signature_release_id=release.id,
-                    detector_name=DETECTOR_NAME,
-                    detector_version=DETECTOR_VERSION,
+                    detector_name=detected.detector_name,
+                    detector_version=detected.detector_version,
                     scanner_name=scanner_result.scanner_name,
                     scanner_version=scanner_result.scanner_version,
                     scanner_signature_version=scanner_result.signature_version,
@@ -822,6 +915,7 @@ class DeletionFirstArtifactRuntime:
                     detection_confidence=Decimal("1.0000"),
                     identification_evidence={
                         "signature_identifiers": list(detected.signature_ids),
+                        "detector": dict(detected.detector_evidence or {}),
                         "scanner": dict(scanner_result.evidence or {}),
                         "parser": dict(parser_result.evidence or {}),
                         "pinned_release": PINNED_RELEASE_PATH.name,
@@ -834,8 +928,7 @@ class DeletionFirstArtifactRuntime:
             observation = (
                 await session.execute(
                     select(AcquisitionArtifactObservation).where(
-                        AcquisitionArtifactObservation.ingestion_run_id
-                        == request.ingestion_run_id,
+                        AcquisitionArtifactObservation.ingestion_run_id == request.ingestion_run_id,
                         AcquisitionArtifactObservation.retrieval_identity
                         == request.retrieval_identity,
                     )
@@ -851,8 +944,7 @@ class DeletionFirstArtifactRuntime:
                     declared_media_type=request.declared_media_type,
                     observed_media_type=request.declared_media_type,
                     extension_chain=[
-                        suffix[1:].lower()
-                        for suffix in Path(request.original_filename).suffixes
+                        suffix[1:].lower() for suffix in Path(request.original_filename).suffixes
                     ],
                     retrieval_evidence=dict(request.retrieval_provenance),
                 )
@@ -881,10 +973,8 @@ class DeletionFirstArtifactRuntime:
             existing = (
                 await session.execute(
                     select(ArtifactRejection).where(
-                        ArtifactRejection.ingestion_run_id
-                        == request.ingestion_run_id,
-                        ArtifactRejection.retrieval_identity
-                        == request.retrieval_identity,
+                        ArtifactRejection.ingestion_run_id == request.ingestion_run_id,
+                        ArtifactRejection.retrieval_identity == request.retrieval_identity,
                     )
                 )
             ).scalar_one_or_none()
@@ -896,20 +986,24 @@ class DeletionFirstArtifactRuntime:
                 ingestion_run_id=request.ingestion_run_id,
                 retrieval_identity=request.retrieval_identity,
                 detected_format_id=(
-                    rejection.detected.format_id
-                    if rejection.detected is not None
-                    else None
+                    rejection.detected.format_id if rejection.detected is not None else None
                 ),
                 content_hash=staged.content_hash,
                 byte_length=staged.byte_length,
                 reason_code=rejection.reason_code,
                 rejection_reason=rejection.rejection_reason,
-                detector_name=DETECTOR_NAME,
-                detector_version=DETECTOR_VERSION,
-                signature_release_id=release.id,
-                scanner_name=(
-                    scanner_result.scanner_name if scanner_result is not None else None
+                detector_name=(
+                    rejection.detected.detector_name
+                    if rejection.detected is not None
+                    else DETECTOR_NAME
                 ),
+                detector_version=(
+                    rejection.detected.detector_version
+                    if rejection.detected is not None
+                    else DETECTOR_VERSION
+                ),
+                signature_release_id=release.id,
+                scanner_name=(scanner_result.scanner_name if scanner_result is not None else None),
                 scanner_version=(
                     scanner_result.scanner_version if scanner_result is not None else None
                 ),
@@ -920,14 +1014,17 @@ class DeletionFirstArtifactRuntime:
                 },
                 detected_metadata={
                     "format_slug": (
-                        rejection.detected.format_slug
-                        if rejection.detected is not None
-                        else None
+                        rejection.detected.format_slug if rejection.detected is not None else None
                     ),
                     "signature_identifiers": (
                         list(rejection.detected.signature_ids)
                         if rejection.detected is not None
                         else []
+                    ),
+                    "detector_evidence": (
+                        dict(rejection.detected.detector_evidence or {})
+                        if rejection.detected is not None
+                        else {}
                     ),
                     **rejection.metadata,
                 },

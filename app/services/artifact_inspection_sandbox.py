@@ -11,7 +11,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.services.artifact_security_service import ScannerResult
+from app.services.artifact_security_service import (
+    ParserResult,
+    ScannerResult,
+    StructuralDetectionResult,
+)
 
 WORKER_PATH = Path(__file__).with_name("artifact_inspection_worker.py")
 VERDICT_SCHEMA_VERSION = 1
@@ -133,6 +137,9 @@ class BubblewrapInspectionSandbox:
 
     async def scan(self, artifact_path: Path) -> SandboxVerdict:
         return await self._invoke(operation="scan", artifact_path=artifact_path)
+
+    async def detect_feed(self, artifact_path: Path) -> SandboxVerdict:
+        return await self._invoke(operation="detect_feed", artifact_path=artifact_path)
 
     async def _invoke(
         self,
@@ -319,6 +326,80 @@ class BubblewrapClamAVScanner:
             signature_version=verdict.signature_version,
             reason_code=verdict.reason_code,
             evidence=verdict.evidence,
+        )
+
+
+class BubblewrapFeedStructureDetector:
+    """Identify exact RSS/Atom structure inside the credential-free sandbox."""
+
+    name = "gni-sandbox-feed-structure"
+    version = "1"
+
+    def __init__(self, sandbox: BubblewrapInspectionSandbox) -> None:
+        self._sandbox = sandbox
+
+    async def detect(
+        self,
+        path: Path,
+        *,
+        allowed_format_slugs: frozenset[str],
+    ) -> StructuralDetectionResult:
+        if not allowed_format_slugs & {"rss", "atom"}:
+            return StructuralDetectionResult(
+                identified=False,
+                format_slug=None,
+                detector_name=self.name,
+                detector_version=self.version,
+                reason_code="feed_format_not_allowed",
+                evidence={},
+            )
+        verdict = await self._sandbox.detect_feed(path)
+        format_slug = verdict.evidence.get("detected_format")
+        if format_slug is not None and format_slug not in {"rss", "atom"}:
+            raise InspectionSandboxViolation(
+                "Feed detector returned an unsupported format identity."
+            )
+        return StructuralDetectionResult(
+            identified=verdict.status == "clean",
+            format_slug=format_slug if isinstance(format_slug, str) else None,
+            detector_name=self.name,
+            detector_version=self.version,
+            reason_code=verdict.reason_code,
+            evidence=verdict.evidence,
+        )
+
+
+class BubblewrapFeedSafeParser:
+    """Require a complete bounded feed parse for one exact feed format."""
+
+    def __init__(
+        self,
+        sandbox: BubblewrapInspectionSandbox,
+        *,
+        expected_format: str,
+    ) -> None:
+        if expected_format not in {"rss", "atom"}:
+            raise ValueError("Feed parser format must be rss or atom.")
+        self._sandbox = sandbox
+        self._expected_format = expected_format
+
+    async def parse(self, path: Path) -> ParserResult:
+        verdict = await self._sandbox.detect_feed(path)
+        detected_format = verdict.evidence.get("detected_format")
+        valid = verdict.status == "clean" and detected_format == self._expected_format
+        return ParserResult(
+            valid=valid,
+            parser_name="gni-sandbox-feed-parser",
+            parser_version="1",
+            reason_code=(
+                None
+                if valid
+                else verdict.reason_code or "feed_parser_format_mismatch"
+            ),
+            evidence={
+                **verdict.evidence,
+                "expected_format": self._expected_format,
+            },
         )
 
 

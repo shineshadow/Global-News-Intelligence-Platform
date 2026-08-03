@@ -9,15 +9,27 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from xml.etree import ElementTree
 
 SCHEMA_VERSION = 1
 VERSION_PATTERN = re.compile(r"^ClamAV\s+([^/\\s]+)/([^/\\s]+)(?:/.*)?$")
 MAX_SCANNER_OUTPUT = 32 * 1024
+MAX_STRUCTURED_FEED_BYTES = 10 * 1024 * 1024
+MAX_XML_ELEMENTS = 200_000
+MAX_XML_DEPTH = 64
+MAX_XML_ATTRIBUTES = 256
+ATOM_NAMESPACE = "http://www.w3.org/2005/Atom"
+RDF_NAMESPACE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+RSS_1_NAMESPACE = "http://purl.org/rss/1.0/"
 
 
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("--operation", choices=("probe", "scan"), required=True)
+    parser.add_argument(
+        "--operation",
+        choices=("probe", "scan", "detect_feed"),
+        required=True,
+    )
     parser.add_argument("--scanner", required=True)
     parser.add_argument("--signature-directory", required=True)
     parser.add_argument("--process-limit", required=True, type=int)
@@ -120,8 +132,15 @@ def _run() -> dict[str, object]:
             evidence=isolation_evidence,
         )
     if not arguments.input:
-        raise ValueError("scan operation requires an input")
+        raise ValueError("inspection operation requires an input")
     artifact = _regular_file(arguments.input, label="input")
+    if arguments.operation == "detect_feed":
+        return _detect_feed(
+            artifact,
+            engine_version=engine_version,
+            signature_version=signature_version,
+            isolation_evidence=isolation_evidence,
+        )
     completed = subprocess.run(
         (
             str(scanner),
@@ -182,6 +201,153 @@ def _run() -> dict[str, object]:
     )
 
 
+def _detect_feed(
+    artifact: Path,
+    *,
+    engine_version: str,
+    signature_version: str,
+    isolation_evidence: dict[str, object],
+) -> dict[str, object]:
+    metadata = artifact.stat()
+    if metadata.st_size <= 0 or metadata.st_size > MAX_STRUCTURED_FEED_BYTES:
+        return _verdict(
+            operation="detect_feed",
+            status="rejected",
+            engine_version=engine_version,
+            signature_version=signature_version,
+            reason_code="feed_size_invalid",
+            evidence={**isolation_evidence, "byte_length": metadata.st_size},
+        )
+    payload = artifact.read_bytes()
+    upper_payload = payload.upper()
+    if b"\x00" in payload:
+        return _feed_rejection(
+            "feed_encoding_unsupported",
+            engine_version,
+            signature_version,
+            isolation_evidence,
+        )
+    if b"<!DOCTYPE" in upper_payload or b"<!ENTITY" in upper_payload:
+        return _feed_rejection(
+            "feed_unsafe_xml_declaration",
+            engine_version,
+            signature_version,
+            isolation_evidence,
+        )
+
+    depth = 0
+    element_count = 0
+    root_tag: str | None = None
+    has_rss_channel = False
+    has_atom_title = False
+    has_atom_id = False
+    has_atom_updated = False
+    try:
+        for event, element in ElementTree.iterparse(artifact, events=("start", "end")):
+            if event == "start":
+                depth += 1
+                element_count += 1
+                if depth > MAX_XML_DEPTH or element_count > MAX_XML_ELEMENTS:
+                    return _feed_rejection(
+                        "feed_structure_limit_exceeded",
+                        engine_version,
+                        signature_version,
+                        isolation_evidence,
+                    )
+                if len(element.attrib) > MAX_XML_ATTRIBUTES:
+                    return _feed_rejection(
+                        "feed_attribute_limit_exceeded",
+                        engine_version,
+                        signature_version,
+                        isolation_evidence,
+                    )
+                if root_tag is None:
+                    root_tag = element.tag
+                elif depth == 2:
+                    has_rss_channel = has_rss_channel or element.tag in {
+                        "channel",
+                        f"{{{RSS_1_NAMESPACE}}}channel",
+                    }
+                    has_atom_title = (
+                        has_atom_title or element.tag == f"{{{ATOM_NAMESPACE}}}title"
+                    )
+                    has_atom_id = has_atom_id or element.tag == f"{{{ATOM_NAMESPACE}}}id"
+                    has_atom_updated = (
+                        has_atom_updated
+                        or element.tag == f"{{{ATOM_NAMESPACE}}}updated"
+                    )
+            else:
+                depth -= 1
+                element.clear()
+    except (ElementTree.ParseError, OSError, ValueError):
+        return _feed_rejection(
+            "feed_xml_malformed",
+            engine_version,
+            signature_version,
+            isolation_evidence,
+        )
+
+    format_slug: str | None = None
+    if root_tag == "rss" and has_rss_channel:
+        format_slug = "rss"
+    elif (
+        root_tag == f"{{{ATOM_NAMESPACE}}}feed"
+        and has_atom_title
+        and has_atom_id
+        and has_atom_updated
+    ):
+        format_slug = "atom"
+    elif root_tag == f"{{{RDF_NAMESPACE}}}RDF" and has_rss_channel:
+        format_slug = "rss"
+    if format_slug is None:
+        return _feed_rejection(
+            "feed_root_unrecognized",
+            engine_version,
+            signature_version,
+            isolation_evidence,
+        )
+    namespace, local_name = _split_xml_tag(root_tag)
+    return _verdict(
+        operation="detect_feed",
+        status="clean",
+        engine_version=engine_version,
+        signature_version=signature_version,
+        reason_code=None,
+        evidence={
+            **isolation_evidence,
+            "detected_format": format_slug,
+            "root_namespace": namespace,
+            "root_local_name": local_name,
+            "element_count": element_count,
+            "parser": "python-stdlib-elementtree",
+            "parser_version": sys.version.split()[0],
+        },
+    )
+
+
+def _feed_rejection(
+    reason_code: str,
+    engine_version: str,
+    signature_version: str,
+    evidence: dict[str, object],
+) -> dict[str, object]:
+    return _verdict(
+        operation="detect_feed",
+        status="rejected",
+        engine_version=engine_version,
+        signature_version=signature_version,
+        reason_code=reason_code,
+        evidence=evidence,
+    )
+
+
+def _split_xml_tag(tag: str) -> tuple[str | None, str]:
+    if tag.startswith("{") and "}" in tag:
+        namespace, local_name = tag[1:].split("}", maxsplit=1)
+        return namespace, local_name
+    return None, tag
+
+
 def main() -> int:
     try:
         payload = _run()
@@ -204,7 +370,11 @@ def main() -> int:
 
 def _arguments_namespace() -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--operation", choices=("probe", "scan"), default="probe")
+    parser.add_argument(
+        "--operation",
+        choices=("probe", "scan", "detect_feed"),
+        default="probe",
+    )
     arguments, _ = parser.parse_known_args()
     return arguments
 

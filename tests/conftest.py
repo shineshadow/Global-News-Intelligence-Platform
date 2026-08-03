@@ -263,6 +263,89 @@ async def truncate_test_tables() -> None:
         await connection.execute(
             text(
                 """
+                INSERT INTO artifact_format_media_types (
+                    artifact_format_id, media_type, authority_slug,
+                    is_preferred, provenance
+                )
+                SELECT format.id, evidence.media_type, evidence.authority_slug,
+                       evidence.is_preferred,
+                       '{"migration":"f3a1c7d9e2b4"}'::jsonb
+                FROM artifact_formats AS format
+                JOIN (
+                    VALUES
+                        ('rss', 'application/rss+xml', 'iana', true),
+                        ('rss', 'application/rdf+xml', 'iana', false),
+                        ('rss', 'application/xml', 'iana', false),
+                        ('rss', 'text/xml', 'iana', false),
+                        ('atom', 'application/atom+xml', 'iana', true),
+                        ('atom', 'application/xml', 'iana', false),
+                        ('atom', 'text/xml', 'iana', false)
+                ) AS evidence(format_slug, media_type, authority_slug, is_preferred)
+                  ON evidence.format_slug = format.slug;
+
+                INSERT INTO artifact_format_extensions (
+                    artifact_format_id, extension, authority_slug,
+                    is_preferred, provenance
+                )
+                SELECT format.id, evidence.extension, evidence.authority_slug,
+                       evidence.is_preferred,
+                       '{"migration":"f3a1c7d9e2b4"}'::jsonb
+                FROM artifact_formats AS format
+                JOIN (
+                    VALUES
+                        ('rss', 'rss', 'rss-advisory-board', true),
+                        ('rss', 'xml', 'iana', false),
+                        ('atom', 'atom', 'ietf-rfc-4287', true),
+                        ('atom', 'xml', 'iana', false)
+                ) AS evidence(format_slug, extension, authority_slug, is_preferred)
+                  ON evidence.format_slug = format.slug;
+
+                INSERT INTO acquisition_adapters (
+                    slug, version, display_name, implementation, status,
+                    configuration_schema, provenance, activated_at
+                )
+                VALUES (
+                    'feed_parser', '1', 'RSS and Atom Feed Parser',
+                    'ingestion.adapters.feed_parser:FeedParserAdapter',
+                    'active',
+                    jsonb_build_object(
+                        'type', 'object',
+                        'properties', '{}'::jsonb,
+                        'additionalProperties', false
+                    ),
+                    jsonb_build_object(
+                        'migration', 'f3a1c7d9e2b4',
+                        'activation_scope', 'registry-only-no-endpoint-cutover'
+                    ),
+                    now()
+                );
+
+                INSERT INTO acquisition_adapter_compatibilities (
+                    adapter_id, endpoint_type, endpoint_format,
+                    acquisition_method, platform, platform_key
+                )
+                SELECT adapter.id, 'feed', format.slug, 'feed_parser', NULL, '*'
+                FROM acquisition_adapters AS adapter
+                CROSS JOIN (VALUES ('rss'), ('atom')) AS format(slug)
+                WHERE adapter.slug = 'feed_parser' AND adapter.version = '1';
+
+                INSERT INTO acquisition_adapter_artifact_capabilities (
+                    adapter_id, artifact_format_id,
+                    identification_supported, safe_parser_supported,
+                    safe_extraction_supported
+                )
+                SELECT adapter.id, format.id, true, true, false
+                FROM acquisition_adapters AS adapter
+                CROSS JOIN artifact_formats AS format
+                WHERE adapter.slug = 'feed_parser'
+                  AND adapter.version = '1'
+                  AND format.slug IN ('rss', 'atom');
+                """
+            )
+        )
+        await connection.execute(
+            text(
+                """
                 DELETE FROM
                     entity_geography_relationship_type_external_mappings
                 WHERE provenance ->> 'seed_set' IS DISTINCT FROM 'gfa_c_5';

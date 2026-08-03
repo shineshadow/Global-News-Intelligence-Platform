@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,6 +22,9 @@ class Settings(BaseSettings):
     celery_alert_dispatch_limit: int = 500
     celery_calendar_dispatch_interval_seconds: int = 30
     celery_calendar_dispatch_limit: int = 500
+
+    artifact_staging_root: Path | None = None
+    artifact_canonical_root: Path | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

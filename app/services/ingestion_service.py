@@ -97,6 +97,11 @@ class _PollContext:
     poll_interval_seconds: int
 
 
+# Public boundary used by the Phase 3 acquisition worker while the legacy
+# polling entry point remains available for an explicit parity period.
+FeedPollContext = _PollContext
+
+
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -442,6 +447,7 @@ async def _finish_successful_fetch(
                     "error_message": None,
                     "error_details": {},
                     "run_metadata": {
+                        **dict(run.run_metadata or {}),
                         "not_modified": True,
                         "final_url": (result.fetch.final_url),
                     },
@@ -644,6 +650,7 @@ async def _finish_successful_fetch(
                     "item_errors": item_errors,
                 },
                 "run_metadata": {
+                    **dict(run.run_metadata or {}),
                     "not_modified": False,
                     "final_url": result.fetch.final_url,
                     "feed_title": result.feed.title,
@@ -748,6 +755,11 @@ async def _record_poll_failure(
                     ),
                 },
             )
+
+
+start_feed_ingestion_run = _start_ingestion_run
+finish_feed_poll = _finish_successful_fetch
+record_feed_poll_failure = _record_poll_failure
 
 
 async def poll_source_endpoint(

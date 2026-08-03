@@ -6,6 +6,8 @@ import pytest
 
 from app.services.artifact_inspection_sandbox import (
     BubblewrapClamAVScanner,
+    BubblewrapFeedSafeParser,
+    BubblewrapFeedStructureDetector,
     BubblewrapInspectionSandbox,
     ClamAVSandboxConfiguration,
     InspectionSandboxLimits,
@@ -166,3 +168,91 @@ async def test_missing_clamav_or_signatures_fails_readiness_closed(tmp_path) -> 
     assert await scanner.ready() is False
     with pytest.raises(InspectionSandboxUnavailable):
         await scanner.scan(_artifact(tmp_path, b"clean"))
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (
+            (
+                b"<?xml version='1.0'?><rss version='2.0'><channel>"
+                b"<title>RSS</title></channel></rss>"
+            ),
+            "rss",
+        ),
+        (
+            (
+                b"<feed xmlns='http://www.w3.org/2005/Atom'>"
+                b"<title>Atom</title><id>urn:test</id>"
+                b"<updated>2026-08-03T12:00:00Z</updated></feed>"
+            ),
+            "atom",
+        ),
+    ],
+)
+async def test_feed_structure_detector_identifies_exact_feed_root(
+    tmp_path,
+    payload,
+    expected,
+) -> None:
+    sandbox = BubblewrapInspectionSandbox(configuration=_configuration(tmp_path))
+    detector = BubblewrapFeedStructureDetector(sandbox)
+
+    result = await detector.detect(
+        _artifact(tmp_path, payload),
+        allowed_format_slugs=frozenset({"rss", "atom"}),
+    )
+
+    assert result.identified is True
+    assert result.format_slug == expected
+    assert result.detector_name == "gni-sandbox-feed-structure"
+    assert result.evidence["parser"] == "python-stdlib-elementtree"
+    assert result.evidence["seccomp_mode"] == 2
+
+
+@pytest.mark.parametrize(
+    ("payload", "reason"),
+    [
+        (b"<html><title>not a feed</title></html>", "feed_root_unrecognized"),
+        (
+            (
+                b"<!DOCTYPE rss [<!ENTITY x 'unsafe'>]>"
+                b"<rss><channel><title>&x;</title></channel></rss>"
+            ),
+            "feed_unsafe_xml_declaration",
+        ),
+        (b"<rss><channel>", "feed_xml_malformed"),
+    ],
+)
+async def test_feed_structure_detector_rejects_untrusted_or_non_feed_xml(
+    tmp_path,
+    payload,
+    reason,
+) -> None:
+    detector = BubblewrapFeedStructureDetector(
+        BubblewrapInspectionSandbox(configuration=_configuration(tmp_path))
+    )
+
+    result = await detector.detect(
+        _artifact(tmp_path, payload),
+        allowed_format_slugs=frozenset({"rss", "atom"}),
+    )
+
+    assert result.identified is False
+    assert result.format_slug is None
+    assert result.reason_code == reason
+
+
+async def test_feed_safe_parser_requires_the_expected_exact_format(tmp_path) -> None:
+    sandbox = BubblewrapInspectionSandbox(configuration=_configuration(tmp_path))
+    parser = BubblewrapFeedSafeParser(sandbox, expected_format="atom")
+    rss = _artifact(
+        tmp_path,
+        b"<rss version='2.0'><channel><title>RSS</title></channel></rss>",
+    )
+
+    result = await parser.parse(rss)
+
+    assert result.valid is False
+    assert result.reason_code == "feed_parser_format_mismatch"
+    assert result.evidence["expected_format"] == "atom"
