@@ -103,8 +103,8 @@ Phase 3 leases/adapter registry/secrets/rate policy  implemented candidate
 Phase 3 feed adapter/shared acquisition worker       implemented candidate
 UI foundation and UX governance                      draft candidate
 Phase 3 controlled feed cutover/acquisition health   implemented candidate
-Phase 3 live feed canary/parity review                next
-Phase 3 remaining acquisition adapters                after canary proof
+Phase 3 live feed canary/parity review                passed
+Phase 3 remaining acquisition adapters                next
 Phase 3 formal implementation review                 final gate
 ```
 
@@ -133,6 +133,12 @@ projection, Acquisition Health UI, and canary procedure are recorded in
 `../specifications/PHASE_3_CONTROLLED_FEED_CUTOVER_AND_ACQUISITION_HEALTH.md`.
 Its migration activates no endpoints and the installation cohort limit
 defaults to one.
+The bounded CISA RSS activation, manual and scheduled Phase 3 acquisition,
+stable Document parity, live rollback, legacy recovery poll, and versioned
+reactivation proof are recorded in
+`../specifications/PHASE_3_LIVE_FEED_CANARY_PARITY_REVIEW.md`. The exact
+RSS/feed-parser canary passed; the cohort limit remains one and the result does
+not claim parity for unreviewed feeds or remaining adapter types.
 
 ---
 

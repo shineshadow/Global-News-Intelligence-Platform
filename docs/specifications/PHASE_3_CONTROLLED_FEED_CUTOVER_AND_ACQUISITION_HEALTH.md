@@ -1,6 +1,7 @@
 # Phase 3 Controlled Feed Cutover and Acquisition Health
 
-Status: IMPLEMENTED CANDIDATE  
+Status: IMPLEMENTED CANDIDATE — LIVE CANARY PASSED
+
 Date: 2026-08-03
 
 ## Scope
@@ -116,7 +117,9 @@ to the corrected formatter; it no longer renders UTC.
 Before the first live canary:
 
 1. provision distinct development Artifact staging and canonical directories;
-2. set `ARTIFACT_STAGING_ROOT` and `ARTIFACT_CANONICAL_ROOT` in `.env`;
+2. set `ARTIFACT_STAGING_ROOT` and `ARTIFACT_CANONICAL_ROOT` in the active
+   installation environment (`/etc/global-news-intelligence/gni.env` for the
+   provided systemd units, or `.env` for a manual development process);
 3. retain `PHASE3_FEED_CUTOVER_LIMIT=1`;
 4. pass signature-import, inspection, egress, migration, and repository gates;
 5. open Acquisition Health and choose one eligible low-risk feed;
@@ -128,11 +131,13 @@ must remain separate.
 
 ## Deliberate Exclusions
 
-This candidate does not activate a feed, declare legacy parity, remove the
-legacy poller, change the default cohort limit, expose security bypasses, or
-implement the remaining Phase 3 adapters. Authentication-backed actor identity
-replaces the current explicit operator field only when the authentication track
-is implemented.
+The migration and installation defaults do not activate a feed. The retained
+live review proves parity only for the exact CISA `feed/rss/feed_parser`
+canary; it does not declare parity for every RSS or Atom feed. This candidate
+does not remove the legacy poller, change the default cohort limit, expose
+security bypasses, or implement the remaining Phase 3 adapters.
+Authentication-backed actor identity replaces the current explicit operator
+field only when the authentication track is implemented.
 
 ## Proof Results
 
@@ -140,12 +145,19 @@ The implemented candidate passed:
 
 - 150 focused acquisition, Artifact, migration, RSS, and web tests, including
   destructive-downgrade refusal once cutover history exists;
-- the full repository gate with 11 migration-safety tests and 362
-  non-migration tests before the final additional downgrade proof;
+- the full repository gate with 12 migration-safety tests and 362
+  non-migration tests;
 - Alembic upgrade to `a4c2e8f0b6d1 (head)` with zero schema drift;
 - scoped lint, Python compilation, and whitespace validation; and
-- repeated `/var` inode checks at 12% usage.
+- guarded `/var` inode checks, ending at 48% usage below the 65% refusal
+  threshold.
 
-The live canary and parity review remain intentionally unperformed because
-Artifact storage has not yet been provisioned in `.env` and no endpoint has
-been operator-activated.
+The live CISA RSS canary subsequently passed manual and scheduled Phase 3
+acquisition, Artifact acceptance, stable 15-Document parity, live rollback,
+legacy polling after rollback, and reactivation as
+`feed-parser-v1-cutover-0002`. One accepted Artifact, zero rejections, and
+three immutable cutover events remained at review. The non-blocking upstream
+warning `no Content-type specified` was retained; exact structural RSS
+inspection and all security boundaries still passed. The complete bounded
+evidence and decision are recorded in
+`PHASE_3_LIVE_FEED_CANARY_PARITY_REVIEW.md`.
