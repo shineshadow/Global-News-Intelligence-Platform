@@ -8,15 +8,21 @@ from sqlalchemy import func, select
 
 from app.models import (
     AcquisitionAdapter,
+    AcquisitionAdapterSecretSlot,
     AcquisitionLease,
     AcquisitionRateLimitBucket,
+    AcquisitionRateLimitObservation,
     AcquisitionRateLimitReservation,
+    AcquisitionRateLimitReservationBucket,
+    AcquisitionSecretBinding,
     Document,
     IngestionRun,
+    SecretReference,
     Source,
     SourceEndpoint,
 )
 from app.services.acquisition_registry_service import AcquisitionRegistryService
+from app.services.acquisition_secret_service import AcquisitionSecretService
 from app.services.acquisition_worker_service import (
     ArtifactRejectedError,
     Phase3AcquisitionWorker,
@@ -25,7 +31,11 @@ from app.services.artifact_security_service import (
     ArtifactSecurityOutcome,
     ArtifactSecurityUnavailable,
 )
-from ingestion.adapters.types import AdapterRetrieval
+from ingestion.adapters.types import (
+    AcquisitionRateLimitedError,
+    AdapterRetrieval,
+    RateLimitFeedback,
+)
 from ingestion.rss import FeedFetchResult, FeedPollResult, parse_feed
 
 RSS_BYTES = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -43,6 +53,8 @@ class FakeFeedAdapter:
     version: str = "1"
     implementation: str = "ingestion.adapters.feed_parser:FeedParserAdapter"
     retrieval_count: int = 0
+    rate_limit_feedback: RateLimitFeedback | None = None
+    rate_limited: bool = False
 
     def inspection_configuration(self, *, configuration):
         return dict(configuration)
@@ -55,6 +67,12 @@ class FakeFeedAdapter:
         assert configuration == {}
         assert credentials == {}
         self.retrieval_count += 1
+        if self.rate_limited:
+            assert self.rate_limit_feedback is not None
+            raise AcquisitionRateLimitedError(
+                "Provider installed a test hold.",
+                feedback=self.rate_limit_feedback,
+            )
         return AdapterRetrieval(
             requested_url=endpoint.url,
             final_url=endpoint.url,
@@ -67,6 +85,7 @@ class FakeFeedAdapter:
             not_modified=self.not_modified,
             original_filename="feed.rss",
             provenance={"test": "guarded"},
+            rate_limit_feedback=self.rate_limit_feedback,
         )
 
     async def normalize(self, retrieval, *, inspected_payload=None):
@@ -92,6 +111,34 @@ class FakeFeedAdapter:
                     content_type=retrieval.declared_media_type,
                 )
             ),
+        )
+
+
+@dataclass
+class FakeCredentialAdapter(FakeFeedAdapter):
+    slug: str = "changedetection"
+    implementation: str = "ingestion.adapters.monitored_listing:ChangedetectionAdapter"
+
+    def allowed_artifact_formats(self, endpoint, *, configuration):
+        assert configuration["internal_service_identity"] == "local-changedetection"
+        return frozenset({endpoint.endpoint_format})
+
+    async def retrieve(self, endpoint, *, configuration, credentials):
+        assert configuration["watch_uuid"] == "watch-rate-proof"
+        assert credentials == {"api_key": "ephemeral-browser-key"}
+        self.retrieval_count += 1
+        return AdapterRetrieval(
+            requested_url=endpoint.url,
+            final_url=endpoint.url,
+            status_code=200,
+            content=RSS_BYTES,
+            declared_media_type="text/html",
+            response_bytes=len(RSS_BYTES),
+            etag='"credential-phase3"',
+            last_modified=None,
+            not_modified=False,
+            original_filename="listing.html",
+            provenance={"test": "credential-rate-authority"},
         )
 
 
@@ -160,6 +207,86 @@ async def _configured_feed(session) -> int:
     return endpoint.id
 
 
+async def _configured_credential_endpoint(session) -> tuple[int, int]:
+    source = Source(
+        name="Phase 3 Credential Worker Source",
+        country="Testland",
+        primary_language="en",
+        source_type="news_organization",
+    )
+    session.add(source)
+    await session.flush()
+    endpoint = SourceEndpoint(
+        source_id=source.id,
+        name="Credential-bound listing",
+        endpoint_type="website",
+        endpoint_format="html",
+        acquisition_method="web_scraper",
+        url=f"https://publisher.example/credential-{source.id}/",
+    )
+    session.add(endpoint)
+    await session.flush()
+    adapter = await session.scalar(
+        select(AcquisitionAdapter).where(
+            AcquisitionAdapter.slug == "changedetection",
+            AcquisitionAdapter.version == "1",
+            AcquisitionAdapter.status == "active",
+        )
+    )
+    assert adapter is not None
+    await AcquisitionRegistryService().configure_endpoint(
+        session,
+        source_endpoint_id=endpoint.id,
+        adapter_id=adapter.id,
+        configuration_version="credential-rate-1",
+        configuration={
+            "internal_service_identity": "local-changedetection",
+            "snapshot_url": (
+                "http://changedetection.gni.internal:5000/gni/snapshot?watch_uuid=watch-rate-proof"
+            ),
+            "watch_uuid": "watch-rate-proof",
+            "item_selector": "article.story",
+            "fields": {
+                "url": {"selector": "a", "attribute": "href"},
+                "title": {"selector": "h2"},
+            },
+        },
+        actor="test",
+        reason="prove composed credential rate authority",
+    )
+    slot = await session.scalar(
+        select(AcquisitionAdapterSecretSlot).where(
+            AcquisitionAdapterSecretSlot.adapter_id == adapter.id,
+            AcquisitionAdapterSecretSlot.slot_name == "api_key",
+        )
+    )
+    assert slot is not None
+    reference = SecretReference(
+        identity=f"credential-worker-{source.id}",
+        display_name="Credential worker test key",
+        purpose="prove composed credential rate authority",
+        backend="environment",
+        backend_reference="GNI_TEST_BROWSER_KEY",
+        actor="test",
+        reason="test credential identity",
+    )
+    session.add(reference)
+    await session.flush()
+    session.add(
+        AcquisitionSecretBinding(
+            secret_reference_id=reference.id,
+            adapter_id=adapter.id,
+            adapter_secret_slot_id=slot.id,
+            authentication_type="api_key_header",
+            scope="installation",
+            actor="test",
+            reason="share installation service quota",
+        )
+    )
+    await session.flush()
+    return endpoint.id, reference.id
+
+
 async def test_worker_composes_authority_artifact_and_feed_persistence(
     database_session_factory,
 ) -> None:
@@ -209,6 +336,49 @@ async def test_worker_composes_authority_artifact_and_feed_persistence(
     assert lease is not None and lease.status == "released"
     assert reservation is not None and reservation.status == "completed"
     assert document is not None and document.title_original == "Phase 3 Headline"
+
+
+async def test_worker_reserves_credential_bucket_without_persisting_secret_value(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session, session.begin():
+        endpoint_id, reference_id = await _configured_credential_endpoint(session)
+    worker = Phase3AcquisitionWorker(
+        adapters=(FakeCredentialAdapter(),),
+        artifact_runtime=FakeArtifactRuntime(),
+        secret_service=AcquisitionSecretService(
+            environment={"GNI_TEST_BROWSER_KEY": "ephemeral-browser-key"}
+        ),
+        session_factory=database_session_factory,
+    )
+
+    result = await worker.run(
+        endpoint_id,
+        trigger_type="manual",
+        execution_identity="manual:credential-rate:config:1",
+        owner_identifier="test-worker",
+    )
+
+    assert result.state == "completed"
+    async with database_session_factory() as session:
+        run = await session.get(IngestionRun, result.run_id)
+        bucket = await session.scalar(
+            select(AcquisitionRateLimitBucket).where(
+                AcquisitionRateLimitBucket.secret_reference_id == reference_id
+            )
+        )
+        assert bucket is not None
+        membership = await session.scalar(
+            select(AcquisitionRateLimitReservationBucket)
+            .join(AcquisitionRateLimitReservation)
+            .where(
+                AcquisitionRateLimitReservation.ingestion_run_id == result.run_id,
+                AcquisitionRateLimitReservationBucket.bucket_id == bucket.id,
+            )
+        )
+    assert membership is not None
+    assert bucket.scope_identity == f"credential:{reference_id}"
+    assert "ephemeral-browser-key" not in str(run.run_metadata)
 
 
 async def test_worker_fails_authority_and_persists_no_document_on_artifact_rejection(
@@ -309,8 +479,9 @@ async def test_worker_commits_rate_delay_and_performs_no_retrieval(
                 AcquisitionRateLimitBucket.scope_identity == "installation"
             )
         )
-    assert run is not None and run.status == "failed"
-    assert lease is not None and lease.status == "failed"
+    assert run is not None and run.status == "delayed"
+    assert run.error_type == "AcquisitionRateLimited"
+    assert lease is not None and lease.status == "released"
     assert reservation_count == 0
     assert persisted_bucket is not None
     assert persisted_bucket.next_eligible_at == result.next_eligible_at
@@ -339,3 +510,94 @@ async def test_worker_proves_artifact_infrastructure_before_retrieval(
         )
 
     assert adapter.retrieval_count == 0
+
+
+async def test_provider_hold_is_durable_delay_not_structural_failure(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session, session.begin():
+        endpoint_id = await _configured_feed(session)
+    observed_at = datetime.now(UTC)
+    feedback = RateLimitFeedback(
+        observed_at=observed_at,
+        http_status=429,
+        retry_after_at=observed_at + timedelta(minutes=20),
+        retry_after_state="valid",
+    )
+    worker = Phase3AcquisitionWorker(
+        adapters=(FakeFeedAdapter(rate_limit_feedback=feedback, rate_limited=True),),
+        artifact_runtime=FakeArtifactRuntime(),
+        session_factory=database_session_factory,
+    )
+
+    result = await worker.run(
+        endpoint_id,
+        trigger_type="scheduled",
+        execution_identity="scheduled:provider-hold:config:1",
+        owner_identifier="test-worker",
+    )
+
+    assert result.state == "delayed"
+    assert result.next_eligible_at == feedback.retry_after_at
+    async with database_session_factory() as session:
+        endpoint = await session.get(SourceEndpoint, endpoint_id)
+        run = await session.get(IngestionRun, result.run_id)
+        lease = await session.scalar(select(AcquisitionLease))
+        reservation = await session.scalar(select(AcquisitionRateLimitReservation))
+        observations = (
+            await session.scalars(
+                select(AcquisitionRateLimitObservation).order_by(AcquisitionRateLimitObservation.id)
+            )
+        ).all()
+        buckets = (await session.scalars(select(AcquisitionRateLimitBucket))).all()
+    assert endpoint is not None
+    assert endpoint.consecutive_failures == 0
+    assert endpoint.last_error is None
+    assert endpoint.next_poll_at == feedback.retry_after_at
+    assert run is not None and run.status == "delayed" and run.http_status == 429
+    assert lease is not None and lease.status == "released"
+    assert reservation is not None and reservation.status == "completed"
+    assert observations
+    assert {row.observation_type for row in observations} == {"http_status", "retry_after"}
+    assert all(row.evidence["retry_after"] == "valid" for row in observations)
+    assert all(bucket.blocked_until == feedback.retry_after_at for bucket in buckets)
+
+
+async def test_malformed_429_uses_conservative_nonshortening_fallback(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session, session.begin():
+        endpoint_id = await _configured_feed(session)
+    observed_at = datetime.now(UTC)
+    feedback = RateLimitFeedback(
+        observed_at=observed_at,
+        http_status=429,
+        retry_after_state="invalid",
+    )
+    worker = Phase3AcquisitionWorker(
+        adapters=(FakeFeedAdapter(rate_limit_feedback=feedback, rate_limited=True),),
+        artifact_runtime=FakeArtifactRuntime(),
+        session_factory=database_session_factory,
+    )
+
+    result = await worker.run(
+        endpoint_id,
+        trigger_type="manual",
+        execution_identity="manual:provider-fallback:config:1",
+        owner_identifier="test-worker",
+    )
+
+    assert result.state == "delayed"
+    assert result.next_eligible_at is not None
+    assert result.next_eligible_at >= observed_at + timedelta(seconds=60)
+    async with database_session_factory() as session:
+        observations = (
+            await session.scalars(
+                select(AcquisitionRateLimitObservation).where(
+                    AcquisitionRateLimitObservation.observation_type == "retry_after"
+                )
+            )
+        ).all()
+    assert observations
+    assert all(row.retry_after_at is None for row in observations)
+    assert all(row.evidence["fallback_applied"] is True for row in observations)

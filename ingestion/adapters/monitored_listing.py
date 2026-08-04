@@ -9,7 +9,12 @@ from app.models import SourceEndpoint
 from app.services.outbound_egress_service import EgressRequestPolicy, GuardedHTTPClient
 from ingestion.adapters.direct_listing import HTMLListingAdapter, _filename
 from ingestion.adapters.feed_parser import DEFAULT_USER_AGENT, _normalized_media_type
-from ingestion.adapters.types import AcquisitionAdapterError, AdapterRetrieval
+from ingestion.adapters.types import (
+    AcquisitionAdapterError,
+    AcquisitionRateLimitedError,
+    AdapterRetrieval,
+    extract_rate_limit_feedback,
+)
 
 _COMMON_KEYS = frozenset({"internal_service_identity", "item_selector", "fields"})
 
@@ -74,7 +79,13 @@ class _InternalRenderedListingAdapter(HTMLListingAdapter):
             policy=self.egress_request_policy(configuration=configuration),
             headers=headers,
         )
+        rate_feedback = extract_rate_limit_feedback(response.status_code, response.headers)
         if response.status_code != 304 and not 200 <= response.status_code < 300:
+            if rate_feedback.requires_hold:
+                raise AcquisitionRateLimitedError(
+                    f"{self.slug} internal service returned HTTP {response.status_code}.",
+                    feedback=rate_feedback,
+                )
             raise AcquisitionAdapterError(
                 f"{self.slug} internal service returned HTTP {response.status_code}."
             )
@@ -109,6 +120,7 @@ class _InternalRenderedListingAdapter(HTMLListingAdapter):
                 "source_url_binding": endpoint.url,
                 "service_policy": self.policy_header_value,
             },
+            rate_limit_feedback=(rate_feedback if rate_feedback.has_provider_signal else None),
         )
 
     def _validate_configuration(self, configuration: dict[str, Any]) -> None:

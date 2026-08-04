@@ -8,6 +8,7 @@ import pytest
 from app.models import SourceEndpoint
 from app.services.outbound_egress_service import GuardedHTTPResponse
 from ingestion.adapters.feed_parser import FeedParserAdapter
+from ingestion.adapters.types import RateLimitFeedback
 from ingestion.rss import FeedHTTPStatusError
 
 RSS_BYTES = b"""<?xml version="1.0"?>
@@ -38,7 +39,12 @@ def _endpoint() -> SourceEndpoint:
     )
 
 
-def _response(*, status: int = 200, content: bytes = RSS_BYTES) -> GuardedHTTPResponse:
+def _response(
+    *,
+    status: int = 200,
+    content: bytes = RSS_BYTES,
+    headers: dict[str, str] | None = None,
+) -> GuardedHTTPResponse:
     return GuardedHTTPResponse(
         requested_url="https://example.test/news/feed.xml",
         final_url="https://cdn.example.test/current/feed.xml",
@@ -47,6 +53,7 @@ def _response(*, status: int = 200, content: bytes = RSS_BYTES) -> GuardedHTTPRe
             {
                 "Content-Type": "Application/RSS+XML; charset=utf-8",
                 "ETag": '"new"',
+                **(headers or {}),
             }
         ),
         content=content,
@@ -101,6 +108,44 @@ async def test_feed_adapter_rejects_unexpected_http_status() -> None:
 
     with pytest.raises(FeedHTTPStatusError, match="HTTP 503"):
         await adapter.retrieve(_endpoint(), configuration={}, credentials={})
+
+
+async def test_feed_adapter_preserves_only_sanitized_provider_rate_feedback() -> None:
+    adapter = FeedParserAdapter(
+        http_client=FakeGuardedClient(
+            _response(
+                headers={
+                    "RateLimit-Remaining": "0",
+                    "RateLimit-Reset": "120",
+                }
+            )
+        )
+    )
+
+    retrieval = await adapter.retrieve(_endpoint(), configuration={}, credentials={})
+
+    feedback = retrieval.rate_limit_feedback
+    assert isinstance(feedback, RateLimitFeedback)
+    assert feedback.provider_remaining == 0
+    assert feedback.provider_reset_at is not None
+    assert feedback.provider_remaining_state == "valid"
+    assert feedback.provider_reset_state == "valid"
+
+
+async def test_feed_adapter_turns_429_into_provider_rate_authority() -> None:
+    adapter = FeedParserAdapter(
+        http_client=FakeGuardedClient(_response(status=429, headers={"Retry-After": "not-a-delay"}))
+    )
+
+    with pytest.raises(FeedHTTPStatusError, match="HTTP 429") as captured:
+        await adapter.retrieve(_endpoint(), configuration={}, credentials={})
+
+    feedback = captured.value.rate_limit_feedback
+    assert isinstance(feedback, RateLimitFeedback)
+    assert feedback.http_status == 429
+    assert feedback.retry_after_at is None
+    assert feedback.retry_after_state == "invalid"
+    assert feedback.requires_hold is True
 
 
 async def test_feed_adapter_rejects_wrong_exact_endpoint_tuple() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -25,6 +26,14 @@ EXTERNAL_REFERENCE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:[^\s]+$")
 
 class SecretResolutionError(RuntimeError):
     """Required acquisition credentials were not safely resolvable."""
+
+
+@dataclass(frozen=True)
+class ResolvedAcquisitionSecrets:
+    """Ephemeral values paired with non-secret identities used for shared quotas."""
+
+    values: dict[str, str]
+    secret_reference_ids: tuple[int, ...]
 
 
 class ExternalSecretResolver(Protocol):
@@ -53,7 +62,7 @@ class AcquisitionSecretService:
         source_endpoint_id: int,
         platform_account_id: int | None = None,
         actor: str = "acquisition-worker",
-    ) -> dict[str, str]:
+    ) -> ResolvedAcquisitionSecrets:
         endpoint = await session.get(SourceEndpoint, source_endpoint_id)
         if endpoint is None:
             raise SecretResolutionError("Source endpoint does not exist.")
@@ -74,6 +83,7 @@ class AcquisitionSecretService:
             )
         ).all()
         resolved: dict[str, str] = {}
+        reference_ids: set[int] = set()
         failures: list[str] = []
         for slot in slots:
             binding = await session.scalar(
@@ -112,6 +122,7 @@ class AcquisitionSecretService:
                 actor=actor,
             )
             resolved[slot.slot_name] = value
+            reference_ids.add(reference.id)
         if failures:
             await session.flush()
             raise SecretResolutionError(
@@ -119,7 +130,10 @@ class AcquisitionSecretService:
                 + ", ".join(sorted(set(failures)))
             )
         await session.flush()
-        return resolved
+        return ResolvedAcquisitionSecrets(
+            values=resolved,
+            secret_reference_ids=tuple(sorted(reference_ids)),
+        )
 
     @staticmethod
     def _binding_query(

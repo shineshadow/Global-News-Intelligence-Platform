@@ -12,7 +12,11 @@ from app.services.outbound_egress_service import (
     EgressRequestPolicy,
     GuardedHTTPClient,
 )
-from ingestion.adapters.types import AdapterRetrieval
+from ingestion.adapters.types import (
+    AdapterRetrieval,
+    RateLimitFeedback,
+    extract_rate_limit_feedback,
+)
 from ingestion.rss import (
     FeedFetchResult,
     FeedHTTPStatusError,
@@ -22,6 +26,14 @@ from ingestion.rss import (
 
 DEFAULT_USER_AGENT = "Global-News-Intelligence-Platform/0.1"
 ACCEPT_HEADER = "application/atom+xml,application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.5"
+
+
+class FeedAdapterRateLimitedError(FeedHTTPStatusError):
+    """A feed provider response installed a durable rate hold."""
+
+    def __init__(self, status_code: int, url: str, *, feedback: RateLimitFeedback) -> None:
+        FeedHTTPStatusError.__init__(self, status_code, url)
+        self.rate_limit_feedback = feedback
 
 
 class FeedParserAdapter:
@@ -97,7 +109,14 @@ class FeedParserAdapter:
             policy=policy,
             headers=headers,
         )
+        rate_feedback = extract_rate_limit_feedback(response.status_code, response.headers)
         if response.status_code != 304 and not 200 <= response.status_code < 300:
+            if rate_feedback.requires_hold:
+                raise FeedAdapterRateLimitedError(
+                    response.status_code,
+                    response.final_url,
+                    feedback=rate_feedback,
+                )
             raise FeedHTTPStatusError(response.status_code, response.final_url)
 
         content_type = response.headers.get("Content-Type")
@@ -126,6 +145,7 @@ class FeedParserAdapter:
             not_modified=not_modified,
             original_filename=_original_filename(response.final_url),
             provenance=provenance,
+            rate_limit_feedback=(rate_feedback if rate_feedback.has_provider_signal else None),
         )
 
     async def normalize(

@@ -140,6 +140,68 @@ async def test_activation_preflights_and_appends_audited_cutover(
     assert items[0].cutover_proof_state == "pending"
 
 
+async def test_rate_delay_preserves_healthy_passed_phase3_proof(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session, session.begin():
+        endpoint_id = await _healthy_legacy_feed(session)
+
+    async def preflight(_formats):
+        return None
+
+    async with database_session_factory() as session:
+        await activate_feed_endpoint(
+            session,
+            endpoint_id,
+            actor="owner",
+            reason="rate projection proof",
+            runtime_settings=_settings(),
+            runtime_preflight=preflight,
+        )
+    now = datetime.now(UTC)
+    async with database_session_factory() as session, session.begin():
+        endpoint = await session.get(SourceEndpoint, endpoint_id)
+        assert endpoint is not None
+        endpoint.last_success_at = now
+        session.add_all(
+            [
+                IngestionRun(
+                    source_id=endpoint.source_id,
+                    source_endpoint_id=endpoint.id,
+                    endpoint_url=endpoint.url,
+                    trigger_type="scheduled",
+                    status="succeeded",
+                    started_at=now,
+                    finished_at=now,
+                    run_metadata={"phase3": True},
+                ),
+                IngestionRun(
+                    source_id=endpoint.source_id,
+                    source_endpoint_id=endpoint.id,
+                    endpoint_url=endpoint.url,
+                    trigger_type="scheduled",
+                    status="delayed",
+                    started_at=now + timedelta(seconds=1),
+                    finished_at=now + timedelta(seconds=1),
+                    error_type="AcquisitionRateLimited",
+                    run_metadata={"phase3": True},
+                ),
+            ]
+        )
+
+    async with database_session_factory() as session:
+        _summary, items = await list_acquisition_health(
+            session,
+            runtime_settings=_settings(),
+            endpoint_id=endpoint_id,
+        )
+
+    assert items[0].latest_run_status == "delayed"
+    assert items[0].health_state == "healthy"
+    assert items[0].gate_state == "rate_limited"
+    assert items[0].cutover_proof_state == "passed"
+
+
 async def test_failed_runtime_preflight_creates_no_cutover_state(
     database_session_factory,
 ) -> None:

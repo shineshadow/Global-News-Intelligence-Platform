@@ -12,6 +12,7 @@ from app.models import (
     AcquisitionEndpointConfiguration,
     AcquisitionRateLimitBucket,
     AcquisitionRateLimitReservation,
+    AcquisitionRateLimitReservationBucket,
     AcquisitionSecretBinding,
     ArtifactFormat,
     IngestionRun,
@@ -228,6 +229,70 @@ async def test_missing_required_secret_fails_before_request(
         else:  # pragma: no cover - a failure above is the security assertion
             await perform_request()
     assert request_calls == 0
+
+
+async def test_resolved_secret_identity_joins_every_atomic_rate_reservation(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session, session.begin():
+        endpoint, slot = await _configured_endpoint(session, with_required_secret=True)
+        assert slot is not None
+        reference = SecretReference(
+            identity="test-shared-quota-secret",
+            display_name="Shared quota test secret",
+            purpose="prove credential rate authority",
+            backend="environment",
+            backend_reference="GNI_TEST_SHARED_QUOTA_SECRET",
+            actor="test",
+            reason="prove credential quota composition",
+        )
+        session.add(reference)
+        await session.flush()
+        session.add(
+            AcquisitionSecretBinding(
+                secret_reference_id=reference.id,
+                adapter_id=slot.adapter_id,
+                adapter_secret_slot_id=slot.id,
+                authentication_type="bearer_token",
+                scope="endpoint",
+                source_endpoint_id=endpoint.id,
+                actor="test",
+                reason="bind exact test credential",
+            )
+        )
+        await session.flush()
+        resolved = await AcquisitionSecretService(
+            environment={"GNI_TEST_SHARED_QUOTA_SECRET": "ephemeral-value"}
+        ).resolve_required(session, source_endpoint_id=endpoint.id)
+        run = await _run(session, endpoint, "credential-quota")
+        decision = await AcquisitionRateLimitService().reserve(
+            session,
+            ingestion_run_id=run.id,
+            source_endpoint_id=endpoint.id,
+            request_identity="credential-quota",
+            secret_reference_ids=resolved.secret_reference_ids,
+        )
+        assert decision.reservation is not None
+        reservation_id = decision.reservation.id
+        reference_id = reference.id
+
+    assert resolved.values == {"api_token": "ephemeral-value"}
+    assert resolved.secret_reference_ids == (reference_id,)
+    async with database_session_factory() as session:
+        credential_bucket = await session.scalar(
+            select(AcquisitionRateLimitBucket).where(
+                AcquisitionRateLimitBucket.secret_reference_id == reference_id
+            )
+        )
+        assert credential_bucket is not None
+        membership = await session.scalar(
+            select(AcquisitionRateLimitReservationBucket).where(
+                AcquisitionRateLimitReservationBucket.reservation_id == reservation_id,
+                AcquisitionRateLimitReservationBucket.bucket_id == credential_bucket.id,
+            )
+        )
+    assert credential_bucket.scope_identity == f"credential:{reference_id}"
+    assert membership is not None
 
 
 async def test_all_bucket_reservation_is_atomic(

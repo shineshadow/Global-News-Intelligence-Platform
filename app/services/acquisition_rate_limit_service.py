@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
@@ -18,6 +19,7 @@ from app.models import (
     IngestionRun,
     SourceEndpoint,
 )
+from ingestion.adapters.types import RateLimitFeedback
 
 
 class RateLimitError(RuntimeError):
@@ -266,6 +268,181 @@ class AcquisitionRateLimitService:
                 )
             )
         await session.flush()
+
+    async def observe_feedback(
+        self,
+        session: AsyncSession,
+        *,
+        reservation_id: int,
+        feedback: RateLimitFeedback,
+    ) -> datetime | None:
+        """Apply the strictest sanitized provider signal to every reserved bucket."""
+
+        reservation = await session.get(AcquisitionRateLimitReservation, reservation_id)
+        if reservation is None:
+            raise RateLimitError("Reservation does not exist for provider feedback.")
+        rows = (
+            await session.execute(
+                select(
+                    AcquisitionRateLimitBucket,
+                    AcquisitionRateLimitPolicy,
+                )
+                .join(
+                    AcquisitionRateLimitReservationBucket,
+                    AcquisitionRateLimitReservationBucket.bucket_id
+                    == AcquisitionRateLimitBucket.id,
+                )
+                .join(
+                    AcquisitionRateLimitBinding,
+                    AcquisitionRateLimitBinding.id == AcquisitionRateLimitBucket.binding_id,
+                )
+                .join(
+                    AcquisitionRateLimitPolicy,
+                    AcquisitionRateLimitPolicy.id == AcquisitionRateLimitBinding.policy_id,
+                )
+                .where(
+                    AcquisitionRateLimitReservationBucket.reservation_id == reservation_id,
+                )
+                .order_by(AcquisitionRateLimitBucket.id)
+                .with_for_update()
+            )
+        ).all()
+        if not rows:
+            raise RateLimitError("Reservation has no rate buckets for provider feedback.")
+
+        strictest_hold: datetime | None = None
+        for bucket, policy in rows:
+            hold = self._provider_hold(
+                bucket,
+                policy,
+                feedback=feedback,
+                reservation_id=reservation_id,
+            )
+            if hold is not None:
+                bucket.blocked_until = max(
+                    value for value in (bucket.blocked_until, hold) if value is not None
+                )
+                bucket.next_eligible_at = bucket.blocked_until
+                strictest_hold = (
+                    bucket.blocked_until
+                    if strictest_hold is None
+                    else max(strictest_hold, bucket.blocked_until)
+                )
+            if feedback.provider_exhausted and feedback.provider_reset_at is not None:
+                bucket.provider_reset_at = max(
+                    value
+                    for value in (bucket.provider_reset_at, feedback.provider_reset_at)
+                    if value is not None
+                )
+            self._append_feedback_observations(
+                session,
+                bucket=bucket,
+                ingestion_run_id=reservation.ingestion_run_id,
+                feedback=feedback,
+                fallback_applied=(
+                    hold is not None
+                    and hold not in {feedback.retry_after_at, feedback.provider_reset_at}
+                ),
+            )
+        await session.flush()
+        return strictest_hold
+
+    @staticmethod
+    def _provider_hold(
+        bucket: AcquisitionRateLimitBucket,
+        policy: AcquisitionRateLimitPolicy,
+        *,
+        feedback: RateLimitFeedback,
+        reservation_id: int,
+    ) -> datetime | None:
+        candidates = [
+            value
+            for value in (feedback.retry_after_at,)
+            if value is not None and value >= feedback.observed_at
+        ]
+        if (
+            feedback.provider_exhausted
+            and feedback.provider_reset_at is not None
+            and feedback.provider_reset_at >= feedback.observed_at
+        ):
+            candidates.append(feedback.provider_reset_at)
+        if candidates:
+            return max(candidates)
+        if feedback.http_status != 429 and not feedback.provider_exhausted:
+            return None
+
+        exponent = min(max(bucket.request_count - 1, 0), 20)
+        base_seconds = min(
+            policy.retry_max_seconds,
+            policy.retry_base_seconds * (2**exponent),
+        )
+        jitter_span = (base_seconds * policy.retry_jitter_percent + 99) // 100
+        material = f"{reservation_id}:{bucket.id}:{bucket.request_count}".encode()
+        jitter = (
+            int.from_bytes(hashlib.sha256(material).digest()[:8], "big") % (jitter_span + 1)
+            if jitter_span
+            else 0
+        )
+        return feedback.observed_at + timedelta(seconds=base_seconds + jitter)
+
+    @staticmethod
+    def _append_feedback_observations(
+        session: AsyncSession,
+        *,
+        bucket: AcquisitionRateLimitBucket,
+        ingestion_run_id: int,
+        feedback: RateLimitFeedback,
+        fallback_applied: bool,
+    ) -> None:
+        evidence = {
+            "retry_after": feedback.retry_after_state,
+            "provider_remaining": feedback.provider_remaining_state,
+            "provider_reset": feedback.provider_reset_state,
+            "fallback_applied": fallback_applied,
+        }
+        if feedback.http_status in {429, 503}:
+            session.add(
+                AcquisitionRateLimitObservation(
+                    bucket_id=bucket.id,
+                    ingestion_run_id=ingestion_run_id,
+                    observation_type="http_status",
+                    http_status=feedback.http_status,
+                    evidence=evidence,
+                )
+            )
+        if feedback.retry_after_state != "absent":
+            session.add(
+                AcquisitionRateLimitObservation(
+                    bucket_id=bucket.id,
+                    ingestion_run_id=ingestion_run_id,
+                    observation_type="retry_after",
+                    http_status=feedback.http_status,
+                    retry_after_at=feedback.retry_after_at,
+                    evidence=evidence,
+                )
+            )
+        if feedback.provider_remaining_state != "absent":
+            session.add(
+                AcquisitionRateLimitObservation(
+                    bucket_id=bucket.id,
+                    ingestion_run_id=ingestion_run_id,
+                    observation_type="provider_quota",
+                    http_status=feedback.http_status,
+                    provider_remaining=feedback.provider_remaining,
+                    evidence=evidence,
+                )
+            )
+        if feedback.provider_reset_state != "absent":
+            session.add(
+                AcquisitionRateLimitObservation(
+                    bucket_id=bucket.id,
+                    ingestion_run_id=ingestion_run_id,
+                    observation_type="provider_reset",
+                    http_status=feedback.http_status,
+                    provider_reset_at=feedback.provider_reset_at,
+                    evidence=evidence,
+                )
+            )
 
     async def _targets(
         self,

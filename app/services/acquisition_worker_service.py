@@ -33,9 +33,11 @@ from app.services.ingestion_service import (
     EndpointPollSummary,
     FeedPollContext,
     finish_feed_poll,
+    record_feed_poll_delay,
     record_feed_poll_failure,
 )
 from ingestion.adapters import SourceAcquisitionAdapter
+from ingestion.adapters.types import RateLimitFeedback
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +125,10 @@ class Phase3AcquisitionWorker:
         assert execution is not None
 
         reservation_id: int | None = None
+        response_feedback: RateLimitFeedback | None = None
         try:
             async with self._session_factory() as session, session.begin():
-                credentials = await self._secret_service.resolve_required(
+                resolved_secrets = await self._secret_service.resolve_required(
                     session,
                     source_endpoint_id=source_endpoint_id,
                     actor=owner_identifier,
@@ -135,24 +138,24 @@ class Phase3AcquisitionWorker:
                     ingestion_run_id=execution.poll_context.run_id,
                     source_endpoint_id=source_endpoint_id,
                     request_identity=execution_identity,
+                    secret_reference_ids=resolved_secrets.secret_reference_ids,
                 )
                 if decision.permitted and decision.reservation is not None:
                     reservation_id = decision.reservation.id
 
             if reservation_id is None:
-                delayed = AcquisitionWorkerError(
-                    "Acquisition is delayed by the controlling rate policy."
-                )
-                await self._record_failure(
-                    execution,
-                    delayed,
+                assert decision.next_eligible_at is not None
+                await record_feed_poll_delay(
+                    execution.poll_context,
+                    next_eligible_at=decision.next_eligible_at,
                     started_clock=started_clock,
+                    session_factory=self._session_factory,
                 )
                 await self._finalize_authority(
                     execution,
                     owner_identifier=owner_identifier,
                     reservation_id=None,
-                    succeeded=False,
+                    succeeded=True,
                 )
                 return AcquisitionExecutionResult(
                     endpoint_id=source_endpoint_id,
@@ -173,8 +176,9 @@ class Phase3AcquisitionWorker:
             retrieval = await execution.adapter.retrieve(
                 execution.endpoint,
                 configuration=dict(execution.configuration.configuration),
-                credentials=credentials,
+                credentials=dict(resolved_secrets.values),
             )
+            response_feedback = retrieval.rate_limit_feedback
             if not retrieval.not_modified:
                 outcome = await self._artifact_runtime.ingest(
                     ArtifactIngestRequest(
@@ -220,6 +224,33 @@ class Phase3AcquisitionWorker:
                 session_factory=self._session_factory,
             )
         except Exception as exc:
+            rate_feedback = getattr(exc, "rate_limit_feedback", None)
+            if isinstance(rate_feedback, RateLimitFeedback) and rate_feedback.requires_hold:
+                next_eligible_at = await self._finalize_authority(
+                    execution,
+                    owner_identifier=owner_identifier,
+                    reservation_id=reservation_id,
+                    succeeded=True,
+                    rate_feedback=rate_feedback,
+                )
+                if next_eligible_at is None:
+                    raise AcquisitionWorkerError(
+                        "Provider rate response did not produce a controlling hold."
+                    ) from exc
+                await record_feed_poll_delay(
+                    execution.poll_context,
+                    next_eligible_at=next_eligible_at,
+                    started_clock=started_clock,
+                    session_factory=self._session_factory,
+                    http_status=rate_feedback.http_status,
+                )
+                return AcquisitionExecutionResult(
+                    endpoint_id=source_endpoint_id,
+                    state="delayed",
+                    run_id=execution.poll_context.run_id,
+                    poll=None,
+                    next_eligible_at=next_eligible_at,
+                )
             await self._record_failure(
                 execution,
                 exc,
@@ -230,20 +261,23 @@ class Phase3AcquisitionWorker:
                 owner_identifier=owner_identifier,
                 reservation_id=reservation_id,
                 succeeded=False,
+                rate_feedback=response_feedback,
             )
             raise
 
-        await self._finalize_authority(
+        next_eligible_at = await self._finalize_authority(
             execution,
             owner_identifier=owner_identifier,
             reservation_id=reservation_id,
             succeeded=True,
+            rate_feedback=response_feedback,
         )
         return AcquisitionExecutionResult(
             endpoint_id=source_endpoint_id,
             state="completed",
             run_id=poll_summary.run_id,
             poll=poll_summary,
+            next_eligible_at=next_eligible_at,
         )
 
     async def _open_execution(
@@ -419,9 +453,19 @@ class Phase3AcquisitionWorker:
         owner_identifier: str,
         reservation_id: int | None,
         succeeded: bool,
-    ) -> None:
+        rate_feedback: RateLimitFeedback | None = None,
+    ) -> datetime | None:
+        next_eligible_at: datetime | None = None
         async with self._session_factory() as session, session.begin():
             if reservation_id is not None:
+                if rate_feedback is not None and (
+                    rate_feedback.has_provider_signal or rate_feedback.requires_hold
+                ):
+                    next_eligible_at = await self._rate_service.observe_feedback(
+                        session,
+                        reservation_id=reservation_id,
+                        feedback=rate_feedback,
+                    )
                 await self._rate_service.finalize(
                     session,
                     reservation_id=reservation_id,
@@ -433,3 +477,4 @@ class Phase3AcquisitionWorker:
                 owner_identifier=owner_identifier,
                 outcome="released" if succeeded else "failed",
             )
+        return next_eligible_at

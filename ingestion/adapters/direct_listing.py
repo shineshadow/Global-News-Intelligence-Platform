@@ -13,7 +13,11 @@ import httpx
 from app.models import SourceEndpoint
 from app.services.outbound_egress_service import EgressRequestPolicy, GuardedHTTPClient
 from ingestion.adapters.feed_parser import DEFAULT_USER_AGENT, _normalized_media_type
-from ingestion.adapters.types import AdapterRetrieval
+from ingestion.adapters.types import (
+    AcquisitionRateLimitedError,
+    AdapterRetrieval,
+    extract_rate_limit_feedback,
+)
 from ingestion.rss import FeedFetchResult, FeedPollResult, ParsedFeed, ParsedFeedItem
 
 _FIELDS = frozenset(
@@ -71,7 +75,13 @@ class _DirectListingAdapter:
             policy=self.egress_request_policy(configuration=configuration),
             headers=headers,
         )
+        rate_feedback = extract_rate_limit_feedback(response.status_code, response.headers)
         if response.status_code != 304 and not 200 <= response.status_code < 300:
+            if rate_feedback.requires_hold:
+                raise AcquisitionRateLimitedError(
+                    f"Direct listing returned HTTP {response.status_code}.",
+                    feedback=rate_feedback,
+                )
             raise RuntimeError(f"Direct listing returned HTTP {response.status_code}.")
         not_modified = response.status_code == 304
         return AdapterRetrieval(
@@ -90,6 +100,7 @@ class _DirectListingAdapter:
                 "redirect_count": response.redirect_count,
                 "egress_policy": "ip-pinned-public-v1",
             },
+            rate_limit_feedback=(rate_feedback if rate_feedback.has_provider_signal else None),
         )
 
     async def normalize(

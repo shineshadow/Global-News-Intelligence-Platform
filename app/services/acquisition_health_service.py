@@ -133,7 +133,11 @@ def _gate_state(
 ) -> str | None:
     if cutover_path == "phase3" and not runtime_configured:
         return "adapter_unavailable"
-    if latest_run is None or latest_run.status != "failed":
+    if latest_run is None:
+        return None
+    if latest_run.status == "delayed":
+        return "rate_limited"
+    if latest_run.status != "failed":
         return None
     error_type = latest_run.error_type or ""
     error_message = latest_run.error_message or ""
@@ -236,6 +240,16 @@ async def list_acquisition_health(
         .correlate(SourceEndpoint)
         .scalar_subquery()
     )
+    phase3_success_count = (
+        select(func.count(IngestionRun.id))
+        .where(
+            IngestionRun.source_endpoint_id == SourceEndpoint.id,
+            IngestionRun.status == "succeeded",
+            IngestionRun.run_metadata.contains({"phase3": True}),
+        )
+        .correlate(SourceEndpoint)
+        .scalar_subquery()
+    )
     statement = (
         select(
             SourceEndpoint,
@@ -247,6 +261,7 @@ async def list_acquisition_health(
             artifact_count.label("artifact_count"),
             rejection_count.label("rejection_count"),
             event_count.label("event_count"),
+            phase3_success_count.label("phase3_success_count"),
         )
         .join(Source, Source.id == SourceEndpoint.source_id)
         .outerjoin(
@@ -309,6 +324,7 @@ async def list_acquisition_health(
         accepted_count,
         rejected_count,
         cutover_events,
+        phase3_successes,
     ) in rows:
         verification_state = _verification_state(endpoint)
         health_state = _health_state(endpoint, run, now=now)
@@ -329,7 +345,12 @@ async def list_acquisition_health(
         if configuration is None:
             proof_state = "not_applicable"
         elif run is not None and run_metadata.get("phase3") is True:
-            proof_state = "passed" if run.status == "succeeded" else "failed"
+            if run.status == "succeeded" or (run.status == "delayed" and phase3_successes > 0):
+                proof_state = "passed"
+            elif run.status == "delayed":
+                proof_state = "pending"
+            else:
+                proof_state = "failed"
         else:
             proof_state = "pending"
         items.append(

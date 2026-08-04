@@ -498,8 +498,7 @@ async def _finish_successful_fetch(
                     classification_status = classification_summary.status
                     if classification_summary.status == "failed":
                         logger.warning(
-                            "Deterministic classification failed "
-                            "after preserving document %s: %s",
+                            "Deterministic classification failed after preserving document %s: %s",
                             document_id,
                             classification_summary.error,
                         )
@@ -757,9 +756,61 @@ async def _record_poll_failure(
             )
 
 
+async def _record_poll_delay(
+    context: _PollContext,
+    *,
+    next_eligible_at: datetime,
+    started_clock: float,
+    session_factory: async_sessionmaker[AsyncSession],
+    http_status: int | None = None,
+) -> None:
+    """Record a provider/policy delay without changing structural health."""
+
+    finished_at = _utcnow()
+    eligible_at = max(next_eligible_at, finished_at)
+    async with session_factory() as session, session.begin():
+        endpoint = await source_endpoint_repository.get_source_endpoint_by_id_for_update(
+            session,
+            context.endpoint_id,
+        )
+        run = await ingestion_run_repository.get_ingestion_run_by_id(
+            session,
+            context.run_id,
+            for_update=True,
+        )
+        if run is None or run.status != "running":
+            return
+        await ingestion_run_repository.update_ingestion_run(
+            session,
+            run,
+            {
+                "status": "delayed",
+                "finished_at": finished_at,
+                "duration_ms": _elapsed_milliseconds(started_clock),
+                "http_status": http_status,
+                "error_type": "AcquisitionRateLimited",
+                "error_message": "Acquisition delayed by controlling rate authority.",
+                "error_details": {"next_eligible_at": eligible_at.isoformat()},
+            },
+        )
+        if endpoint is not None:
+            endpoint_values = {
+                "last_checked_at": finished_at,
+                "next_poll_at": eligible_at,
+            }
+            if http_status is not None:
+                endpoint_values["last_http_status"] = http_status
+            await source_endpoint_repository.update_source_endpoint(
+                session,
+                endpoint,
+                endpoint_values,
+            )
+
+
 start_feed_ingestion_run = _start_ingestion_run
 finish_feed_poll = _finish_successful_fetch
 record_feed_poll_failure = _record_poll_failure
+record_feed_poll_delay = _record_poll_delay
 
 
 async def poll_source_endpoint(
