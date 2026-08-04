@@ -105,8 +105,8 @@ UI foundation and UX governance                      draft candidate
 Phase 3 controlled feed cutover/acquisition health   implemented candidate
 Phase 3 live feed canary/parity review                passed
 Phase 3 RSSHub/RSS-Bridge adapters                    implemented candidate
-Phase 3 direct HTTP/listing extraction                next
-Phase 3 changedetection/Playwright fallback           after direct extraction
+Phase 3 direct HTTP/listing extraction                implemented candidate
+Phase 3 changedetection/Playwright fallback           next
 Phase 3 formal implementation review                 final gate
 ```
 
@@ -146,6 +146,12 @@ seeds, internal-service egress identity, and non-activating migration are
 recorded in
 `../specifications/PHASE_3_RSSHUB_AND_RSS_BRIDGE_ADAPTERS.md`. No generated
 feed endpoint or internal service is configured by the repository candidate.
+The public direct JSON/API and HTML listing adapters, bounded selector/path
+configuration, sandbox-only extraction, and non-activating registry migration
+are recorded in
+`../specifications/PHASE_3_DIRECT_HTTP_AND_LISTING_EXTRACTION.md`. The package
+creates no endpoint configuration or cutover and supports no authenticated API
+slot or JavaScript rendering; those remain separate reviewed capabilities.
 
 ---
 

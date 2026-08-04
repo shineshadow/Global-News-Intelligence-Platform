@@ -8,6 +8,7 @@ import resource
 import stat
 import subprocess
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -18,6 +19,13 @@ MAX_STRUCTURED_FEED_BYTES = 10 * 1024 * 1024
 MAX_XML_ELEMENTS = 200_000
 MAX_XML_DEPTH = 64
 MAX_XML_ATTRIBUTES = 256
+MAX_LISTING_BYTES = 10 * 1024 * 1024
+MAX_LISTING_ITEMS = 25
+MAX_LISTING_FIELD_CHARS = 256
+MAX_JSON_DEPTH = 32
+LISTING_FIELDS = frozenset(
+    {"url", "title", "summary", "published_at", "external_id", "author", "language"}
+)
 ATOM_NAMESPACE = "http://www.w3.org/2005/Atom"
 RDF_NAMESPACE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 RSS_1_NAMESPACE = "http://purl.org/rss/1.0/"
@@ -27,7 +35,7 @@ def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument(
         "--operation",
-        choices=("probe", "scan", "detect_feed"),
+        choices=("probe", "scan", "detect_feed", "detect_listing", "extract_listing"),
         required=True,
     )
     parser.add_argument("--scanner", required=True)
@@ -35,6 +43,8 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--process-limit", required=True, type=int)
     parser.add_argument("--sandbox-policy", required=True)
     parser.add_argument("--input")
+    parser.add_argument("--format", choices=("html", "json"))
+    parser.add_argument("--configuration")
     return parser.parse_args()
 
 
@@ -62,9 +72,7 @@ def _scanner_version(
         check=False,
         timeout=5,
     )
-    output = completed.stdout[:MAX_SCANNER_OUTPUT].decode(
-        "utf-8", errors="replace"
-    ).strip()
+    output = completed.stdout[:MAX_SCANNER_OUTPUT].decode("utf-8", errors="replace").strip()
     if completed.returncode != 0 or len(completed.stdout) > MAX_SCANNER_OUTPUT:
         raise RuntimeError("scanner version command failed")
     matched = VERSION_PATTERN.fullmatch(output)
@@ -137,6 +145,16 @@ def _run() -> dict[str, object]:
     if arguments.operation == "detect_feed":
         return _detect_feed(
             artifact,
+            engine_version=engine_version,
+            signature_version=signature_version,
+            isolation_evidence=isolation_evidence,
+        )
+    if arguments.operation in {"detect_listing", "extract_listing"}:
+        return _inspect_listing(
+            artifact,
+            operation=arguments.operation,
+            expected_format=arguments.format,
+            raw_configuration=arguments.configuration,
             engine_version=engine_version,
             signature_version=signature_version,
             isolation_evidence=isolation_evidence,
@@ -268,13 +286,10 @@ def _detect_feed(
                         "channel",
                         f"{{{RSS_1_NAMESPACE}}}channel",
                     }
-                    has_atom_title = (
-                        has_atom_title or element.tag == f"{{{ATOM_NAMESPACE}}}title"
-                    )
+                    has_atom_title = has_atom_title or element.tag == f"{{{ATOM_NAMESPACE}}}title"
                     has_atom_id = has_atom_id or element.tag == f"{{{ATOM_NAMESPACE}}}id"
                     has_atom_updated = (
-                        has_atom_updated
-                        or element.tag == f"{{{ATOM_NAMESPACE}}}updated"
+                        has_atom_updated or element.tag == f"{{{ATOM_NAMESPACE}}}updated"
                     )
             else:
                 depth -= 1
@@ -348,6 +363,324 @@ def _split_xml_tag(tag: str) -> tuple[str | None, str]:
     return None, tag
 
 
+class _HTMLStructureProbe(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.element_count = 0
+        self.depth = 0
+        self.max_depth = 0
+        self.has_document_element = False
+        self.has_link = False
+
+    def handle_starttag(self, tag, attrs):
+        self.element_count += 1
+        self.depth += 1
+        self.max_depth = max(self.max_depth, self.depth)
+        if self.element_count > 100_000 or self.depth > 64 or len(attrs) > 256:
+            raise ValueError("html structure limit exceeded")
+        self.has_document_element = self.has_document_element or tag in {"html", "body"}
+        self.has_link = self.has_link or tag == "a"
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        self.depth = max(0, self.depth - 1)
+
+
+def _inspect_listing(
+    artifact: Path,
+    *,
+    operation: str,
+    expected_format: str | None,
+    raw_configuration: str | None,
+    engine_version: str,
+    signature_version: str,
+    isolation_evidence: dict[str, object],
+) -> dict[str, object]:
+    size = artifact.stat().st_size
+    if size <= 0 or size > MAX_LISTING_BYTES:
+        return _listing_rejection(
+            operation, "listing_size_invalid", engine_version, signature_version, isolation_evidence
+        )
+    payload = artifact.read_bytes()
+    if b"\x00" in payload:
+        return _listing_rejection(
+            operation,
+            "listing_encoding_unsupported",
+            engine_version,
+            signature_version,
+            isolation_evidence,
+        )
+    detected_format: str | None = None
+    parsed_json: object | None = None
+    try:
+        decoded = payload.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return _listing_rejection(
+            operation,
+            "listing_encoding_unsupported",
+            engine_version,
+            signature_version,
+            isolation_evidence,
+        )
+    try:
+        parsed_json = json.loads(decoded)
+        _validate_json_depth(parsed_json)
+        detected_format = "json"
+    except (json.JSONDecodeError, ValueError):
+        probe = _HTMLStructureProbe()
+        try:
+            probe.feed(decoded)
+            probe.close()
+        except (ValueError, RecursionError):
+            return _listing_rejection(
+                operation,
+                "listing_structure_invalid",
+                engine_version,
+                signature_version,
+                isolation_evidence,
+            )
+        if probe.has_document_element and probe.has_link:
+            detected_format = "html"
+    if detected_format is None:
+        return _listing_rejection(
+            operation,
+            "listing_structure_unrecognized",
+            engine_version,
+            signature_version,
+            isolation_evidence,
+        )
+    if expected_format is not None and detected_format != expected_format:
+        return _listing_rejection(
+            operation,
+            "listing_format_mismatch",
+            engine_version,
+            signature_version,
+            isolation_evidence,
+        )
+    evidence: dict[str, object] = {
+        **isolation_evidence,
+        "detected_format": detected_format,
+        "parser": "python-stdlib-json"
+        if detected_format == "json"
+        else "python-stdlib-html-parser",
+        "parser_version": sys.version.split()[0],
+    }
+    if operation == "extract_listing":
+        if not raw_configuration:
+            return _listing_rejection(
+                operation,
+                "listing_configuration_missing",
+                engine_version,
+                signature_version,
+                isolation_evidence,
+            )
+        try:
+            configuration = json.loads(raw_configuration)
+            records = (
+                _extract_json_records(parsed_json, configuration)
+                if detected_format == "json"
+                else _extract_html_records(decoded, configuration)
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return _listing_rejection(
+                operation,
+                "listing_extraction_invalid",
+                engine_version,
+                signature_version,
+                isolation_evidence,
+            )
+        evidence["item_count"] = len(records)
+        evidence["normalized_listing"] = {"items": records}
+    return _verdict(
+        operation=operation,
+        status="clean",
+        engine_version=engine_version,
+        signature_version=signature_version,
+        reason_code=None,
+        evidence=evidence,
+    )
+
+
+def _validate_json_depth(value: object, depth: int = 0) -> None:
+    if depth > MAX_JSON_DEPTH:
+        raise ValueError("json depth exceeded")
+    if isinstance(value, dict):
+        if len(value) > 10_000:
+            raise ValueError("json object too large")
+        for child in value.values():
+            _validate_json_depth(child, depth + 1)
+    elif isinstance(value, list):
+        if len(value) > 100_000:
+            raise ValueError("json array too large")
+        for child in value:
+            _validate_json_depth(child, depth + 1)
+
+
+def _path(value: object, parts: object) -> object:
+    if (
+        not isinstance(parts, list)
+        or not parts
+        or len(parts) > 16
+        or not all(isinstance(part, str) and part for part in parts)
+    ):
+        raise ValueError("invalid json path")
+    current = value
+    for part in parts:
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
+
+
+def _extract_json_records(payload: object, configuration: object) -> list[dict[str, str]]:
+    if not isinstance(configuration, dict) or set(configuration) != {"items_path", "fields"}:
+        raise ValueError("invalid json configuration")
+    items = _path(payload, configuration["items_path"])
+    fields = configuration["fields"]
+    if (
+        not isinstance(items, list)
+        or not isinstance(fields, dict)
+        or not {"url", "title"} <= fields.keys()
+        or not fields.keys() <= LISTING_FIELDS
+    ):
+        raise ValueError("invalid json fields")
+    return [_record_from_json(item, fields) for item in items[:MAX_LISTING_ITEMS]]
+
+
+def _record_from_json(item: object, fields: dict[str, object]) -> dict[str, str]:
+    record: dict[str, str] = {}
+    for name, parts in fields.items():
+        value = _path(item, parts)
+        if value is None:
+            continue
+        if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+            raise TypeError("listing field is not scalar")
+        text = str(value).strip()
+        if text:
+            record[name] = text[:MAX_LISTING_FIELD_CHARS]
+    if not record.get("url") or not record.get("title"):
+        raise ValueError("listing item lacks url or title")
+    return record
+
+
+def _selector(value: object) -> tuple[str, str | None]:
+    if not isinstance(value, str) or not re.fullmatch(r"[a-zA-Z][\w-]*(?:\.[\w-]+)?", value):
+        raise ValueError("invalid selector")
+    tag, _, class_name = value.partition(".")
+    return tag.lower(), class_name or None
+
+
+def _matches(tag: str, attrs: dict[str, str | None], selector: object) -> bool:
+    expected_tag, expected_class = _selector(selector)
+    classes = (attrs.get("class") or "").split()
+    return tag == expected_tag and (expected_class is None or expected_class in classes)
+
+
+class _ListingHTMLParser(HTMLParser):
+    def __init__(self, configuration: dict[str, object]) -> None:
+        super().__init__(convert_charrefs=True)
+        if set(configuration) != {"item_selector", "fields"}:
+            raise ValueError("invalid html configuration")
+        self.item_selector = configuration["item_selector"]
+        self.fields = configuration["fields"]
+        if (
+            not isinstance(self.fields, dict)
+            or not {"url", "title"} <= self.fields.keys()
+            or not self.fields.keys() <= LISTING_FIELDS
+        ):
+            raise ValueError("invalid html fields")
+        _selector(self.item_selector)
+        for spec in self.fields.values():
+            if (
+                not isinstance(spec, dict)
+                or not set(spec) <= {"selector", "attribute"}
+                or "selector" not in spec
+            ):
+                raise ValueError("invalid html field")
+            _selector(spec["selector"])
+            if "attribute" in spec and (
+                not isinstance(spec["attribute"], str)
+                or not re.fullmatch(r"[a-zA-Z_:][\w:.-]*", spec["attribute"])
+            ):
+                raise ValueError("invalid html attribute")
+        self.depth = 0
+        self.item_depth: int | None = None
+        self.record: dict[str, str] = {}
+        self.active: list[tuple[str, int, list[str]]] = []
+        self.records: list[dict[str, str]] = []
+
+    def handle_starttag(self, tag, attrs):
+        self.depth += 1
+        attributes = dict(attrs)
+        if (
+            self.item_depth is None
+            and len(self.records) < MAX_LISTING_ITEMS
+            and _matches(tag, attributes, self.item_selector)
+        ):
+            self.item_depth = self.depth
+            self.record = {}
+        if self.item_depth is not None:
+            for name, raw_spec in self.fields.items():
+                spec = raw_spec
+                if name not in self.record and _matches(tag, attributes, spec["selector"]):
+                    attribute = spec.get("attribute")
+                    if attribute is not None and attributes.get(attribute):
+                        self.record[name] = str(attributes[attribute]).strip()[
+                            :MAX_LISTING_FIELD_CHARS
+                        ]
+                    else:
+                        self.active.append((name, self.depth, []))
+
+    def handle_data(self, data):
+        for _name, _depth, chunks in self.active:
+            if sum(map(len, chunks)) < MAX_LISTING_FIELD_CHARS:
+                chunks.append(data)
+
+    def handle_endtag(self, tag):
+        remaining = []
+        for name, depth, chunks in self.active:
+            if depth == self.depth:
+                text = " ".join("".join(chunks).split())[:MAX_LISTING_FIELD_CHARS]
+                if text:
+                    self.record[name] = text
+            else:
+                remaining.append((name, depth, chunks))
+        self.active = remaining
+        if self.item_depth == self.depth:
+            if not self.record.get("url") or not self.record.get("title"):
+                raise ValueError("listing item lacks url or title")
+            self.records.append(self.record)
+            self.record = {}
+            self.item_depth = None
+            self.active = []
+        self.depth = max(0, self.depth - 1)
+
+
+def _extract_html_records(payload: str, configuration: object) -> list[dict[str, str]]:
+    if not isinstance(configuration, dict):
+        raise TypeError("invalid html configuration")
+    parser = _ListingHTMLParser(configuration)
+    parser.feed(payload)
+    parser.close()
+    return parser.records
+
+
+def _listing_rejection(
+    operation: str, reason: str, engine: str, signatures: str, evidence: dict[str, object]
+) -> dict[str, object]:
+    return _verdict(
+        operation=operation,
+        status="rejected",
+        engine_version=engine,
+        signature_version=signatures,
+        reason_code=reason,
+        evidence=evidence,
+    )
+
+
 def main() -> int:
     try:
         payload = _run()
@@ -372,7 +705,7 @@ def _arguments_namespace() -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--operation",
-        choices=("probe", "scan", "detect_feed"),
+        choices=("probe", "scan", "detect_feed", "detect_listing", "extract_listing"),
         default="probe",
     )
     arguments, _ = parser.parse_known_args()

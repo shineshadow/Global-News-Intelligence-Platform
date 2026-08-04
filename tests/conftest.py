@@ -413,6 +413,109 @@ async def truncate_test_tables() -> None:
                 WHERE adapter.slug IN ('rsshub', 'rss_bridge')
                   AND adapter.version = '1'
                   AND format.slug IN ('rss', 'atom');
+
+                INSERT INTO artifact_format_media_types (
+                    artifact_format_id, media_type, authority_slug,
+                    is_preferred, provenance
+                )
+                SELECT format.id, evidence.media_type, 'iana',
+                       evidence.is_preferred,
+                       jsonb_build_object('migration', 'c1e3f5a7b9d2')
+                FROM artifact_formats AS format
+                JOIN (VALUES
+                    ('html', 'text/html', true),
+                    ('html', 'application/xhtml+xml', false),
+                    ('json', 'application/json', true)
+                ) AS evidence(format_slug, media_type, is_preferred)
+                  ON evidence.format_slug = format.slug;
+
+                INSERT INTO artifact_format_extensions (
+                    artifact_format_id, extension, authority_slug,
+                    is_preferred, provenance
+                )
+                SELECT format.id, evidence.extension,
+                       evidence.authority_slug, evidence.is_preferred,
+                       jsonb_build_object('migration', 'c1e3f5a7b9d2')
+                FROM artifact_formats AS format
+                JOIN (VALUES
+                    ('html', 'html', 'iana', true),
+                    ('html', 'htm', 'iana', false),
+                    ('json', 'json', 'ietf-rfc-8259', true)
+                ) AS evidence(format_slug, extension, authority_slug, is_preferred)
+                  ON evidence.format_slug = format.slug;
+
+                INSERT INTO acquisition_adapters (
+                    slug, version, display_name, implementation, status,
+                    configuration_schema, provenance, activated_at
+                ) VALUES
+                    (
+                        'direct_json_api', '1', 'Direct JSON API Listing',
+                        'ingestion.adapters.direct_listing:DirectJSONAPIAdapter',
+                        'active',
+                        jsonb_build_object(
+                            'type', 'object',
+                            'required', jsonb_build_array('items_path', 'fields'),
+                            'additionalProperties', false,
+                            'properties', jsonb_build_object(
+                                'items_path', jsonb_build_object('type', 'array'),
+                                'fields', jsonb_build_object('type', 'object')
+                            )
+                        ),
+                        jsonb_build_object(
+                            'migration', 'c1e3f5a7b9d2',
+                            'activation_scope',
+                            'registry-only-no-endpoint-configuration'
+                        ), now()
+                    ),
+                    (
+                        'html_listing', '1', 'Direct HTML Listing',
+                        'ingestion.adapters.direct_listing:HTMLListingAdapter',
+                        'active',
+                        jsonb_build_object(
+                            'type', 'object',
+                            'required', jsonb_build_array('item_selector', 'fields'),
+                            'additionalProperties', false,
+                            'properties', jsonb_build_object(
+                                'item_selector', jsonb_build_object('type', 'string'),
+                                'fields', jsonb_build_object('type', 'object')
+                            )
+                        ),
+                        jsonb_build_object(
+                            'migration', 'c1e3f5a7b9d2',
+                            'activation_scope',
+                            'registry-only-no-endpoint-configuration'
+                        ), now()
+                    );
+
+                INSERT INTO acquisition_adapter_compatibilities (
+                    adapter_id, endpoint_type, endpoint_format,
+                    acquisition_method, platform, platform_key
+                )
+                SELECT adapter.id, expected.endpoint_type,
+                       expected.endpoint_format, expected.acquisition_method,
+                       NULL, '*'
+                FROM acquisition_adapters AS adapter
+                JOIN (VALUES
+                    ('direct_json_api', 'api', 'json', 'api_client'),
+                    ('html_listing', 'website', 'html', 'web_scraper')
+                ) AS expected(slug, endpoint_type, endpoint_format, acquisition_method)
+                  ON expected.slug = adapter.slug
+                WHERE adapter.version = '1';
+
+                INSERT INTO acquisition_adapter_artifact_capabilities (
+                    adapter_id, artifact_format_id,
+                    identification_supported, safe_parser_supported,
+                    safe_extraction_supported
+                )
+                SELECT adapter.id, format.id, true, true, true
+                FROM acquisition_adapters AS adapter
+                JOIN (VALUES
+                    ('direct_json_api', 'json'), ('html_listing', 'html')
+                ) AS expected(adapter_slug, format_slug)
+                  ON expected.adapter_slug = adapter.slug
+                JOIN artifact_formats AS format
+                  ON format.slug = expected.format_slug
+                WHERE adapter.version = '1';
                 """
             )
         )

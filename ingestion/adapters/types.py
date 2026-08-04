@@ -46,4 +46,9 @@ class SourceAcquisitionAdapter(Protocol):
         credentials: dict[str, str],
     ) -> AdapterRetrieval: ...
 
-    async def normalize(self, retrieval: AdapterRetrieval) -> FeedPollResult: ...
+    async def normalize(
+        self,
+        retrieval: AdapterRetrieval,
+        *,
+        inspected_payload: dict[str, Any] | None = None,
+    ) -> FeedPollResult: ...

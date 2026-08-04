@@ -21,10 +21,7 @@ from ingestion.rss import (
 )
 
 DEFAULT_USER_AGENT = "Global-News-Intelligence-Platform/0.1"
-ACCEPT_HEADER = (
-    "application/atom+xml,application/rss+xml,application/xml,"
-    "text/xml;q=0.9,*/*;q=0.5"
-)
+ACCEPT_HEADER = "application/atom+xml,application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.5"
 
 
 class FeedParserAdapter:
@@ -122,7 +119,14 @@ class FeedParserAdapter:
             provenance=provenance,
         )
 
-    async def normalize(self, retrieval: AdapterRetrieval) -> FeedPollResult:
+    async def normalize(
+        self,
+        retrieval: AdapterRetrieval,
+        *,
+        inspected_payload: dict[str, Any] | None = None,
+    ) -> FeedPollResult:
+        if inspected_payload is not None:
+            raise ValueError("feed_parser v1 does not accept listing extraction output.")
         fetch = FeedFetchResult(
             requested_url=retrieval.requested_url,
             final_url=retrieval.final_url,

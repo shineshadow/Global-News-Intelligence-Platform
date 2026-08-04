@@ -192,6 +192,7 @@ class Phase3AcquisitionWorker:
                         allowed_format_slugs=allowed_formats,
                         chunks=(retrieval.content,),
                         retrieval_provenance=dict(retrieval.provenance),
+                        parser_configuration=dict(execution.configuration.configuration),
                         original_locator=retrieval.final_url,
                         max_bytes=max(retrieval.response_bytes, 1),
                     )
@@ -202,7 +203,14 @@ class Phase3AcquisitionWorker:
                         f"({outcome.reason_code or 'unspecified'})."
                     )
 
-            normalized = await execution.adapter.normalize(retrieval)
+            normalized = await execution.adapter.normalize(
+                retrieval,
+                inspected_payload=(
+                    dict(outcome.normalized_payload)
+                    if not retrieval.not_modified and outcome.normalized_payload is not None
+                    else None
+                ),
+            )
             poll_summary = await finish_feed_poll(
                 execution.poll_context,
                 normalized,

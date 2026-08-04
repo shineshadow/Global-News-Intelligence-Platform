@@ -141,22 +141,39 @@ class BubblewrapInspectionSandbox:
     async def detect_feed(self, artifact_path: Path) -> SandboxVerdict:
         return await self._invoke(operation="detect_feed", artifact_path=artifact_path)
 
+    async def detect_listing(self, artifact_path: Path) -> SandboxVerdict:
+        return await self._invoke(operation="detect_listing", artifact_path=artifact_path)
+
+    async def extract_listing(
+        self,
+        artifact_path: Path,
+        *,
+        expected_format: str,
+        configuration: dict[str, Any],
+    ) -> SandboxVerdict:
+        if expected_format not in {"html", "json"}:
+            raise ValueError("Listing format must be html or json.")
+        return await self._invoke(
+            operation="extract_listing",
+            artifact_path=artifact_path,
+            expected_format=expected_format,
+            extraction_configuration=configuration,
+        )
+
     async def _invoke(
         self,
         *,
         operation: str,
         artifact_path: Path | None,
+        expected_format: str | None = None,
+        extraction_configuration: dict[str, Any] | None = None,
     ) -> SandboxVerdict:
         configuration = self._configuration
-        bubblewrap = _require_regular_executable(
-            configuration.bubblewrap_path, "Bubblewrap"
-        )
+        bubblewrap = _require_regular_executable(configuration.bubblewrap_path, "Bubblewrap")
         python = _require_regular_executable(configuration.python_path, "Python")
         scanner = _require_regular_executable(configuration.scanner_path, "ClamAV")
         worker = _require_regular_file(configuration.worker_path, "inspection worker")
-        signatures = _require_real_directory(
-            configuration.signature_directory, "ClamAV signature"
-        )
+        signatures = _require_real_directory(configuration.signature_directory, "ClamAV signature")
         if not any(_is_regular_signature_database(child) for child in signatures.iterdir()):
             raise InspectionSandboxUnavailable(
                 "ClamAV signature directory has no versioned signature database."
@@ -241,6 +258,19 @@ class BubblewrapInspectionSandbox:
         )
         if artifact_path is not None:
             command.extend(("--input", "/input/artifact"))
+        if expected_format is not None:
+            command.extend(("--format", expected_format))
+        if extraction_configuration is not None:
+            encoded_configuration = json.dumps(
+                extraction_configuration,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            if len(encoded_configuration.encode("utf-8")) > 16 * 1024:
+                raise InspectionSandboxViolation(
+                    "Listing extraction configuration exceeds its bound."
+                )
+            command.extend(("--configuration", encoded_configuration))
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -274,8 +304,7 @@ class BubblewrapInspectionSandbox:
         if process.returncode != 0:
             detail = stderr.decode("utf-8", errors="replace").strip()[:500]
             raise InspectionSandboxViolation(
-                "Inspection sandbox exited unsuccessfully"
-                + (f": {detail}" if detail else ".")
+                "Inspection sandbox exited unsuccessfully" + (f": {detail}" if detail else ".")
             )
         if stderr:
             raise InspectionSandboxViolation(
@@ -369,6 +398,54 @@ class BubblewrapFeedStructureDetector:
         )
 
 
+class BubblewrapArtifactStructureDetector:
+    """Identify feeds and direct listings in the credential-free sandbox."""
+
+    name = "gni-sandbox-artifact-structure"
+    version = "1"
+
+    def __init__(self, sandbox: BubblewrapInspectionSandbox) -> None:
+        self._sandbox = sandbox
+
+    async def detect(
+        self,
+        path: Path,
+        *,
+        allowed_format_slugs: frozenset[str],
+    ) -> StructuralDetectionResult:
+        if allowed_format_slugs <= {"rss", "atom"}:
+            verdict = await self._sandbox.detect_feed(path)
+        elif allowed_format_slugs <= {"html", "json"}:
+            verdict = await self._sandbox.detect_listing(path)
+        else:
+            return StructuralDetectionResult(
+                identified=False,
+                format_slug=None,
+                detector_name=self.name,
+                detector_version=self.version,
+                reason_code="structural_format_set_unsupported",
+                evidence={},
+            )
+        format_slug = verdict.evidence.get("detected_format")
+        if format_slug is not None and format_slug not in allowed_format_slugs:
+            return StructuralDetectionResult(
+                identified=False,
+                format_slug=None,
+                detector_name=self.name,
+                detector_version=self.version,
+                reason_code="adapter_structural_mismatch",
+                evidence=verdict.evidence,
+            )
+        return StructuralDetectionResult(
+            identified=verdict.status == "clean",
+            format_slug=format_slug if isinstance(format_slug, str) else None,
+            detector_name=self.name,
+            detector_version=self.version,
+            reason_code=verdict.reason_code,
+            evidence=verdict.evidence,
+        )
+
+
 class BubblewrapFeedSafeParser:
     """Require a complete bounded feed parse for one exact feed format."""
 
@@ -383,7 +460,13 @@ class BubblewrapFeedSafeParser:
         self._sandbox = sandbox
         self._expected_format = expected_format
 
-    async def parse(self, path: Path) -> ParserResult:
+    async def parse(
+        self,
+        path: Path,
+        *,
+        configuration: dict[str, Any] | None = None,
+    ) -> ParserResult:
+        del configuration
         verdict = await self._sandbox.detect_feed(path)
         detected_format = verdict.evidence.get("detected_format")
         valid = verdict.status == "clean" and detected_format == self._expected_format
@@ -391,15 +474,51 @@ class BubblewrapFeedSafeParser:
             valid=valid,
             parser_name="gni-sandbox-feed-parser",
             parser_version="1",
-            reason_code=(
-                None
-                if valid
-                else verdict.reason_code or "feed_parser_format_mismatch"
-            ),
+            reason_code=(None if valid else verdict.reason_code or "feed_parser_format_mismatch"),
             evidence={
                 **verdict.evidence,
                 "expected_format": self._expected_format,
             },
+        )
+
+
+class BubblewrapListingSafeParser:
+    """Extract bounded JSON/API or HTML listing records inside Bubblewrap."""
+
+    def __init__(
+        self,
+        sandbox: BubblewrapInspectionSandbox,
+        *,
+        expected_format: str,
+    ) -> None:
+        if expected_format not in {"html", "json"}:
+            raise ValueError("Listing parser format must be html or json.")
+        self._sandbox = sandbox
+        self._expected_format = expected_format
+
+    async def parse(
+        self,
+        path: Path,
+        *,
+        configuration: dict[str, Any],
+    ) -> ParserResult:
+        verdict = await self._sandbox.extract_listing(
+            path,
+            expected_format=self._expected_format,
+            configuration=configuration,
+        )
+        normalized = verdict.evidence.get("normalized_listing")
+        valid = verdict.status == "clean" and isinstance(normalized, dict)
+        evidence = {
+            key: value for key, value in verdict.evidence.items() if key != "normalized_listing"
+        }
+        return ParserResult(
+            valid=valid,
+            parser_name="gni-sandbox-listing-parser",
+            parser_version="1",
+            reason_code=(None if valid else verdict.reason_code or "listing_parser_invalid"),
+            evidence=evidence,
+            normalized_payload=normalized if valid else None,
         )
 
 
@@ -436,21 +555,14 @@ async def _bounded_communicate(
 
 
 def _parse_verdict(payload: bytes, *, expected_operation: str) -> SandboxVerdict:
-    if (
-        not payload
-        or payload != payload.strip()
-        or b"\n" in payload
-        or b"\r" in payload
-    ):
+    if not payload or payload != payload.strip() or b"\n" in payload or b"\r" in payload:
         raise InspectionSandboxViolation(
             "Inspection sandbox must return exactly one structured verdict."
         )
     try:
         decoded = json.loads(payload)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise InspectionSandboxViolation(
-            "Inspection sandbox returned invalid JSON."
-        ) from exc
+        raise InspectionSandboxViolation("Inspection sandbox returned invalid JSON.") from exc
     if not isinstance(decoded, dict):
         raise InspectionSandboxViolation("Inspection verdict must be one JSON object.")
     required = {
@@ -462,9 +574,7 @@ def _parse_verdict(payload: bytes, *, expected_operation: str) -> SandboxVerdict
         "evidence",
     }
     if set(decoded) != required or decoded["schema_version"] != VERDICT_SCHEMA_VERSION:
-        raise InspectionSandboxViolation(
-            "Inspection verdict has an unsupported schema."
-        )
+        raise InspectionSandboxViolation("Inspection verdict has an unsupported schema.")
     if decoded["operation"] != expected_operation:
         raise InspectionSandboxViolation("Inspection verdict operation mismatch.")
     if decoded["status"] not in {"clean", "rejected", "error"}:
@@ -477,22 +587,15 @@ def _parse_verdict(payload: bytes, *, expected_operation: str) -> SandboxVerdict
         or not all(isinstance(value, str) and value.strip() for value in scanner.values())
         or not isinstance(evidence, dict)
     ):
-        raise InspectionSandboxViolation(
-            "Inspection verdict provenance is invalid."
-        )
+        raise InspectionSandboxViolation("Inspection verdict provenance is invalid.")
     reason_code = decoded["reason_code"]
-    if reason_code is not None and (
-        not isinstance(reason_code, str) or not reason_code.strip()
-    ):
+    if reason_code is not None and (not isinstance(reason_code, str) or not reason_code.strip()):
         raise InspectionSandboxViolation("Inspection reason code is invalid.")
     if decoded["status"] != "clean" and reason_code is None:
-        raise InspectionSandboxViolation(
-            "Non-clean inspection verdict requires a reason code."
-        )
+        raise InspectionSandboxViolation("Non-clean inspection verdict requires a reason code.")
     if decoded["status"] == "error":
         raise InspectionSandboxViolation(
-            "Inspection worker reported "
-            f"{reason_code}: {json.dumps(evidence, sort_keys=True)}."
+            f"Inspection worker reported {reason_code}: {json.dumps(evidence, sort_keys=True)}."
         )
     return SandboxVerdict(
         operation=decoded["operation"],
@@ -534,9 +637,7 @@ def _require_real_directory(path: Path, label: str) -> Path:
     except OSError as exc:
         raise InspectionSandboxUnavailable(f"{label} directory is unavailable.") from exc
     if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
-        raise InspectionSandboxUnavailable(
-            f"{label} directory must be a real directory."
-        )
+        raise InspectionSandboxUnavailable(f"{label} directory must be a real directory.")
     return path.resolve(strict=True)
 
 
@@ -577,9 +678,7 @@ def _create_seccomp_filter() -> int:
     try:
         deny_action = 0x00050000 | errno.EPERM
         for syscall_name in DENIED_SYSCALLS:
-            syscall_number = library.seccomp_syscall_resolve_name(
-                syscall_name.encode("ascii")
-            )
+            syscall_number = library.seccomp_syscall_resolve_name(syscall_name.encode("ascii"))
             if syscall_number < 0:
                 continue
             if (

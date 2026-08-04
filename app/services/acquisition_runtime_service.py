@@ -6,10 +6,11 @@ from app.config import Settings, settings
 from app.database import async_session_factory
 from app.services.acquisition_worker_service import Phase3AcquisitionWorker
 from app.services.artifact_inspection_sandbox import (
+    BubblewrapArtifactStructureDetector,
     BubblewrapClamAVScanner,
     BubblewrapFeedSafeParser,
-    BubblewrapFeedStructureDetector,
     BubblewrapInspectionSandbox,
+    BubblewrapListingSafeParser,
 )
 from app.services.artifact_security_service import DeletionFirstArtifactRuntime
 from app.services.outbound_egress_service import (
@@ -18,7 +19,13 @@ from app.services.outbound_egress_service import (
     InternalServiceRegistry,
     OutboundEgressGuard,
 )
-from ingestion.adapters import FeedParserAdapter, RSSBridgeAdapter, RSSHubAdapter
+from ingestion.adapters import (
+    DirectJSONAPIAdapter,
+    FeedParserAdapter,
+    HTMLListingAdapter,
+    RSSBridgeAdapter,
+    RSSHubAdapter,
+)
 
 
 class AcquisitionRuntimeConfigurationError(RuntimeError):
@@ -72,10 +79,12 @@ def _create_feed_artifact_runtime(
         staging_root=staging_root,
         canonical_root=canonical_root,
         scanner=BubblewrapClamAVScanner(sandbox),
-        structural_detector=BubblewrapFeedStructureDetector(sandbox),
+        structural_detector=BubblewrapArtifactStructureDetector(sandbox),
         safe_parsers={
             "rss": BubblewrapFeedSafeParser(sandbox, expected_format="rss"),
             "atom": BubblewrapFeedSafeParser(sandbox, expected_format="atom"),
+            "json": BubblewrapListingSafeParser(sandbox, expected_format="json"),
+            "html": BubblewrapListingSafeParser(sandbox, expected_format="html"),
         },
     )
 
@@ -97,9 +106,7 @@ def create_phase3_acquisition_worker(
 ) -> Phase3AcquisitionWorker:
     """Compose the repository-approved Phase 3 runtime without unsafe defaults."""
 
-    internal_services = _create_internal_service_registry(
-        runtime_settings=runtime_settings
-    )
+    internal_services = _create_internal_service_registry(runtime_settings=runtime_settings)
     guarded_http_client = GuardedHTTPClient(
         guard=OutboundEgressGuard(internal_services=internal_services)
     )
@@ -108,6 +115,8 @@ def create_phase3_acquisition_worker(
             FeedParserAdapter(http_client=guarded_http_client),
             RSSHubAdapter(http_client=guarded_http_client),
             RSSBridgeAdapter(http_client=guarded_http_client),
+            DirectJSONAPIAdapter(http_client=guarded_http_client),
+            HTMLListingAdapter(http_client=guarded_http_client),
         ),
         artifact_runtime=_create_feed_artifact_runtime(runtime_settings=runtime_settings),
     )

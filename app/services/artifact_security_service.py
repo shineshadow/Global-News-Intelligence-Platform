@@ -71,10 +71,16 @@ class ParserResult:
     parser_version: str
     reason_code: str | None = None
     evidence: Mapping[str, Any] | None = None
+    normalized_payload: Mapping[str, Any] | None = None
 
 
 class ExactSafeParser(Protocol):
-    async def parse(self, path: Path) -> ParserResult: ...
+    async def parse(
+        self,
+        path: Path,
+        *,
+        configuration: Mapping[str, Any],
+    ) -> ParserResult: ...
 
 
 @dataclass(frozen=True)
@@ -110,6 +116,7 @@ class ArtifactIngestRequest:
     allowed_format_slugs: frozenset[str]
     chunks: Iterable[bytes]
     retrieval_provenance: Mapping[str, Any]
+    parser_configuration: Mapping[str, Any] = field(default_factory=dict)
     original_locator: str | None = None
     max_bytes: int = 50 * 1024 * 1024
 
@@ -123,6 +130,7 @@ class ArtifactSecurityOutcome:
     artifact_id: int | None = None
     rejection_id: int | None = None
     reason_code: str | None = None
+    normalized_payload: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -256,7 +264,10 @@ class DeletionFirstArtifactRuntime:
                     detected=detected,
                 )
             try:
-                parser_result = await parser.parse(staged.path)
+                parser_result = await parser.parse(
+                    staged.path,
+                    configuration=request.parser_configuration,
+                )
             except Exception as exc:
                 raise _SecurityRejection(
                     "safe_parser_failure",
@@ -315,6 +326,7 @@ class DeletionFirstArtifactRuntime:
             byte_length=staged.byte_length,
             format_slug=detected.format_slug,
             artifact_id=artifact_id,
+            normalized_payload=parser_result.normalized_payload,
         )
 
     async def preflight(self, allowed_format_slugs: frozenset[str]) -> None:
@@ -329,7 +341,10 @@ class DeletionFirstArtifactRuntime:
                 + ", ".join(sorted(missing_parsers))
                 + "."
             )
-        if allowed_format_slugs & {"rss", "atom"} and self._structural_detector is None:
+        if (
+            allowed_format_slugs & {"rss", "atom", "html", "json"}
+            and self._structural_detector is None
+        ):
             raise ArtifactSecurityUnavailable(
                 "Required structural feed detector is unavailable before retrieval."
             )

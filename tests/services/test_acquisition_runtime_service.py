@@ -67,7 +67,7 @@ def test_empty_installation_registry_fails_generated_service_lookup_closed() -> 
         registry.require("endpoint-supplied-bypass")
 
 
-def test_phase3_worker_composes_exact_generated_feed_versions(tmp_path) -> None:
+def test_phase3_worker_composes_exact_acquisition_adapter_versions(tmp_path) -> None:
     runtime_settings = _settings(
         AcquisitionInternalServiceSettings(
             identity="local-rsshub",
@@ -89,4 +89,6 @@ def test_phase3_worker_composes_exact_generated_feed_versions(tmp_path) -> None:
         ("feed_parser", "1"),
         ("rsshub", "1"),
         ("rss_bridge", "1"),
+        ("direct_json_api", "1"),
+        ("html_listing", "1"),
     }

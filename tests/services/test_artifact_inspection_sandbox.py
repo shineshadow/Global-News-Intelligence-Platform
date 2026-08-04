@@ -9,6 +9,7 @@ from app.services.artifact_inspection_sandbox import (
     BubblewrapFeedSafeParser,
     BubblewrapFeedStructureDetector,
     BubblewrapInspectionSandbox,
+    BubblewrapListingSafeParser,
     ClamAVSandboxConfiguration,
     InspectionSandboxLimits,
     InspectionSandboxUnavailable,
@@ -30,10 +31,7 @@ def _configuration(
     signatures.mkdir()
     (signatures / "daily.cvd").write_bytes(b"test signatures")
     worker_path = (
-        Path(__file__).resolve().parents[2]
-        / "app"
-        / "services"
-        / worker
+        Path(__file__).resolve().parents[2] / "app" / "services" / worker
         if worker == "artifact_inspection_worker.py"
         else FIXTURE_ROOT / worker
     )
@@ -55,9 +53,7 @@ async def test_probe_verifies_scanner_and_credential_free_namespaces(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("GNI_SANDBOX_TEST_SECRET", "must-not-cross-boundary")
-    sandbox = BubblewrapInspectionSandbox(
-        configuration=_configuration(tmp_path)
-    )
+    sandbox = BubblewrapInspectionSandbox(configuration=_configuration(tmp_path))
 
     verdict = await sandbox.probe()
 
@@ -148,9 +144,7 @@ async def test_invalid_or_excessive_worker_output_fails_closed(
     worker,
     message,
 ) -> None:
-    sandbox = BubblewrapInspectionSandbox(
-        configuration=_configuration(tmp_path, worker=worker)
-    )
+    sandbox = BubblewrapInspectionSandbox(configuration=_configuration(tmp_path, worker=worker))
 
     with pytest.raises(InspectionSandboxViolation, match=message):
         await sandbox.probe()
@@ -168,6 +162,48 @@ async def test_missing_clamav_or_signatures_fails_readiness_closed(tmp_path) -> 
     assert await scanner.ready() is False
     with pytest.raises(InspectionSandboxUnavailable):
         await scanner.scan(_artifact(tmp_path, b"clean"))
+
+
+@pytest.mark.parametrize(
+    ("payload", "format_slug", "configuration", "expected_url"),
+    [
+        (
+            b'{"data":{"items":[{"href":"/one","headline":"One"}]}}',
+            "json",
+            {
+                "items_path": ["data", "items"],
+                "fields": {"url": ["href"], "title": ["headline"]},
+            },
+            "/one",
+        ),
+        (
+            b'<html><body><article class="story"><a href="/two"><h2>Two</h2></a></article></body></html>',
+            "html",
+            {
+                "item_selector": "article.story",
+                "fields": {
+                    "url": {"selector": "a", "attribute": "href"},
+                    "title": {"selector": "h2"},
+                },
+            },
+            "/two",
+        ),
+    ],
+)
+async def test_listing_parser_extracts_bounded_records_inside_sandbox(
+    tmp_path, payload, format_slug, configuration, expected_url
+) -> None:
+    sandbox = BubblewrapInspectionSandbox(configuration=_configuration(tmp_path))
+    parser = BubblewrapListingSafeParser(sandbox, expected_format=format_slug)
+
+    result = await parser.parse(_artifact(tmp_path, payload), configuration=configuration)
+
+    assert result.valid is True
+    assert result.normalized_payload == {
+        "items": [{"title": "One" if format_slug == "json" else "Two", "url": expected_url}]
+    }
+    assert "normalized_listing" not in result.evidence
+    assert result.evidence["seccomp_mode"] == 2
 
 
 @pytest.mark.parametrize(

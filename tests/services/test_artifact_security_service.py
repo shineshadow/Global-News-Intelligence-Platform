@@ -66,7 +66,7 @@ class FakeParser:
     raises: bool = False
     valid_provenance: bool = True
 
-    async def parse(self, path: Path) -> ParserResult:
+    async def parse(self, path: Path, *, configuration=None) -> ParserResult:
         assert path.exists()
         if self.raises:
             raise RuntimeError("parser crashed")

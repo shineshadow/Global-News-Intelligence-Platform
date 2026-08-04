@@ -66,7 +66,7 @@ class FakeFeedAdapter:
             provenance={"test": "guarded"},
         )
 
-    async def normalize(self, retrieval):
+    async def normalize(self, retrieval, *, inspected_payload=None):
         fetch = FeedFetchResult(
             requested_url=retrieval.requested_url,
             final_url=retrieval.final_url,
