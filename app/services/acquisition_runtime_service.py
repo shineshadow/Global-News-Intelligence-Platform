@@ -6,6 +6,7 @@ from app.config import Settings, settings
 from app.database import async_session_factory
 from app.services.acquisition_worker_service import Phase3AcquisitionWorker
 from app.services.artifact_inspection_sandbox import (
+    BubblewrapArchiveExtractor,
     BubblewrapArtifactStructureDetector,
     BubblewrapClamAVScanner,
     BubblewrapFeedSafeParser,
@@ -81,6 +82,7 @@ def _create_feed_artifact_runtime(
         staging_root=staging_root,
         canonical_root=canonical_root,
         scanner=BubblewrapClamAVScanner(sandbox),
+        archive_extractor=BubblewrapArchiveExtractor(sandbox),
         structural_detector=BubblewrapArtifactStructureDetector(sandbox),
         safe_parsers={
             "rss": BubblewrapFeedSafeParser(sandbox, expected_format="rss"),

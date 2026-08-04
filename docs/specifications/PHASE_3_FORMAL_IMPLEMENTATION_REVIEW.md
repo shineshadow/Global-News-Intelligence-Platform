@@ -12,6 +12,14 @@
 > the `d3f5a7b9c1e4` review and must not be presented as a review of the amended
 > matrix. The outcome remains blocked pending a new formal review.
 
+> **Post-review archive remediation candidate (2026-08-04):** Migration
+> `a9c1e3f5b7d2` and
+> `PHASE_3_ARCHIVE_TREE_INSPECTION_AND_PROMOTION.md` now provide recursive
+> sandbox extraction, complete-tree deletion/promotion, archive controls, and
+> nested Artifact provenance for proofs 23-26. This is implementation evidence,
+> not a retroactive change to the historical disposition below. The proofs and
+> review outcome remain blocked until the complete formal review is rerun.
+
 ## Decision
 
 Phase 3 does not yet pass its formal implementation freeze. The repository is
@@ -160,7 +168,8 @@ non-activating, and none should be presented as live-approved by this review.
 ## Required Remediation Sequence
 
 1. Implement recursive container/archive inspection and all-or-nothing
-   Artifact-tree promotion for proofs 23-26.
+   Artifact-tree promotion for proofs 23-26. **Implemented candidate at
+   `a9c1e3f5b7d2`; formal rerun pending.**
 2. Implement robots acquisition, parsing, persistence, default enforcement,
    and exact owner-override proof to complete amended proof 34. Credential
    identity, provider-response authority, and their owner-control path are now

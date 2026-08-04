@@ -55,6 +55,14 @@ class _DirectListingAdapter:
         self._validate_configuration(configuration)
         return frozenset({self.endpoint_format})
 
+    def allowed_archive_member_formats(
+        self,
+        endpoint: SourceEndpoint,
+        *,
+        configuration: dict[str, Any],
+    ) -> frozenset[str]:
+        return frozenset()
+
     async def retrieve(
         self,
         endpoint: SourceEndpoint,

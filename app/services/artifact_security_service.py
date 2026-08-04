@@ -27,6 +27,12 @@ from app.models import (
     ArtifactRejection,
     ArtifactSignatureRelease,
 )
+from app.services.artifact_archive_service import (
+    ARCHIVE_FORMAT_SLUGS,
+    DEFAULT_ARCHIVE_LIMITS,
+    ArchiveInspectionLimits,
+    ExactArchiveExtractor,
+)
 from app.services.artifact_signature_service import (
     PINNED_RELEASE_PATH,
     load_repository_pinned_release,
@@ -119,6 +125,9 @@ class ArtifactIngestRequest:
     parser_configuration: Mapping[str, Any] = field(default_factory=dict)
     original_locator: str | None = None
     max_bytes: int = 50 * 1024 * 1024
+    archive_member_format_slugs: frozenset[str] = frozenset()
+    archive_limits: ArchiveInspectionLimits = DEFAULT_ARCHIVE_LIMITS
+    archive_policy_evidence: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -131,6 +140,7 @@ class ArtifactSecurityOutcome:
     rejection_id: int | None = None
     reason_code: str | None = None
     normalized_payload: Mapping[str, Any] | None = None
+    artifact_tree_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -141,6 +151,8 @@ class _DetectedFormat:
     detector_name: str = DETECTOR_NAME
     detector_version: str = DETECTOR_VERSION
     detector_evidence: Mapping[str, Any] = field(default_factory=dict)
+    is_container: bool = False
+    is_compression: bool = False
 
 
 @dataclass(frozen=True)
@@ -148,6 +160,26 @@ class _StagedPayload:
     path: Path
     content_hash: str
     byte_length: int
+    workspace: Path
+
+
+@dataclass
+class _InspectedArtifact:
+    staged: _StagedPayload
+    detected: _DetectedFormat
+    scanner_result: ScannerResult
+    parser_result: ParserResult
+    original_filename: str
+    member_path: str | None = None
+    full_member_path: str | None = None
+    children: list[_InspectedArtifact] = field(default_factory=list)
+
+
+@dataclass
+class _ArchiveTreeState:
+    root_byte_length: int
+    member_count: int = 0
+    total_uncompressed_bytes: int = 0
 
 
 class _SecurityRejection(Exception):
@@ -190,11 +222,13 @@ class DeletionFirstArtifactRuntime:
         scanner: MandatoryArtifactScanner,
         safe_parsers: Mapping[str, ExactSafeParser],
         structural_detector: ExactStructuralDetector | None = None,
+        archive_extractor: ExactArchiveExtractor | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._scanner = scanner
         self._safe_parsers = dict(safe_parsers)
         self._structural_detector = structural_detector
+        self._archive_extractor = archive_extractor
         self._staging_root = self._prepare_root(staging_root, mode=0o700)
         self._canonical_root = self._prepare_root(canonical_root, mode=0o750)
         if self._staging_root == self._canonical_root:
@@ -237,53 +271,27 @@ class DeletionFirstArtifactRuntime:
                 rejection_id=rejection_id,
                 reason_code=failure.rejection.reason_code,
             )
-        detected: _DetectedFormat | None = None
-        scanner_result: ScannerResult | None = None
-        parser_result: ParserResult | None = None
+        tree: _InspectedArtifact | None = None
         try:
-            detected = await self._detect(
-                staged.path,
-                release.id,
+            tree = await self._inspect_node(
+                staged=staged,
+                release_id=release.id,
+                request=request,
+                original_filename=request.original_filename,
                 allowed_format_slugs=request.allowed_format_slugs,
+                depth=0,
+                member_path=None,
+                full_member_path=None,
+                state=_ArchiveTreeState(root_byte_length=staged.byte_length),
             )
-            await self._validate_declared_evidence(request, detected)
-            try:
-                scanner_result = await self._scanner.scan(staged.path)
-            except Exception as exc:
-                raise _SecurityRejection(
-                    "scanner_failure",
-                    "Mandatory scanner failed while inspecting staged bytes.",
-                    detected=detected,
-                ) from exc
-            self._validate_scanner_result(scanner_result, detected)
-            parser = self._safe_parsers.get(detected.format_slug)
-            if parser is None:
-                raise _SecurityRejection(
-                    "unsupported_safe_parser",
-                    "No exact safe parser is registered for the detected format.",
-                    detected=detected,
-                )
-            try:
-                parser_result = await parser.parse(
-                    staged.path,
-                    configuration=request.parser_configuration,
-                )
-            except Exception as exc:
-                raise _SecurityRejection(
-                    "safe_parser_failure",
-                    "Exact safe parser failed while inspecting staged bytes.",
-                    detected=detected,
-                ) from exc
-            self._validate_parser_result(parser_result, detected)
-            self._verify_staged_identity(staged)
         except _SecurityRejection as rejection:
-            self._delete_and_verify(staged.path)
+            self._delete_tree_and_verify(staged.workspace)
             rejection_id = await self._persist_rejection(
                 request=request,
                 staged=staged,
                 release=release,
                 rejection=rejection,
-                scanner_result=scanner_result,
+                scanner_result=(tree.scanner_result if tree is not None else None),
             )
             return ArtifactSecurityOutcome(
                 accepted=False,
@@ -296,45 +304,271 @@ class DeletionFirstArtifactRuntime:
                 reason_code=rejection.reason_code,
             )
         except Exception:
-            self._delete_and_verify(staged.path)
+            self._delete_tree_and_verify(staged.workspace)
             raise
 
-        assert detected is not None
-        assert scanner_result is not None
-        assert parser_result is not None
-        final_path, created = self._promote(staged)
+        assert tree is not None
+        promoted: list[tuple[_InspectedArtifact, Path, bool]] = []
         try:
-            artifact_id = await self._persist_acceptance(
+            for node in self._flatten_tree(tree):
+                final_path, created = self._promote(node.staged)
+                promoted.append((node, final_path, created))
+            artifact_ids = await self._persist_tree_acceptance(
                 request=request,
-                staged=staged,
-                final_path=final_path,
-                detected=detected,
+                tree=tree,
+                promoted=promoted,
                 release=release,
-                scanner_result=scanner_result,
-                parser_result=parser_result,
             )
         except Exception as exc:
-            if created:
-                final_path.unlink(missing_ok=True)
+            for _node, final_path, created in promoted:
+                if created:
+                    final_path.unlink(missing_ok=True)
+            self._delete_tree_and_verify(staged.workspace)
             raise ArtifactPromotionError(
-                "Accepted bytes could not be persisted; unreferenced promotion was removed."
+                "Artifact tree could not be promoted atomically; unreferenced bytes were removed."
             ) from exc
+        self._delete_tree_and_verify(staged.workspace)
 
         return ArtifactSecurityOutcome(
             accepted=True,
             content_hash=staged.content_hash,
             byte_length=staged.byte_length,
-            format_slug=detected.format_slug,
-            artifact_id=artifact_id,
-            normalized_payload=parser_result.normalized_payload,
+            format_slug=tree.detected.format_slug,
+            artifact_id=artifact_ids[0],
+            normalized_payload=tree.parser_result.normalized_payload,
+            artifact_tree_ids=tuple(artifact_ids),
         )
+
+    async def _inspect_node(
+        self,
+        *,
+        staged: _StagedPayload,
+        release_id: int,
+        request: ArtifactIngestRequest,
+        original_filename: str,
+        allowed_format_slugs: frozenset[str],
+        depth: int,
+        member_path: str | None,
+        full_member_path: str | None,
+        state: _ArchiveTreeState,
+    ) -> _InspectedArtifact:
+        try:
+            detected = await self._detect(
+                staged.path,
+                release_id,
+                allowed_format_slugs=allowed_format_slugs,
+            )
+        except _SecurityRejection as rejection:
+            if full_member_path is not None:
+                rejection.metadata.setdefault("member_path", full_member_path)
+            raise
+        if member_path is None:
+            await self._validate_declared_evidence(request, detected)
+        else:
+            await self._validate_member_evidence(original_filename, detected)
+        try:
+            scanner_result = await self._scanner.scan(staged.path)
+        except Exception as exc:
+            raise _SecurityRejection(
+                "scanner_failure",
+                "Mandatory scanner failed while inspecting staged bytes.",
+                detected=detected,
+                metadata={"member_path": full_member_path},
+            ) from exc
+        self._validate_scanner_result(
+            scanner_result,
+            detected,
+            member_path=full_member_path,
+        )
+
+        is_archive = detected.is_container or detected.is_compression
+        children: list[_InspectedArtifact] = []
+        if is_archive:
+            if detected.format_slug not in ARCHIVE_FORMAT_SLUGS:
+                raise _SecurityRejection(
+                    "unsupported_archive_format",
+                    "Detected container has no reviewed recursive extractor.",
+                    detected=detected,
+                    metadata={"member_path": full_member_path},
+                )
+            if self._archive_extractor is None:
+                raise _SecurityRejection(
+                    "archive_extractor_unavailable",
+                    "Required archive extractor is unavailable.",
+                    detected=detected,
+                    metadata={"member_path": full_member_path},
+                )
+            if depth >= request.archive_limits.max_depth:
+                raise _SecurityRejection(
+                    "archive_depth_exceeded",
+                    "Archive nesting exceeded the effective owner-selected depth limit.",
+                    detected=detected,
+                    metadata={"member_path": full_member_path, "depth": depth},
+                )
+            if not request.archive_member_format_slugs:
+                raise _SecurityRejection(
+                    "archive_member_allowlist_missing",
+                    "Archive acquisition has no exact member-format allowlist.",
+                    detected=detected,
+                )
+            output_directory = Path(
+                tempfile.mkdtemp(prefix=f"members-{depth}-", dir=staged.workspace)
+            )
+            os.chmod(output_directory, 0o700)
+            try:
+                extraction = await self._archive_extractor.extract(
+                    staged.path,
+                    format_slug=detected.format_slug,
+                    original_filename=original_filename,
+                    output_directory=output_directory,
+                    limits=request.archive_limits,
+                )
+            except Exception as exc:
+                raise _SecurityRejection(
+                    "archive_inspection_failure",
+                    "Sandboxed archive extraction failed closed.",
+                    detected=detected,
+                    metadata={"member_path": full_member_path},
+                ) from exc
+            if not extraction.valid:
+                raise _SecurityRejection(
+                    extraction.reason_code or "archive_rejected",
+                    "Sandboxed archive inspection rejected the complete acquired tree.",
+                    detected=detected,
+                    metadata={
+                        "member_path": full_member_path,
+                        "archive_evidence": dict(extraction.evidence or {}),
+                    },
+                )
+            parser_result = ParserResult(
+                valid=True,
+                parser_name=extraction.parser_name,
+                parser_version=extraction.parser_version,
+                evidence={
+                    **dict(extraction.evidence or {}),
+                    "effective_limits": request.archive_limits.as_dict(),
+                    "owner_policy": dict(request.archive_policy_evidence),
+                },
+            )
+            self._validate_parser_result(
+                parser_result,
+                detected,
+                member_path=full_member_path,
+            )
+            for member in extraction.members:
+                child_full_path = (
+                    f"{full_member_path}!/{member.member_path}"
+                    if full_member_path
+                    else member.member_path
+                )
+                state.member_count += 1
+                state.total_uncompressed_bytes += member.byte_length
+                if state.member_count > request.archive_limits.max_members:
+                    raise _SecurityRejection(
+                        "archive_member_count_exceeded",
+                        "Archive tree exceeded the effective member-count limit.",
+                        detected=detected,
+                    )
+                if (
+                    state.total_uncompressed_bytes
+                    > request.archive_limits.max_total_uncompressed_bytes
+                ):
+                    raise _SecurityRejection(
+                        "archive_expansion_size_exceeded",
+                        "Archive tree exceeded the effective expanded-byte limit.",
+                        detected=detected,
+                    )
+                if (
+                    state.total_uncompressed_bytes
+                    > state.root_byte_length * request.archive_limits.max_expansion_ratio
+                ):
+                    raise _SecurityRejection(
+                        "archive_tree_expansion_ratio_exceeded",
+                        "Complete archive tree exceeded the effective expansion ratio.",
+                        detected=detected,
+                        metadata={"member_path": child_full_path},
+                    )
+                member_hash, member_size = _hash_file(member.staged_path)
+                if member_size != member.byte_length:
+                    raise _SecurityRejection(
+                        "archive_member_changed",
+                        "Extracted archive member changed before recursive inspection.",
+                        detected=detected,
+                    )
+                children.append(
+                    await self._inspect_node(
+                        staged=_StagedPayload(
+                            path=member.staged_path,
+                            content_hash=member_hash,
+                            byte_length=member_size,
+                            workspace=staged.workspace,
+                        ),
+                        release_id=release_id,
+                        request=request,
+                        original_filename=member.member_path,
+                        allowed_format_slugs=request.archive_member_format_slugs,
+                        depth=depth + 1,
+                        member_path=member.member_path,
+                        full_member_path=child_full_path,
+                        state=state,
+                    )
+                )
+        else:
+            parser = self._safe_parsers.get(detected.format_slug)
+            if parser is None:
+                raise _SecurityRejection(
+                    "unsupported_safe_parser",
+                    "No exact safe parser is registered for the detected format.",
+                    detected=detected,
+                    metadata={"member_path": full_member_path},
+                )
+            try:
+                parser_result = await parser.parse(
+                    staged.path,
+                    configuration=request.parser_configuration,
+                )
+            except Exception as exc:
+                raise _SecurityRejection(
+                    "safe_parser_failure",
+                    "Exact safe parser failed while inspecting staged bytes.",
+                    detected=detected,
+                    metadata={"member_path": full_member_path},
+                ) from exc
+            self._validate_parser_result(
+                parser_result,
+                detected,
+                member_path=full_member_path,
+            )
+        self._verify_staged_identity(staged)
+        return _InspectedArtifact(
+            staged=staged,
+            detected=detected,
+            scanner_result=scanner_result,
+            parser_result=parser_result,
+            original_filename=original_filename,
+            member_path=member_path,
+            full_member_path=full_member_path,
+            children=children,
+        )
+
+    @staticmethod
+    def _flatten_tree(root: _InspectedArtifact) -> list[_InspectedArtifact]:
+        flattened: list[_InspectedArtifact] = []
+
+        def visit(node: _InspectedArtifact) -> None:
+            flattened.append(node)
+            for child in node.children:
+                visit(child)
+
+        visit(root)
+        return flattened
 
     async def preflight(self, allowed_format_slugs: frozenset[str]) -> None:
         """Prove mandatory inspection dependencies before outbound retrieval."""
 
         if not allowed_format_slugs:
             raise ValueError("Artifact preflight requires a non-empty format allowlist.")
-        missing_parsers = allowed_format_slugs - self._safe_parsers.keys()
+        missing_parsers = allowed_format_slugs - ARCHIVE_FORMAT_SLUGS - self._safe_parsers.keys()
         if missing_parsers:
             raise ArtifactSecurityUnavailable(
                 "Required safe parsers are unavailable for: "
@@ -342,11 +576,15 @@ class DeletionFirstArtifactRuntime:
                 + "."
             )
         if (
-            allowed_format_slugs & {"rss", "atom", "html", "json"}
+            allowed_format_slugs & {"rss", "atom", "html", "json", "zip", "tar"}
             and self._structural_detector is None
         ):
             raise ArtifactSecurityUnavailable(
-                "Required structural feed detector is unavailable before retrieval."
+                "Required structural Artifact detector is unavailable before retrieval."
+            )
+        if allowed_format_slugs & ARCHIVE_FORMAT_SLUGS and self._archive_extractor is None:
+            raise ArtifactSecurityUnavailable(
+                "Required archive extractor is unavailable before retrieval."
             )
         await self._require_infrastructure()
 
@@ -402,9 +640,11 @@ class DeletionFirstArtifactRuntime:
             return release
 
     def _stage(self, request: ArtifactIngestRequest) -> _StagedPayload:
+        workspace = Path(tempfile.mkdtemp(prefix=".acquisition-", dir=self._staging_root))
+        os.chmod(workspace, 0o700)
         descriptor, raw_path = tempfile.mkstemp(
             prefix=".incoming-",
-            dir=self._staging_root,
+            dir=workspace,
         )
         path = Path(raw_path)
         digest = hashlib.sha256()
@@ -438,19 +678,21 @@ class DeletionFirstArtifactRuntime:
                 path=path,
                 content_hash=digest.hexdigest(),
                 byte_length=byte_length,
+                workspace=workspace,
             )
         except _SecurityRejection as rejection:
             try:
                 os.close(descriptor)
             except OSError:
                 pass
-            self._delete_and_verify(path)
+            self._delete_tree_and_verify(workspace)
             raise _StagingRejection(
                 rejection=rejection,
                 staged=_StagedPayload(
                     path=path,
                     content_hash=digest.hexdigest(),
                     byte_length=byte_length,
+                    workspace=workspace,
                 ),
             ) from rejection
         except Exception:
@@ -458,7 +700,7 @@ class DeletionFirstArtifactRuntime:
                 os.close(descriptor)
             except OSError:
                 pass
-            self._delete_and_verify(path)
+            self._delete_tree_and_verify(workspace)
             raise
 
     async def _detect(
@@ -542,6 +784,8 @@ class DeletionFirstArtifactRuntime:
             format_id=artifact_format.id,
             format_slug=artifact_format.slug,
             signature_ids=tuple(sorted(identifiers)),
+            is_container=artifact_format.is_container,
+            is_compression=artifact_format.is_compression,
             detector_evidence={
                 "method": "repository_pinned_byte_signature",
             },
@@ -615,6 +859,8 @@ class DeletionFirstArtifactRuntime:
             detector_name=result.detector_name,
             detector_version=result.detector_version,
             detector_evidence=dict(result.evidence or {}),
+            is_container=artifact_format.is_container,
+            is_compression=artifact_format.is_compression,
         )
 
     @staticmethod
@@ -715,10 +961,43 @@ class DeletionFirstArtifactRuntime:
                 detected=detected,
             )
 
+    async def _validate_member_evidence(
+        self,
+        original_filename: str,
+        detected: _DetectedFormat,
+    ) -> None:
+        suffixes = [
+            suffix[1:].lower() for suffix in Path(original_filename).suffixes if len(suffix) > 1
+        ]
+        if not suffixes:
+            raise _SecurityRejection(
+                "archive_member_extension_missing",
+                "Archive member lacks independent extension evidence.",
+                detected=detected,
+                metadata={"member_path": original_filename},
+            )
+        async with self._session_factory() as session:
+            extension_match = await session.scalar(
+                select(ArtifactFormatExtension.id).where(
+                    ArtifactFormatExtension.artifact_format_id == detected.format_id,
+                    ArtifactFormatExtension.extension == suffixes[-1],
+                    ArtifactFormatExtension.is_active.is_(True),
+                )
+            )
+        if extension_match is None:
+            raise _SecurityRejection(
+                "archive_member_extension_mismatch",
+                "Archive member extension disagrees with its exact detected identity.",
+                detected=detected,
+                metadata={"member_path": original_filename, "extension_chain": suffixes},
+            )
+
     @staticmethod
     def _validate_scanner_result(
         result: ScannerResult,
         detected: _DetectedFormat,
+        *,
+        member_path: str | None = None,
     ) -> None:
         if not isinstance(result, ScannerResult) or not isinstance(result.clean, bool):
             raise _SecurityRejection(
@@ -744,13 +1023,18 @@ class DeletionFirstArtifactRuntime:
                 result.reason_code or "security_scanner_match",
                 "Mandatory scanner rejected the payload.",
                 detected=detected,
-                metadata={"scanner_evidence": dict(result.evidence or {})},
+                metadata={
+                    "scanner_evidence": dict(result.evidence or {}),
+                    "member_path": member_path,
+                },
             )
 
     @staticmethod
     def _validate_parser_result(
         result: ParserResult,
         detected: _DetectedFormat,
+        *,
+        member_path: str | None = None,
     ) -> None:
         if not isinstance(result, ParserResult) or not isinstance(result.valid, bool):
             raise _SecurityRejection(
@@ -774,7 +1058,10 @@ class DeletionFirstArtifactRuntime:
                 result.reason_code or "safe_parser_rejected",
                 "Exact safe parser rejected the payload.",
                 detected=detected,
-                metadata={"parser_evidence": dict(result.evidence or {})},
+                metadata={
+                    "parser_evidence": dict(result.evidence or {}),
+                    "member_path": member_path,
+                },
             )
 
     @staticmethod
@@ -840,6 +1127,173 @@ class DeletionFirstArtifactRuntime:
             temporary.unlink(missing_ok=True)
             self._delete_and_verify(staged.path)
             raise
+
+    async def _persist_tree_acceptance(
+        self,
+        *,
+        request: ArtifactIngestRequest,
+        tree: _InspectedArtifact,
+        promoted: list[tuple[_InspectedArtifact, Path, bool]],
+        release: ArtifactSignatureRelease,
+    ) -> list[int]:
+        promoted_paths = {id(node): path for node, path, _created in promoted}
+        artifact_ids: list[int] = []
+        artifact_by_node: dict[int, AcquisitionArtifact] = {}
+        async with self._session_factory() as session, session.begin():
+            for node in self._flatten_tree(tree):
+                await session.execute(
+                    text("SELECT pg_advisory_xact_lock(hashtext(:identity))"),
+                    {"identity": f"artifact-payload:{node.staged.content_hash}"},
+                )
+                final_path = promoted_paths[id(node)]
+                storage_reference = final_path.relative_to(self._canonical_root).as_posix()
+                payload = await session.scalar(
+                    select(ArtifactPayload).where(
+                        ArtifactPayload.content_hash == node.staged.content_hash,
+                        ArtifactPayload.byte_length == node.staged.byte_length,
+                    )
+                )
+                if payload is None:
+                    payload = ArtifactPayload(
+                        content_hash=node.staged.content_hash,
+                        byte_length=node.staged.byte_length,
+                        storage_backend="filesystem",
+                        storage_reference=storage_reference,
+                        artifact_format_id=node.detected.format_id,
+                    )
+                    session.add(payload)
+                    await session.flush()
+                elif (
+                    payload.artifact_format_id != node.detected.format_id
+                    or payload.storage_backend != "filesystem"
+                    or payload.storage_reference != storage_reference
+                ):
+                    raise ArtifactPromotionError(
+                        "Existing payload identity conflicts with tree format or storage."
+                    )
+
+                parent = None
+                if node is not tree:
+                    parent_node = next(
+                        candidate
+                        for candidate in self._flatten_tree(tree)
+                        if any(child is node for child in candidate.children)
+                    )
+                    parent = artifact_by_node[id(parent_node)]
+                if parent is None:
+                    artifact = await session.scalar(
+                        select(AcquisitionArtifact).where(
+                            AcquisitionArtifact.source_endpoint_id == request.source_endpoint_id,
+                            AcquisitionArtifact.resource_identity == request.resource_identity,
+                            AcquisitionArtifact.payload_id == payload.id,
+                            AcquisitionArtifact.parent_artifact_id.is_(None),
+                        )
+                    )
+                    resource_identity = request.resource_identity
+                else:
+                    artifact = await session.scalar(
+                        select(AcquisitionArtifact).where(
+                            AcquisitionArtifact.parent_artifact_id == parent.id,
+                            AcquisitionArtifact.member_path == node.member_path,
+                        )
+                    )
+                    resource_identity = f"{request.resource_identity}!/{node.full_member_path}"
+                    if artifact is not None and artifact.payload_id != payload.id:
+                        raise ArtifactPromotionError(
+                            "Existing archive member path belongs to different accepted bytes."
+                        )
+                if artifact is None:
+                    newer = aliased(AcquisitionArtifact)
+                    previous = await session.scalar(
+                        select(AcquisitionArtifact)
+                        .where(
+                            AcquisitionArtifact.source_endpoint_id == request.source_endpoint_id,
+                            AcquisitionArtifact.resource_identity == resource_identity,
+                            ~exists(
+                                select(newer.id).where(
+                                    newer.supersedes_artifact_id == AcquisitionArtifact.id
+                                )
+                            ),
+                        )
+                        .order_by(AcquisitionArtifact.accepted_at.desc())
+                        .limit(1)
+                    )
+                    artifact = AcquisitionArtifact(
+                        source_endpoint_id=request.source_endpoint_id,
+                        payload_id=payload.id,
+                        parent_artifact_id=parent.id if parent is not None else None,
+                        supersedes_artifact_id=(
+                            previous.id
+                            if previous is not None and previous.payload_id != payload.id
+                            else None
+                        ),
+                        resource_identity=resource_identity,
+                        member_path=node.member_path,
+                        adapter_slug=request.adapter_slug,
+                        adapter_version=request.adapter_version,
+                        configuration_version=request.configuration_version,
+                        signature_release_id=release.id,
+                        detector_name=node.detected.detector_name,
+                        detector_version=node.detected.detector_version,
+                        scanner_name=node.scanner_result.scanner_name,
+                        scanner_version=node.scanner_result.scanner_version,
+                        scanner_signature_version=node.scanner_result.signature_version,
+                        safe_parser_name=node.parser_result.parser_name,
+                        safe_parser_version=node.parser_result.parser_version,
+                        detection_confidence=Decimal("1.0000"),
+                        identification_evidence={
+                            "signature_identifiers": list(node.detected.signature_ids),
+                            "detector": dict(node.detected.detector_evidence or {}),
+                            "scanner": dict(node.scanner_result.evidence or {}),
+                            "parser": dict(node.parser_result.evidence or {}),
+                            "pinned_release": PINNED_RELEASE_PATH.name,
+                            "archive_member_path": node.full_member_path,
+                        },
+                        retrieval_provenance={
+                            **dict(request.retrieval_provenance),
+                            "archive_member_path": node.full_member_path,
+                        },
+                    )
+                    session.add(artifact)
+                    await session.flush()
+                artifact_by_node[id(node)] = artifact
+                artifact_ids.append(artifact.id)
+
+                retrieval_identity = (
+                    request.retrieval_identity
+                    if node is tree
+                    else f"{request.retrieval_identity}#archive:{node.full_member_path}"
+                )
+                observation = await session.scalar(
+                    select(AcquisitionArtifactObservation).where(
+                        AcquisitionArtifactObservation.ingestion_run_id == request.ingestion_run_id,
+                        AcquisitionArtifactObservation.retrieval_identity == retrieval_identity,
+                    )
+                )
+                if observation is None:
+                    observation = AcquisitionArtifactObservation(
+                        artifact_id=artifact.id,
+                        ingestion_run_id=request.ingestion_run_id,
+                        retrieval_identity=retrieval_identity,
+                        original_locator=request.original_locator if node is tree else None,
+                        original_filename=node.original_filename,
+                        declared_media_type=request.declared_media_type if node is tree else None,
+                        observed_media_type=request.declared_media_type if node is tree else None,
+                        extension_chain=[
+                            suffix[1:].lower() for suffix in Path(node.original_filename).suffixes
+                        ],
+                        retrieval_evidence={
+                            **dict(request.retrieval_provenance),
+                            "archive_member_path": node.full_member_path,
+                        },
+                    )
+                    session.add(observation)
+                elif observation.artifact_id != artifact.id:
+                    raise ArtifactPromotionError(
+                        "Archive retrieval identity belongs to a different Artifact."
+                    )
+            await session.flush()
+        return artifact_ids
 
     async def _persist_acceptance(
         self,
@@ -1057,6 +1511,18 @@ class DeletionFirstArtifactRuntime:
         path.unlink(missing_ok=True)
         if path.exists():
             raise ArtifactSecurityError("Rejected staged bytes could not be deleted.")
+
+    @staticmethod
+    def _delete_tree_and_verify(path: Path) -> None:
+        if path.exists():
+            if path.is_symlink():
+                path.unlink()
+            elif path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        if path.exists():
+            raise ArtifactSecurityError("Rejected staged Artifact tree could not be deleted.")
 
 
 def _require_regular_file(path: Path) -> None:

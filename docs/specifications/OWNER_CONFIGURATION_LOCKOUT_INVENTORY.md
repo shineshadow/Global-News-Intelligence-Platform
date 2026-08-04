@@ -27,7 +27,7 @@ approved a permanent lockout.
 | Adapter/legacy fallback | Fail closed for configured Phase 3 endpoint | Pending | Add exact fallback and degraded-operation policies |
 | Signature/hash/scanner bypass behavior | Always rescan known bytes | Pending | Add explicit owner acceptance path with provenance |
 | Later signature authority release | Repository bootstrap only | Pending formal proof | Add owner-controlled release candidate lifecycle |
-| Archive limits and all-or-nothing handling | Not implemented | Pending formal proofs | Include owner-configurable member/depth/ratio/action values |
+| Archive limits and all-or-nothing handling | Delete complete rejected tree under bounded defaults | Limit object wired through scoped owner authority; retention/quarantine action remains pending | Review proofs 23-26; design explicit rejected-byte quarantine/retention authority separately |
 | Canonical Artifact/history mutability | Append-only | Pending destructive-operation design | Provide explicit owner maintenance tooling distinct from ordinary mutation |
 | Migration downgrade refusal | Lossless-only | Pending | Add owner-authorized destructive downgrade tooling with backup/evidence requirements |
 | Cutover cohort size | Environment value, default one | Configurable through installation environment | Surface effective value and consider database owner policy |

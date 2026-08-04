@@ -175,6 +175,13 @@ class SourceAcquisitionAdapter(Protocol):
         configuration: dict[str, Any],
     ) -> frozenset[str]: ...
 
+    def allowed_archive_member_formats(
+        self,
+        endpoint: SourceEndpoint,
+        *,
+        configuration: dict[str, Any],
+    ) -> frozenset[str]: ...
+
     async def retrieve(
         self,
         endpoint: SourceEndpoint,

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import select, text
 
+from app.config import settings
 from app.models import (
     AcquisitionAdapter,
     AcquisitionEndpointConfiguration,
@@ -18,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def _alembic(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    environment["DATABASE_URL"] = environment["TEST_DATABASE_URL"]
+    environment["DATABASE_URL"] = settings.test_database_url or ""
     return subprocess.run(
         [sys.executable, "-m", "alembic", *arguments],
         cwd=PROJECT_ROOT,
@@ -33,7 +34,7 @@ def test_feed_cutover_migration_clean_downgrade_and_reupgrade() -> None:
     _alembic("downgrade", "f3a1c7d9e2b4")
     assert _alembic("current").stdout.strip().endswith("f3a1c7d9e2b4")
     _alembic("upgrade", "head")
-    assert _alembic("current").stdout.strip().endswith("f6a8c2d4e901 (head)")
+    assert _alembic("current").stdout.strip().endswith("a9c1e3f5b7d2 (head)")
 
 
 async def test_cutover_migration_creates_no_operational_state(
@@ -102,4 +103,4 @@ async def test_cutover_history_blocks_destructive_downgrade(
     downgrade = _alembic("downgrade", "f3a1c7d9e2b4", check=False)
     assert downgrade.returncode != 0
     assert "cutover audit history exists" in (downgrade.stdout + downgrade.stderr)
-    assert _alembic("current").stdout.strip().endswith("f6a8c2d4e901 (head)")
+    assert _alembic("current").stdout.strip().endswith("a9c1e3f5b7d2 (head)")

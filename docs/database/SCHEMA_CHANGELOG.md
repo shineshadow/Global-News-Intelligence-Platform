@@ -6,6 +6,26 @@ It does not replace Alembic migration history. Alembic remains the detailed, exe
 
 ---
 
+## 2026-08-04 — Phase 3 Archive-Tree Promotion
+
+**Revision:** `a9c1e3f5b7d2`
+**Revises:** `f6a8c2d4e901`
+**Status:** Implemented candidate
+
+Replaced global acquisition Artifact resource/payload uniqueness with a
+root-only partial unique index so identical accepted member bytes can retain
+distinct immutable parent provenance across archive versions. Nested
+uniqueness remains enforced through the existing exact
+`(parent_artifact_id, member_path)` constraint.
+
+Corrected the Artifact forward-history trigger so a changed member can
+supersede the same complete resource/member scope beneath a newer immutable
+parent archive; identical member bytes remain separate parent-scoped Artifacts
+without a false changed-byte supersession claim.
+
+Added authority-provenanced ZIP and TAR extension/media-type evidence. The
+migration adds no endpoints, cutovers, fabricated history, or API/UI tables.
+
 ## 2026-07-28 — Intelligence Calendar Phase 2 Frozen
 
 **Persistence revision:** `b8d4f0a2c315`

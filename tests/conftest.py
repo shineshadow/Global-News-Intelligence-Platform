@@ -282,7 +282,9 @@ async def truncate_test_tables() -> None:
                         ('rss', 'text/xml', 'iana', false),
                         ('atom', 'application/atom+xml', 'iana', true),
                         ('atom', 'application/xml', 'iana', false),
-                        ('atom', 'text/xml', 'iana', false)
+                        ('atom', 'text/xml', 'iana', false),
+                        ('zip', 'application/zip', 'iana', true),
+                        ('tar', 'application/x-tar', 'iana', true)
                 ) AS evidence(format_slug, media_type, authority_slug, is_preferred)
                   ON evidence.format_slug = format.slug;
 
@@ -299,7 +301,9 @@ async def truncate_test_tables() -> None:
                         ('rss', 'rss', 'rss-advisory-board', true),
                         ('rss', 'xml', 'iana', false),
                         ('atom', 'atom', 'ietf-rfc-4287', true),
-                        ('atom', 'xml', 'iana', false)
+                        ('atom', 'xml', 'iana', false),
+                        ('zip', 'zip', 'iana', true),
+                        ('tar', 'tar', 'posix', true)
                 ) AS evidence(format_slug, extension, authority_slug, is_preferred)
                   ON evidence.format_slug = format.slug;
 

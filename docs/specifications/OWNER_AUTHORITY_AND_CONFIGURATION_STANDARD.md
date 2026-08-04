@@ -89,6 +89,7 @@ acquisition.robots.enforce                       default true
 acquisition.retry_after.enforce                  default true
 acquisition.provider_hard_limits.enforce         default true
 acquisition.rate_limit.manual_poll_enforce       default true
+acquisition.archive.inspection_limits             default bounded JSON object
 ```
 
 Manual-poll authority bypasses local bucket denial while still creating an
@@ -101,6 +102,12 @@ Robots holds have their own durable bucket dimension and are evaluated through
 `acquisition.robots.enforce`. Robots retrieval and parsing are not yet
 implemented, so this is an authority integration point rather than a claim
 that robots proof 34 is complete.
+
+Archive inspection resolves the complete member/depth/expanded-byte/ratio/path
+limit object before retrieval. The shared worker validates the exact field set
+and positive integer values, consumes bounded-use authority, and passes the
+effective policy plus audit evidence into the recursive sandbox runtime. See
+`PHASE_3_ARCHIVE_TREE_INSPECTION_AND_PROMOTION.md`.
 
 ## Implementation Requirement
 

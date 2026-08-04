@@ -14,12 +14,23 @@ ROBOTS_ENFORCEMENT = "acquisition.robots.enforce"
 RETRY_AFTER_ENFORCEMENT = "acquisition.retry_after.enforce"
 PROVIDER_HARD_LIMIT_ENFORCEMENT = "acquisition.provider_hard_limits.enforce"
 MANUAL_POLL_RATE_ENFORCEMENT = "acquisition.rate_limit.manual_poll_enforce"
+ARCHIVE_INSPECTION_LIMITS = "acquisition.archive.inspection_limits"
+
+DEFAULT_ARCHIVE_INSPECTION_LIMITS = {
+    "max_depth": 4,
+    "max_members": 128,
+    "max_total_uncompressed_bytes": 256 * 1024 * 1024,
+    "max_member_bytes": 64 * 1024 * 1024,
+    "max_expansion_ratio": 100,
+    "max_member_path_bytes": 1024,
+}
 
 OWNER_POLICY_DEFAULTS: dict[str, Any] = {
     ROBOTS_ENFORCEMENT: True,
     RETRY_AFTER_ENFORCEMENT: True,
     PROVIDER_HARD_LIMIT_ENFORCEMENT: True,
     MANUAL_POLL_RATE_ENFORCEMENT: True,
+    ARCHIVE_INSPECTION_LIMITS: DEFAULT_ARCHIVE_INSPECTION_LIMITS,
 }
 
 _POLICY_KEY = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")

@@ -5,16 +5,17 @@ from pathlib import Path
 
 from sqlalchemy import text
 
+from app.config import settings
 from app.models import OwnerPolicyOverride
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "f6a8c2d4e901"
+HEAD = "a9c1e3f5b7d2"
 PREVIOUS = "d3f5a7b9c1e4"
 
 
 def _alembic(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    environment["DATABASE_URL"] = environment["TEST_DATABASE_URL"]
+    environment["DATABASE_URL"] = settings.test_database_url or ""
     return subprocess.run(
         [sys.executable, "-m", "alembic", *arguments],
         cwd=PROJECT_ROOT,

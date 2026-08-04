@@ -540,15 +540,17 @@ class AcquisitionArtifact(Base):
             name="member_scope",
         ),
         UniqueConstraint(
-            "source_endpoint_id",
-            "resource_identity",
-            "payload_id",
-            name="uq_acquisition_artifacts_resource_payload",
-        ),
-        UniqueConstraint(
             "parent_artifact_id",
             "member_path",
             name="uq_acquisition_artifacts_parent_member",
+        ),
+        Index(
+            "uq_acquisition_artifacts_root_resource_payload",
+            "source_endpoint_id",
+            "resource_identity",
+            "payload_id",
+            unique=True,
+            postgresql_where=text("parent_artifact_id IS NULL"),
         ),
         Index(
             "uq_acquisition_artifacts_supersedes",

@@ -77,6 +77,14 @@ class FeedParserAdapter:
             raise ValueError("Endpoint format is incompatible with feed_parser v1.")
         return frozenset({endpoint.endpoint_format})
 
+    def allowed_archive_member_formats(
+        self,
+        endpoint: SourceEndpoint,
+        *,
+        configuration: dict[str, Any],
+    ) -> frozenset[str]:
+        return frozenset()
+
     async def retrieve(
         self,
         endpoint: SourceEndpoint,

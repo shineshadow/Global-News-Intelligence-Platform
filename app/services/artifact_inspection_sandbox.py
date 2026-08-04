@@ -11,6 +11,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.services.artifact_archive_service import (
+    ARCHIVE_FORMAT_SLUGS,
+    ArchiveExtractionResult,
+    ArchiveInspectionLimits,
+    ExtractedArchiveMember,
+    normalized_member_path,
+)
 from app.services.artifact_security_service import (
     ParserResult,
     ScannerResult,
@@ -83,7 +90,7 @@ class InspectionSandboxLimits:
     memory_bytes: int = 2 * 1024 * 1024 * 1024
     process_count: int = 32
     open_files: int = 64
-    output_bytes: int = 64 * 1024
+    output_bytes: int = 256 * 1024
     temporary_file_bytes: int = 64 * 1024 * 1024
 
     def __post_init__(self) -> None:
@@ -144,6 +151,29 @@ class BubblewrapInspectionSandbox:
     async def detect_listing(self, artifact_path: Path) -> SandboxVerdict:
         return await self._invoke(operation="detect_listing", artifact_path=artifact_path)
 
+    async def detect_archive(self, artifact_path: Path) -> SandboxVerdict:
+        return await self._invoke(operation="detect_archive", artifact_path=artifact_path)
+
+    async def extract_archive(
+        self,
+        artifact_path: Path,
+        *,
+        format_slug: str,
+        original_filename: str,
+        output_directory: Path,
+        limits: ArchiveInspectionLimits,
+    ) -> SandboxVerdict:
+        if format_slug not in ARCHIVE_FORMAT_SLUGS:
+            raise ValueError("Archive format is unsupported by the fixed extractor.")
+        return await self._invoke(
+            operation="extract_archive",
+            artifact_path=artifact_path,
+            expected_format=format_slug,
+            output_directory=output_directory,
+            original_filename=original_filename,
+            archive_limits=limits,
+        )
+
     async def extract_listing(
         self,
         artifact_path: Path,
@@ -167,6 +197,9 @@ class BubblewrapInspectionSandbox:
         artifact_path: Path | None,
         expected_format: str | None = None,
         extraction_configuration: dict[str, Any] | None = None,
+        output_directory: Path | None = None,
+        original_filename: str | None = None,
+        archive_limits: ArchiveInspectionLimits | None = None,
     ) -> SandboxVerdict:
         configuration = self._configuration
         bubblewrap = _require_regular_executable(configuration.bubblewrap_path, "Bubblewrap")
@@ -237,6 +270,9 @@ class BubblewrapInspectionSandbox:
                     "/input/artifact",
                 )
             )
+        if output_directory is not None:
+            output = _require_empty_real_directory(output_directory, "archive output")
+            command.extend(("--dir", "/output", "--bind", str(output), "/output/members"))
         command.extend(
             (
                 "--",
@@ -271,6 +307,29 @@ class BubblewrapInspectionSandbox:
                     "Listing extraction configuration exceeds its bound."
                 )
             command.extend(("--configuration", encoded_configuration))
+        if output_directory is not None:
+            if archive_limits is None or original_filename is None:
+                raise InspectionSandboxViolation("Archive extraction limits are incomplete.")
+            if not original_filename.strip() or len(original_filename.encode("utf-8")) > 1024:
+                raise InspectionSandboxViolation("Archive filename evidence is invalid.")
+            command.extend(
+                (
+                    "--output",
+                    "/output/members",
+                    "--original-filename",
+                    original_filename,
+                    "--max-members",
+                    str(archive_limits.max_members),
+                    "--max-total-bytes",
+                    str(archive_limits.max_total_uncompressed_bytes),
+                    "--max-member-bytes",
+                    str(archive_limits.max_member_bytes),
+                    "--max-expansion-ratio",
+                    str(archive_limits.max_expansion_ratio),
+                    "--max-member-path-bytes",
+                    str(archive_limits.max_member_path_bytes),
+                )
+            )
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -413,7 +472,19 @@ class BubblewrapArtifactStructureDetector:
         *,
         allowed_format_slugs: frozenset[str],
     ) -> StructuralDetectionResult:
-        if allowed_format_slugs <= {"rss", "atom"}:
+        verdict: SandboxVerdict | None = None
+        if allowed_format_slugs & {"zip", "tar"}:
+            archive_verdict = await self._sandbox.detect_archive(path)
+            detected_archive = archive_verdict.evidence.get("detected_format")
+            if (
+                archive_verdict.status == "clean"
+                and detected_archive in allowed_format_slugs
+                or allowed_format_slugs <= ARCHIVE_FORMAT_SLUGS
+            ):
+                verdict = archive_verdict
+        if verdict is not None:
+            pass
+        elif allowed_format_slugs <= {"rss", "atom"}:
             verdict = await self._sandbox.detect_feed(path)
         elif allowed_format_slugs <= {"html", "json"}:
             verdict = await self._sandbox.detect_listing(path)
@@ -443,6 +514,100 @@ class BubblewrapArtifactStructureDetector:
             detector_version=self.version,
             reason_code=verdict.reason_code,
             evidence=verdict.evidence,
+        )
+
+
+class BubblewrapArchiveExtractor:
+    """Extract bounded members to opaque staging files inside Bubblewrap."""
+
+    name = "gni-sandbox-archive-extractor"
+    version = "1"
+
+    def __init__(self, sandbox: BubblewrapInspectionSandbox) -> None:
+        self._sandbox = sandbox
+
+    async def extract(
+        self,
+        path: Path,
+        *,
+        format_slug: str,
+        original_filename: str,
+        output_directory: Path,
+        limits: ArchiveInspectionLimits,
+    ) -> ArchiveExtractionResult:
+        verdict = await self._sandbox.extract_archive(
+            path,
+            format_slug=format_slug,
+            original_filename=original_filename,
+            output_directory=output_directory,
+            limits=limits,
+        )
+        if verdict.status == "rejected":
+            return ArchiveExtractionResult(
+                valid=False,
+                parser_name=self.name,
+                parser_version=self.version,
+                reason_code=verdict.reason_code,
+                evidence=verdict.evidence,
+            )
+        if verdict.status != "clean":
+            raise InspectionSandboxViolation("Archive extractor returned a non-terminal verdict.")
+        raw_members = verdict.evidence.get("members")
+        if not isinstance(raw_members, list) or not raw_members:
+            raise InspectionSandboxViolation("Archive extractor returned no member manifest.")
+        members: list[ExtractedArchiveMember] = []
+        expected_names: set[str] = set()
+        for index, raw in enumerate(raw_members, start=1):
+            expected_fields = {
+                "member_path",
+                "output_name",
+                "byte_length",
+                "compressed_byte_length",
+            }
+            if not isinstance(raw, dict) or set(raw) != expected_fields:
+                raise InspectionSandboxViolation("Archive member manifest is malformed.")
+            output_name = raw["output_name"]
+            if output_name != f"member-{index:06d}":
+                raise InspectionSandboxViolation("Archive output name is not opaque and ordered.")
+            try:
+                member_path = normalized_member_path(
+                    raw["member_path"],
+                    max_bytes=limits.max_member_path_bytes,
+                )
+            except (TypeError, ValueError) as exc:
+                raise InspectionSandboxViolation("Archive member path is unsafe.") from exc
+            byte_length = raw["byte_length"]
+            compressed = raw["compressed_byte_length"]
+            if (
+                not isinstance(byte_length, int)
+                or isinstance(byte_length, bool)
+                or byte_length <= 0
+                or byte_length > limits.max_member_bytes
+                or (
+                    compressed is not None
+                    and (
+                        not isinstance(compressed, int)
+                        or isinstance(compressed, bool)
+                        or compressed < 0
+                    )
+                )
+            ):
+                raise InspectionSandboxViolation("Archive member sizes are invalid.")
+            staged_path = _require_regular_file(output_directory / output_name, "archive member")
+            if staged_path.stat().st_size != byte_length:
+                raise InspectionSandboxViolation("Archive member size changed after extraction.")
+            expected_names.add(output_name)
+            members.append(
+                ExtractedArchiveMember(member_path, staged_path, byte_length, compressed)
+            )
+        if {child.name for child in output_directory.iterdir()} != expected_names:
+            raise InspectionSandboxViolation("Archive output differs from its member manifest.")
+        return ArchiveExtractionResult(
+            valid=True,
+            parser_name=self.name,
+            parser_version=self.version,
+            evidence={key: value for key, value in verdict.evidence.items() if key != "members"},
+            members=tuple(members),
         )
 
 
@@ -639,6 +804,13 @@ def _require_real_directory(path: Path, label: str) -> Path:
     if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
         raise InspectionSandboxUnavailable(f"{label} directory must be a real directory.")
     return path.resolve(strict=True)
+
+
+def _require_empty_real_directory(path: Path, label: str) -> Path:
+    resolved = _require_real_directory(path, label)
+    if any(resolved.iterdir()):
+        raise InspectionSandboxViolation(f"{label} directory must be empty.")
+    return resolved
 
 
 def _is_regular_signature_database(path: Path) -> bool:

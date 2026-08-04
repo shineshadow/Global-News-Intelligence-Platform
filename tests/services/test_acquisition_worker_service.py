@@ -33,6 +33,7 @@ from app.services.artifact_security_service import (
     ArtifactSecurityUnavailable,
 )
 from app.services.owner_policy_service import (
+    ARCHIVE_INSPECTION_LIMITS,
     MANUAL_POLL_RATE_ENFORCEMENT,
     PROVIDER_HARD_LIMIT_ENFORCEMENT,
     RETRY_AFTER_ENFORCEMENT,
@@ -60,7 +61,7 @@ async def _set_owner_override(
     *,
     policy_key: str,
     endpoint_id: int,
-    value: bool,
+    value: object,
 ) -> None:
     await OwnerPolicyService().set_override(
         session,
@@ -345,6 +346,7 @@ async def test_worker_composes_authority_artifact_and_feed_persistence(
     assert request.adapter_slug == "feed_parser"
     assert request.allowed_format_slugs == frozenset({"rss"})
     assert request.retrieval_provenance == {"test": "guarded"}
+    assert request.archive_limits.max_depth == 4
     async with database_session_factory() as session:
         run = await session.get(IngestionRun, result.run_id)
         lease = await session.scalar(
@@ -364,6 +366,48 @@ async def test_worker_composes_authority_artifact_and_feed_persistence(
     assert lease is not None and lease.status == "released"
     assert reservation is not None and reservation.status == "completed"
     assert document is not None and document.title_original == "Phase 3 Headline"
+
+
+async def test_owner_archive_limits_are_validated_and_passed_with_audit_evidence(
+    database_session_factory,
+) -> None:
+    configured_limits = {
+        "max_depth": 2,
+        "max_members": 12,
+        "max_total_uncompressed_bytes": 8 * 1024 * 1024,
+        "max_member_bytes": 2 * 1024 * 1024,
+        "max_expansion_ratio": 20,
+        "max_member_path_bytes": 512,
+    }
+    async with database_session_factory() as session, session.begin():
+        endpoint_id = await _configured_feed(session)
+        await _set_owner_override(
+            session,
+            policy_key=ARCHIVE_INSPECTION_LIMITS,
+            endpoint_id=endpoint_id,
+            value=configured_limits,
+        )
+    artifact_runtime = FakeArtifactRuntime()
+    worker = Phase3AcquisitionWorker(
+        adapters=(FakeFeedAdapter(),),
+        artifact_runtime=artifact_runtime,
+        session_factory=database_session_factory,
+    )
+
+    result = await worker.run(
+        endpoint_id,
+        trigger_type="manual",
+        execution_identity="manual:archive-limits:config:1",
+        owner_identifier="test-worker",
+    )
+
+    assert result.state == "completed"
+    request = artifact_runtime.requests[0]
+    assert request.archive_limits.as_dict() == configured_limits
+    evidence = request.archive_policy_evidence[ARCHIVE_INSPECTION_LIMITS]
+    assert evidence["effective"] == configured_limits
+    assert evidence["overridden"] is True
+    assert evidence["scope_type"] == "endpoint"
 
 
 async def test_worker_reserves_credential_bucket_without_persisting_secret_value(

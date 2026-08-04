@@ -109,6 +109,7 @@ Phase 3 direct HTTP/listing extraction                implemented candidate
 Phase 3 changedetection/Playwright fallback           implemented candidate
 Phase 3 credential/provider rate authority            implemented candidate
 Project-wide owner policy authority                   implemented foundation
+Phase 3 archive-tree inspection/promotion             implemented candidate
 Phase 3 formal implementation review                 blocked — remediation required
 ```
 
@@ -174,12 +175,20 @@ remaining legacy lockouts and their wiring status are tracked in
 `../specifications/OWNER_CONFIGURATION_LOCKOUT_INVENTORY.md`. New hard-coded or
 documented restrictions require explicit owner approval and both default-path
 and override-path tests.
+The sandboxed ZIP/TAR/GZIP/bzip2/XZ recursive extractor, owner-resolved archive
+limits, all-or-nothing staging/promotion boundary, and immutable nested
+Artifact provenance are recorded in
+`../specifications/PHASE_3_ARCHIVE_TREE_INSPECTION_AND_PROMOTION.md`. The
+package activates no endpoint and does not claim recursive support for
+Zstandard, 7-Zip, or RAR. It supplies implementation candidates for formal
+proofs 23-26; only the next formal review may mark those proofs passed.
 The formal implementation review is recorded in
 `../specifications/PHASE_3_FORMAL_IMPLEMENTATION_REVIEW.md`. The repository,
 migration, lint, and live RSS gates pass, but Phase 3 is not frozen: mandatory
-archive-tree inspection, robots policy enforcement, object-storage promotion,
-later signature-authority updates, and two direct regression proofs remain
-open. Existing live RSS approval is retained only for the exact reviewed CISA
+robots policy enforcement, object-storage promotion, later signature-authority
+updates, and two direct regression proofs remain open. Archive proofs 23-26
+now have a remediation candidate pending review. Existing live RSS approval is
+retained only for the exact reviewed CISA
 endpoint; no unactivated adapter gains live parity from the formal review.
 
 ---

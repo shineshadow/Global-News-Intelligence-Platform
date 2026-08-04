@@ -25,6 +25,7 @@ from app.repositories import ingestion_run_repository, source_repository
 from app.services.acquisition_lease_service import AcquisitionLeaseService
 from app.services.acquisition_rate_limit_service import AcquisitionRateLimitService
 from app.services.acquisition_secret_service import AcquisitionSecretService
+from app.services.artifact_archive_service import ArchiveInspectionLimits
 from app.services.artifact_security_service import (
     ArtifactIngestRequest,
     ArtifactSecurityOutcome,
@@ -38,6 +39,8 @@ from app.services.ingestion_service import (
     record_feed_poll_failure,
 )
 from app.services.owner_policy_service import (
+    ARCHIVE_INSPECTION_LIMITS,
+    DEFAULT_ARCHIVE_INSPECTION_LIMITS,
     MANUAL_POLL_RATE_ENFORCEMENT,
     PROVIDER_HARD_LIMIT_ENFORCEMENT,
     RETRY_AFTER_ENFORCEMENT,
@@ -141,6 +144,8 @@ class Phase3AcquisitionWorker:
         enforce_retry_after = True
         enforce_provider_hard_limits = True
         owner_authority_evidence: dict[str, object] = {}
+        archive_limits = ArchiveInspectionLimits()
+        archive_policy_evidence: dict[str, object] = {}
         try:
             async with self._session_factory() as session, session.begin():
                 resolved_secrets = await self._secret_service.resolve_required(
@@ -169,6 +174,29 @@ class Phase3AcquisitionWorker:
                         MANUAL_POLL_RATE_ENFORCEMENT,
                     )
                 }
+                archive_limit_decision = await self._owner_policy_service.resolve(
+                    session,
+                    policy_key=ARCHIVE_INSPECTION_LIMITS,
+                    default=DEFAULT_ARCHIVE_INSPECTION_LIMITS,
+                    context=owner_context,
+                    consume=True,
+                    runtime_actor=owner_identifier,
+                )
+                if not isinstance(archive_limit_decision.value, dict):
+                    raise AcquisitionWorkerError(
+                        "Owner archive inspection limits must resolve to an object."
+                    )
+                try:
+                    archive_limits = ArchiveInspectionLimits.from_mapping(
+                        archive_limit_decision.value
+                    )
+                except ValueError as exc:
+                    raise AcquisitionWorkerError(
+                        "Owner archive inspection limits are invalid."
+                    ) from exc
+                archive_policy_evidence = self._owner_authority_evidence(
+                    {ARCHIVE_INSPECTION_LIMITS: archive_limit_decision}
+                )
                 enforce_retry_after = bool(owner_decisions[RETRY_AFTER_ENFORCEMENT].value)
                 enforce_provider_hard_limits = bool(
                     owner_decisions[PROVIDER_HARD_LIMIT_ENFORCEMENT].value
@@ -222,7 +250,28 @@ class Phase3AcquisitionWorker:
                     configuration=dict(execution.configuration.configuration),
                 ),
             )
-            await self._artifact_runtime.preflight(allowed_formats)
+            member_selector = getattr(
+                execution.adapter,
+                "allowed_archive_member_formats",
+                None,
+            )
+            requested_member_formats = (
+                member_selector(
+                    execution.endpoint,
+                    configuration=dict(execution.configuration.configuration),
+                )
+                if callable(member_selector)
+                else frozenset()
+            )
+            archive_member_formats = (
+                await self._allowed_formats(
+                    execution.adapter_record.id,
+                    requested=requested_member_formats,
+                )
+                if requested_member_formats
+                else frozenset()
+            )
+            await self._artifact_runtime.preflight(allowed_formats | archive_member_formats)
             retrieval = await execution.adapter.retrieve(
                 execution.endpoint,
                 configuration=dict(execution.configuration.configuration),
@@ -244,6 +293,7 @@ class Phase3AcquisitionWorker:
                             retrieval.declared_media_type or "application/octet-stream"
                         ),
                         allowed_format_slugs=allowed_formats,
+                        archive_member_format_slugs=archive_member_formats,
                         chunks=(retrieval.content,),
                         retrieval_provenance=dict(retrieval.provenance),
                         parser_configuration=execution.adapter.inspection_configuration(
@@ -251,6 +301,8 @@ class Phase3AcquisitionWorker:
                         ),
                         original_locator=retrieval.final_url,
                         max_bytes=max(retrieval.response_bytes, 1),
+                        archive_limits=archive_limits,
+                        archive_policy_evidence=archive_policy_evidence,
                     )
                 )
                 if not outcome.accepted:

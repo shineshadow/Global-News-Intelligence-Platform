@@ -383,7 +383,7 @@ async def test_artifact_format_catalog_is_canonical_and_broad_values_are_nonterm
         not formats[slug].is_terminal
         for slug in ("image", "audio", "video", "archive", "binary", "other")
     )
-    assert evidence_counts == {"external": 0, "media": 10, "extension": 7}
+    assert evidence_counts == {"external": 0, "media": 12, "extension": 9}
 
 
 async def test_external_mapping_history_accumulates_but_active_exact_identity_is_unique(
