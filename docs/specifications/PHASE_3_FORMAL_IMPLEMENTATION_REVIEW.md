@@ -4,6 +4,14 @@
 **Outcome:** BLOCKED — IMPLEMENTATION NOT FROZEN  
 **Reviewed Alembic head:** `d3f5a7b9c1e4`
 
+> **Post-review owner-authority amendment (2026-08-03):** The owner rejected
+> unapproved non-configurable restrictions in the frozen architecture. The
+> governing proof language is now amended by
+> `OWNER_AUTHORITY_AND_CONFIGURATION_STANDARD.md`, with implementation head
+> `f6a8c2d4e901`. The 50/10 disposition below remains the historical result of
+> the `d3f5a7b9c1e4` review and must not be presented as a review of the amended
+> matrix. The outcome remains blocked pending a new formal review.
+
 ## Decision
 
 Phase 3 does not yet pass its formal implementation freeze. The repository is
@@ -105,7 +113,7 @@ Live operation
 | 25 | Blocked | Traversal, expansion bomb, link, device-file, depth, member-count, and ratio controls are not implemented or tested. |
 | 26 | Blocked | The schema can store `parent_artifact_id` and `member_path`, but the runtime does not create accepted nested Artifact provenance. |
 | 30 | Proof gap | The ingestion service deliberately retains old validators on a partial item result, but no direct regression test proves that contract. |
-| 34 | Blocked | Adapters and the worker now apply bounded `Retry-After` and provider quota/reset feedback to every reserved bucket. The runtime still does not retrieve, parse, persist, or enforce robots access/crawl policy. |
+| 34 | Blocked | Adapters and the worker apply bounded provider feedback by default and now honor exact owner overrides for Retry-After, provider hard-limit, robots-hold, and manual-poll decisions. The runtime still does not retrieve, parse, or persist robots access/crawl policy. |
 | 39 | Proof gap | `verified_empty` projection exists, but no direct test proves that a valid empty endpoint can remain healthy. |
 | 48 | Blocked | Filesystem promotion re-hashes and publishes atomically. No object-storage promotion backend implements the frozen opaque-staging, checksum, committed-pointer, and cleanup contract. |
 | 57 | Blocked | Only the reviewed repository bootstrap can be imported. The required guarded, scanned, regression-tested lifecycle for later untrusted authority releases is absent. |
@@ -153,9 +161,10 @@ non-activating, and none should be presented as live-approved by this review.
 
 1. Implement recursive container/archive inspection and all-or-nothing
    Artifact-tree promotion for proofs 23-26.
-2. Implement robots acquisition, parsing, persistence, and crawl enforcement
-   to complete proof 34. Credential identity and provider-response authority
-   are now proven.
+2. Implement robots acquisition, parsing, persistence, default enforcement,
+   and exact owner-override proof to complete amended proof 34. Credential
+   identity, provider-response authority, and their owner-control path are now
+   implemented candidates.
 3. Implement the object-storage canonical promotion contract for proof 48.
 4. Implement the guarded later-authority release lifecycle and active-release
    preservation tests for proofs 12 and 57.

@@ -57,7 +57,7 @@ async def test_calendar_state_blocks_destructive_downgrade(
     )
     assert downgrade.returncode != 0
     assert "Calendar" in (downgrade.stdout + downgrade.stderr)
-    assert _alembic("current").stdout.strip().endswith("d3f5a7b9c1e4 (head)")
+    assert _alembic("current").stdout.strip().endswith("f6a8c2d4e901 (head)")
 
 
 async def test_actor_correction_refuses_ambiguous_ai_job_history(

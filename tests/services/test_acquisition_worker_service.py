@@ -17,6 +17,7 @@ from app.models import (
     AcquisitionSecretBinding,
     Document,
     IngestionRun,
+    OwnerPolicyOverrideEvent,
     SecretReference,
     Source,
     SourceEndpoint,
@@ -31,6 +32,12 @@ from app.services.artifact_security_service import (
     ArtifactSecurityOutcome,
     ArtifactSecurityUnavailable,
 )
+from app.services.owner_policy_service import (
+    MANUAL_POLL_RATE_ENFORCEMENT,
+    PROVIDER_HARD_LIMIT_ENFORCEMENT,
+    RETRY_AFTER_ENFORCEMENT,
+    OwnerPolicyService,
+)
 from ingestion.adapters.types import (
     AcquisitionRateLimitedError,
     AdapterRetrieval,
@@ -44,6 +51,27 @@ RSS_BYTES = b"""<?xml version="1.0" encoding="UTF-8"?>
 <item><guid>phase3-one</guid><title>Phase 3 Headline</title>
 <link>https://example.test/articles/one</link><description>Evidence.</description></item>
 </channel></rss>"""
+
+OWNER_ACKNOWLEDGEMENT = "Owner accepts responsibility for this acquisition policy override."
+
+
+async def _set_owner_override(
+    session,
+    *,
+    policy_key: str,
+    endpoint_id: int,
+    value: bool,
+) -> None:
+    await OwnerPolicyService().set_override(
+        session,
+        policy_key=policy_key,
+        value=value,
+        scope_type="endpoint",
+        scope_identity=str(endpoint_id),
+        actor="shine",
+        reason="Exercise explicit endpoint owner authority",
+        risk_acknowledgement=OWNER_ACKNOWLEDGEMENT,
+    )
 
 
 @dataclass
@@ -512,6 +540,54 @@ async def test_worker_proves_artifact_infrastructure_before_retrieval(
     assert adapter.retrieval_count == 0
 
 
+async def test_owner_authorized_manual_poll_bypasses_local_rate_denial(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session, session.begin():
+        endpoint_id = await _configured_feed(session)
+        installation = await session.scalar(
+            select(AcquisitionRateLimitBucket).where(
+                AcquisitionRateLimitBucket.scope_identity == "installation"
+            )
+        )
+        assert installation is not None
+        installation.blocked_until = datetime.now(UTC) + timedelta(hours=1)
+        await _set_owner_override(
+            session,
+            policy_key=MANUAL_POLL_RATE_ENFORCEMENT,
+            endpoint_id=endpoint_id,
+            value=False,
+        )
+    adapter = FakeFeedAdapter()
+    worker = Phase3AcquisitionWorker(
+        adapters=(adapter,),
+        artifact_runtime=FakeArtifactRuntime(),
+        session_factory=database_session_factory,
+    )
+
+    result = await worker.run(
+        endpoint_id,
+        trigger_type="manual",
+        execution_identity="manual:owner-rate-bypass:config:1",
+        owner_identifier="test-worker",
+    )
+
+    assert result.state == "completed"
+    assert adapter.retrieval_count == 1
+    async with database_session_factory() as session:
+        reservation = await session.scalar(select(AcquisitionRateLimitReservation))
+        events = (
+            await session.scalars(
+                select(OwnerPolicyOverrideEvent).where(
+                    OwnerPolicyOverrideEvent.event_type == "applied"
+                )
+            )
+        ).all()
+    assert reservation is not None and reservation.status == "completed"
+    assert len(events) == 1
+    assert events[0].details["request_identity"] == "manual:owner-rate-bypass:config:1"
+
+
 async def test_provider_hold_is_durable_delay_not_structural_failure(
     database_session_factory,
 ) -> None:
@@ -601,3 +677,105 @@ async def test_malformed_429_uses_conservative_nonshortening_fallback(
     assert observations
     assert all(row.retry_after_at is None for row in observations)
     assert all(row.evidence["fallback_applied"] is True for row in observations)
+
+
+async def test_owner_override_records_provider_denial_without_installing_hold(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session, session.begin():
+        endpoint_id = await _configured_feed(session)
+        for policy_key in (RETRY_AFTER_ENFORCEMENT, PROVIDER_HARD_LIMIT_ENFORCEMENT):
+            await _set_owner_override(
+                session,
+                policy_key=policy_key,
+                endpoint_id=endpoint_id,
+                value=False,
+            )
+    observed_at = datetime.now(UTC)
+    feedback = RateLimitFeedback(
+        observed_at=observed_at,
+        http_status=429,
+        retry_after_at=observed_at + timedelta(hours=2),
+        retry_after_state="valid",
+        provider_remaining=0,
+        provider_remaining_state="valid",
+        provider_reset_at=observed_at + timedelta(hours=3),
+        provider_reset_state="valid",
+    )
+    worker = Phase3AcquisitionWorker(
+        adapters=(FakeFeedAdapter(rate_limit_feedback=feedback, rate_limited=True),),
+        artifact_runtime=FakeArtifactRuntime(),
+        session_factory=database_session_factory,
+    )
+
+    result = await worker.run(
+        endpoint_id,
+        trigger_type="scheduled",
+        execution_identity="scheduled:owner-provider-bypass:config:1",
+        owner_identifier="test-worker",
+    )
+
+    assert result.state == "delayed"
+    assert result.next_eligible_at is not None
+    assert result.next_eligible_at < feedback.retry_after_at
+    async with database_session_factory() as session:
+        buckets = (await session.scalars(select(AcquisitionRateLimitBucket))).all()
+        observations = (
+            await session.scalars(
+                select(AcquisitionRateLimitObservation).order_by(AcquisitionRateLimitObservation.id)
+            )
+        ).all()
+    assert buckets
+    assert all(bucket.retry_after_until is None for bucket in buckets)
+    assert all(bucket.provider_limit_until is None for bucket in buckets)
+    assert observations
+    assert all(
+        row.evidence["owner_authority"][RETRY_AFTER_ENFORCEMENT]["effective"] is False
+        for row in observations
+    )
+    assert all(
+        row.evidence["owner_authority"][PROVIDER_HARD_LIMIT_ENFORCEMENT]["effective"] is False
+        for row in observations
+    )
+
+
+async def test_disabled_provider_hold_cannot_override_enabled_retry_after(
+    database_session_factory,
+) -> None:
+    async with database_session_factory() as session, session.begin():
+        endpoint_id = await _configured_feed(session)
+        installation = await session.scalar(
+            select(AcquisitionRateLimitBucket).where(
+                AcquisitionRateLimitBucket.scope_identity == "installation"
+            )
+        )
+        assert installation is not None
+        installation.provider_limit_until = datetime.now(UTC) + timedelta(hours=4)
+        await _set_owner_override(
+            session,
+            policy_key=PROVIDER_HARD_LIMIT_ENFORCEMENT,
+            endpoint_id=endpoint_id,
+            value=False,
+        )
+    observed_at = datetime.now(UTC)
+    feedback = RateLimitFeedback(
+        observed_at=observed_at,
+        http_status=429,
+        retry_after_at=observed_at + timedelta(minutes=20),
+        retry_after_state="valid",
+    )
+    worker = Phase3AcquisitionWorker(
+        adapters=(FakeFeedAdapter(rate_limit_feedback=feedback, rate_limited=True),),
+        artifact_runtime=FakeArtifactRuntime(),
+        session_factory=database_session_factory,
+    )
+
+    result = await worker.run(
+        endpoint_id,
+        trigger_type="scheduled",
+        execution_identity="scheduled:mixed-owner-provider-policy:config:1",
+        owner_identifier="test-worker",
+    )
+
+    assert result.state == "delayed"
+    assert result.next_eligible_at == feedback.retry_after_at

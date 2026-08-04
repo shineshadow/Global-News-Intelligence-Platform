@@ -54,13 +54,16 @@ current healthy last success and an already-passed Phase 3 cutover proof.
 - Malformed throttling feedback cannot remove or shorten an existing hold.
 - Raw response headers and resolved credential values are never placed in
   durable evidence.
-- Manual and scheduled executions use the same reservation and feedback path.
+- Manual and scheduled executions use the same reservation and feedback path
+  by default; exact owner policy can authorize a manual bypass while retaining
+  the reservation and audit evidence.
 - Feedback remains attached to the reservation even if its policy binding is
   changed after the request was authorized.
 
 ## Deliberate Exclusion
 
-This package implements provider response authority only. It does not retrieve,
+This package implements provider response authority and now participates in
+the project-wide owner policy layer. It does not retrieve,
 parse, persist, or enforce `robots.txt` crawl rules. Consequently formal proof
 34 remains open for its robots-policy requirement even though its
 `Retry-After` and provider quota/reset portion is now implemented.

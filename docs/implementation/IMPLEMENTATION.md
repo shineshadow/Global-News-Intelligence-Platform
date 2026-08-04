@@ -108,6 +108,7 @@ Phase 3 RSSHub/RSS-Bridge adapters                    implemented candidate
 Phase 3 direct HTTP/listing extraction                implemented candidate
 Phase 3 changedetection/Playwright fallback           implemented candidate
 Phase 3 credential/provider rate authority            implemented candidate
+Project-wide owner policy authority                   implemented foundation
 Phase 3 formal implementation review                 blocked — remediation required
 ```
 
@@ -165,6 +166,14 @@ semantics are recorded in
 `../specifications/PHASE_3_CREDENTIAL_AND_PROVIDER_RATE_AUTHORITY.md`. This
 closes formal proofs 33 and 51 and implements the provider portion of proof 34;
 robots acquisition and crawl enforcement remain separate required work.
+The owner's final authority over runtime policies and configuration is
+governed by
+`../specifications/OWNER_AUTHORITY_AND_CONFIGURATION_STANDARD.md`. The scoped,
+timed, single-use PostgreSQL ledger and operational CLI are implemented; the
+remaining legacy lockouts and their wiring status are tracked in
+`../specifications/OWNER_CONFIGURATION_LOCKOUT_INVENTORY.md`. New hard-coded or
+documented restrictions require explicit owner approval and both default-path
+and override-path tests.
 The formal implementation review is recorded in
 `../specifications/PHASE_3_FORMAL_IMPLEMENTATION_REVIEW.md`. The repository,
 migration, lint, and live RSS gates pass, but Phase 3 is not frozen: mandatory
@@ -178,10 +187,10 @@ endpoint; no unactivated adapter gains live parity from the formal review.
 ## Implementation Guardrails
 
 - PostgreSQL remains authoritative.
-- Canonical instants remain timezone-aware in storage. Every User-facing UI
-  date/time must use the shared User-local American formatter governed by
-  `../specifications/AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`; features may not
-  introduce private UTC, ISO, 24-hour, or seconds-bearing UI formats.
+- Canonical instants remain timezone-aware in storage. American User-local
+  display remains the current default, governed by
+  `../specifications/AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`, pending the
+  owner/user preference adapter recorded in the lockout inventory.
 - Migrations are additive and reversible where practical.
 - Accepted canonical originals are preserved. Suspicious or unverifiable
   acquisition bytes are deleted immediately and never become Documents,

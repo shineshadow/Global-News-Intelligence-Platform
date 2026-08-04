@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import text
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "d3f5a7b9c1e4"
+HEAD = "f6a8c2d4e901"
 PREVIOUS = "b7d9e1f3a5c2"
 
 

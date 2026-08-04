@@ -1,10 +1,16 @@
 # GNI UI Date and Time Display Standard
 
-**Status:** OWNER-APPROVED PROJECT STANDARD
-**Approved:** August 3, 2026
+**Status:** AMENDED — CURRENT DEFAULT, NOT EXCLUSIVE
+**Corrected:** August 3, 2026
 **Applies to:** Dates and times displayed in the GNI user interface
 **Source:** Owner-supplied 9-page PDF, SHA-256 `bd3e6d9e9a8c026d00f25869b4f2f9cb18b7438d81d2d457f51d7d8a8597eb4a`
 **Decision:** `UXD-0003`
+
+> **Owner-authority correction:** The prior claim that this was an exclusive,
+> owner-approved format was incorrect. American User-local display remains the
+> current default, but the owner may configure installation, view, or User
+> formats. This document does not prohibit ISO, 24-hour, seconds-bearing, or
+> other owner-selected presets.
 
 ## 1. Scope
 
@@ -19,7 +25,7 @@ values, developer records, or governance record dates. Those layers use the
 canonical formats best supported by PostgreSQL, Python, protocols, standards,
 and external integrations.
 
-The required boundary is:
+The default boundary is:
 
 ```text
 canonical internal date or timezone-aware instant
@@ -117,9 +123,9 @@ Requirements:
 - hour uses two digits;
 - minutes always use two digits;
 - `am` and `pm` are lowercase and unpunctuated;
-- seconds are never displayed;
-- the 12-hour clock is mandatory;
-- 24-hour time is prohibited in UI display.
+- seconds are hidden in the American default;
+- the American default uses the 12-hour clock; and
+- an owner-selected preset may use 24-hour time or seconds.
 
 Examples:
 
@@ -189,10 +195,11 @@ month-first presentation.
 
 ## 11. Framework and Locale Precedence
 
-This UI standard controls over browser locale, OS locale, device region,
-framework defaults, component-library defaults, internationalization-library
-defaults, widget defaults, and imported-source formatting. Framework-generated
-values are reformatted before display.
+The effective owner/User preference controls over browser locale, OS locale,
+device region, framework defaults, component-library defaults,
+internationalization-library defaults, widget defaults, and imported-source
+formatting. Without an explicit preference, framework-generated values use the
+American default.
 
 ## 12. Per-User Configuration
 
@@ -200,9 +207,9 @@ Date/time display preferences belong to User. The initial/default display
 timezone is `America/New_York`. Missing preferences inherit the installation
 default and never browser, Source, or content locale.
 
-The format described here is the only approved preset. Another preset requires
-an Approved UX Decision. User timezone changes affect rendering only and never
-rewrite canonical stored values.
+The format described here is the initial preset. The owner may register and
+select another preset without a new architecture freeze. User timezone and
+format changes affect rendering only and never rewrite canonical stored values.
 
 ## 13. Component Contract
 

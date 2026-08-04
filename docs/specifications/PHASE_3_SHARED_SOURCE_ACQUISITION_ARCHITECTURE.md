@@ -1,13 +1,19 @@
 # Phase 3 — Shared Source Acquisition Architecture
 
-**Status:** ARCHITECTURE FROZEN
+**Status:** ARCHITECTURE AMENDED — OWNER AUTHORITY GOVERNS
 **Date:** 2026-07-28
 **Phase:** Main Track Phase 3 — Expanded Sources
 **First gate:** Phase 3.1 — Source Acquisition Foundation Audit
 **Depends on:** GFA-A through GFA-E, Steps 24 through 26, and Calendar
 Phase 2 — FROZEN
-**Authority:** Owner-approved acquisition and deletion-first security
-directives
+**Authority:** Owner direction recorded 2026-08-03; the Owner Authority and
+Configuration Standard supersedes unapproved non-configurable restrictions
+
+> **Owner-authority amendment:** Safe behaviors in this document are defaults,
+> not permanent limits on the project owner. Any earlier `cannot`, `never`,
+> `non-configurable`, hard-limit, or read-only wording is governed by
+> `OWNER_AUTHORITY_AND_CONFIGURATION_STANDARD.md` and the live wiring status in
+> `OWNER_CONFIGURATION_LOCKOUT_INVENTORY.md`.
 
 ## 1. Purpose
 
@@ -570,15 +576,16 @@ No suspicious parent or child is retained.
 
 ## 9. Security-Critical Deletion Boundary
 
-This entire section is security-critical and non-configurable.
+This section defines the safe deletion-first default. The owner may explicitly
+select a different rejection, quarantine, retention, restoration, scanner, or
+processing policy through the project-wide owner-authority contract once that
+policy family is wired. Until then, the implementation retains the safe
+default and reports the missing owner adapter as pending work; it may not claim
+that the owner approved permanent inaccessibility.
 
-There is no API, UI, SQLAdmin control, adapter option, environment switch, or
-operator override that can weaken, bypass, postpone, quarantine, retain, or
-restore a rejected payload. Read-only rejection outcomes may be shown to an
-authorized operator; the rules and execution controls are not exposed.
-
-False-positive deletion is acceptable. Reacquisition after correcting the
-catalog, adapter, or source configuration is the recovery mechanism.
+False-positive deletion is an accepted default tradeoff. Reacquisition after
+correcting the catalog, adapter, source configuration, or owner policy is the
+default recovery mechanism.
 
 ### 9.1 Isolated Staging
 
@@ -599,8 +606,9 @@ parser output are prohibited.
 
 ### 9.2 Outbound Retrieval Boundary
 
-All endpoint and redirect destinations pass a non-bypassable SSRF/egress
-validator before connection:
+By default, all endpoint and redirect destinations pass the SSRF/egress
+validator before connection. Exact owner-authorized egress exceptions must
+retain destination and effective-policy evidence:
 
 ```text
 approved scheme for the exact adapter
@@ -1199,7 +1207,8 @@ PostgreSQL or required-policy unavailability fails closed and sends nothing.
 
 ### 13.4 Precedence and HTTP Behavior
 
-The strictest applicable limit wins:
+The most exact active owner policy wins first; without one, the strictest
+applicable default limit wins:
 
 ```text
 provider Retry-After or reset
@@ -1232,11 +1241,12 @@ provider/robots temporary hold
 effective controlling policy and next eligible time
 ```
 
-Authorized controls may create Source/endpoint policies and configure bounded
-rate, burst, concurrency, polling, retry, and budget values with actor and
-reason. They cannot ignore Retry-After or robots restrictions, exceed hard
-limits, edit live counters, bypass a manual poll, or reuse a secret outside
-its binding.
+Authorized controls may create owner, Source, and endpoint policies and
+configure or override rate, burst, concurrency, polling, retry, budget,
+Retry-After, provider, robots, manual-poll, and other registered values with
+actor, reason, risk acknowledgement, scope, and durable history. External
+signals and consequences remain visible even when the owner selects a
+different effective decision.
 
 ## 14. UI and Authorization
 
@@ -1260,8 +1270,9 @@ source and endpoint history
 Specialized forms cover RSSHub, RSS-Bridge, listing selectors,
 changedetection, and Playwright only when their adapters are implemented.
 
-The security-critical deletion rules, detectors, execution paths, bypasses,
-and retention behavior have no configurable UI or API exposure.
+The initial owner authority is CLI/database backed. A UI is optional; absence
+of a UI does not remove owner control. Policy families not yet wired are
+listed in `OWNER_CONFIGURATION_LOCKOUT_INVENTORY.md`.
 
 FastAPI services enforce authorization. The current single-operator
 deployment may expose authorized workflows before the later multi-user
@@ -1457,10 +1468,12 @@ Phase 3 implementation must directly prove:
 31. HTTP 304 produces no new Artifact or Document.
 32. Secret values cannot enter database metadata, logs, Celery, API, or HTML.
 33. Shared credential/platform quotas apply across endpoints.
-34. Retry-After and stricter robots/provider policy override local defaults.
+34. Retry-After and robots/provider policy are observed and enforced by
+    default; exact audited owner authority can select a different decision.
 35. Rate limiting does not count as structural endpoint failure.
 36. Operator mutations are server-authorized and actor/reason audited.
-37. Security rejections remain read-only operational outcomes.
+37. Security rejection evidence remains auditable; owner-authorized rejection
+    actions are actor/reason/risk-attributed.
 38. Retrieval and untrusted processing hold no database transaction open.
 39. A valid empty endpoint can be healthy.
 40. Unsupported future catalog entries do not claim adapter implementation.

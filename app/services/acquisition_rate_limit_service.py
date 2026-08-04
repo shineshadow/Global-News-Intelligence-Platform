@@ -53,6 +53,10 @@ class AcquisitionRateLimitService:
         source_endpoint_id: int,
         request_identity: str,
         secret_reference_ids: tuple[int, ...] = (),
+        bypass_limits: bool = False,
+        enforce_retry_after: bool = True,
+        enforce_provider_hard_limits: bool = True,
+        enforce_robots: bool = True,
         reservation_ttl: timedelta = timedelta(minutes=2),
         now: datetime | None = None,
     ) -> RateLimitDecision:
@@ -128,10 +132,17 @@ class AcquisitionRateLimitService:
         ) = None
         for bucket, binding, policy in buckets:
             self._refresh_windows(bucket, policy, current_time)
-            eligible = self._next_eligible(bucket, policy, current_time)
+            eligible = self._next_eligible(
+                bucket,
+                policy,
+                current_time,
+                enforce_retry_after=enforce_retry_after,
+                enforce_provider_hard_limits=enforce_provider_hard_limits,
+                enforce_robots=enforce_robots,
+            )
             if eligible is not None and (controlling is None or eligible > controlling[2]):
                 controlling = (bucket, binding, eligible)
-        if controlling is not None:
+        if controlling is not None and not bypass_limits:
             bucket, binding, eligible = controlling
             bucket.next_eligible_at = eligible
             await session.flush()
@@ -255,6 +266,22 @@ class AcquisitionRateLimitService:
                 if value is not None
             ]
             bucket.blocked_until = max(holds) if holds else None
+            if observation_type == "retry_after" and retry_after_at is not None:
+                bucket.retry_after_until = retry_after_at
+            if observation_type == "robots" and retry_after_at is not None:
+                bucket.robots_disallow_until = max(
+                    value
+                    for value in (bucket.robots_disallow_until, retry_after_at)
+                    if value is not None
+                )
+            if observation_type in {"http_status", "provider_quota", "provider_reset"}:
+                provider_hold = provider_reset_at or retry_after_at
+                if provider_hold is not None:
+                    bucket.provider_limit_until = max(
+                        value
+                        for value in (bucket.provider_limit_until, provider_hold)
+                        if value is not None
+                    )
             if provider_reset_at is not None:
                 bucket.provider_reset_at = provider_reset_at
             session.add(
@@ -275,6 +302,9 @@ class AcquisitionRateLimitService:
         *,
         reservation_id: int,
         feedback: RateLimitFeedback,
+        enforce_retry_after: bool = True,
+        enforce_provider_hard_limits: bool = True,
+        authority_evidence: dict[str, object] | None = None,
     ) -> datetime | None:
         """Apply the strictest sanitized provider signal to every reserved bucket."""
 
@@ -312,27 +342,62 @@ class AcquisitionRateLimitService:
 
         strictest_hold: datetime | None = None
         for bucket, policy in rows:
-            hold = self._provider_hold(
+            retry_hold = (
+                feedback.retry_after_at
+                if enforce_retry_after
+                and feedback.retry_after_at is not None
+                and feedback.retry_after_at >= feedback.observed_at
+                else None
+            )
+            provider_hold = self._provider_hold(
                 bucket,
                 policy,
                 feedback=feedback,
                 reservation_id=reservation_id,
+                enforce_provider_hard_limits=enforce_provider_hard_limits,
+                retry_authoritative=retry_hold is not None,
+            )
+            hold = max(
+                (value for value in (retry_hold, provider_hold) if value is not None),
+                default=None,
             )
             if hold is not None:
                 bucket.blocked_until = max(
                     value for value in (bucket.blocked_until, hold) if value is not None
                 )
-                bucket.next_eligible_at = bucket.blocked_until
-                strictest_hold = (
-                    bucket.blocked_until
-                    if strictest_hold is None
-                    else max(strictest_hold, bucket.blocked_until)
+            if retry_hold is not None:
+                bucket.retry_after_until = max(
+                    value for value in (bucket.retry_after_until, retry_hold) if value is not None
                 )
-            if feedback.provider_exhausted and feedback.provider_reset_at is not None:
+            if provider_hold is not None:
+                bucket.provider_limit_until = max(
+                    value
+                    for value in (bucket.provider_limit_until, provider_hold)
+                    if value is not None
+                )
+            if feedback.provider_reset_at is not None:
                 bucket.provider_reset_at = max(
                     value
                     for value in (bucket.provider_reset_at, feedback.provider_reset_at)
                     if value is not None
+                )
+            effective_hold = max(
+                (
+                    value
+                    for value in (
+                        bucket.retry_after_until if enforce_retry_after else None,
+                        bucket.provider_limit_until if enforce_provider_hard_limits else None,
+                    )
+                    if value is not None and value >= feedback.observed_at
+                ),
+                default=None,
+            )
+            if effective_hold is not None:
+                bucket.next_eligible_at = effective_hold
+                strictest_hold = (
+                    effective_hold
+                    if strictest_hold is None
+                    else max(strictest_hold, effective_hold)
                 )
             self._append_feedback_observations(
                 session,
@@ -340,9 +405,9 @@ class AcquisitionRateLimitService:
                 ingestion_run_id=reservation.ingestion_run_id,
                 feedback=feedback,
                 fallback_applied=(
-                    hold is not None
-                    and hold not in {feedback.retry_after_at, feedback.provider_reset_at}
+                    provider_hold is not None and provider_hold != feedback.provider_reset_at
                 ),
+                authority_evidence=authority_evidence,
             )
         await session.flush()
         return strictest_hold
@@ -354,12 +419,12 @@ class AcquisitionRateLimitService:
         *,
         feedback: RateLimitFeedback,
         reservation_id: int,
+        enforce_provider_hard_limits: bool,
+        retry_authoritative: bool,
     ) -> datetime | None:
-        candidates = [
-            value
-            for value in (feedback.retry_after_at,)
-            if value is not None and value >= feedback.observed_at
-        ]
+        if not enforce_provider_hard_limits:
+            return None
+        candidates: list[datetime] = []
         if (
             feedback.provider_exhausted
             and feedback.provider_reset_at is not None
@@ -368,6 +433,8 @@ class AcquisitionRateLimitService:
             candidates.append(feedback.provider_reset_at)
         if candidates:
             return max(candidates)
+        if retry_authoritative:
+            return None
         if feedback.http_status != 429 and not feedback.provider_exhausted:
             return None
 
@@ -393,12 +460,14 @@ class AcquisitionRateLimitService:
         ingestion_run_id: int,
         feedback: RateLimitFeedback,
         fallback_applied: bool,
+        authority_evidence: dict[str, object] | None,
     ) -> None:
         evidence = {
             "retry_after": feedback.retry_after_state,
             "provider_remaining": feedback.provider_remaining_state,
             "provider_reset": feedback.provider_reset_state,
             "fallback_applied": fallback_applied,
+            "owner_authority": authority_evidence or {},
         }
         if feedback.http_status in {429, 503}:
             session.add(
@@ -624,9 +693,25 @@ class AcquisitionRateLimitService:
         bucket: AcquisitionRateLimitBucket,
         policy: AcquisitionRateLimitPolicy,
         now: datetime,
+        *,
+        enforce_retry_after: bool,
+        enforce_provider_hard_limits: bool,
+        enforce_robots: bool,
     ) -> datetime | None:
         candidates: list[datetime] = []
-        for hold in (bucket.blocked_until, bucket.provider_reset_at):
+        external_holds = (
+            bucket.retry_after_until if enforce_retry_after else None,
+            bucket.provider_limit_until if enforce_provider_hard_limits else None,
+            bucket.robots_disallow_until if enforce_robots else None,
+        )
+        if (
+            bucket.retry_after_until is None
+            and bucket.provider_limit_until is None
+            and bucket.robots_disallow_until is None
+            and bucket.blocked_until is not None
+        ):
+            external_holds = (*external_holds, bucket.blocked_until)
+        for hold in external_holds:
             if hold is not None and hold > now:
                 candidates.append(hold)
         if bucket.active_concurrency >= policy.max_concurrency:

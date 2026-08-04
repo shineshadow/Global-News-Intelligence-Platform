@@ -138,6 +138,7 @@ from app.models.monitor import (
     MonitorRevisionSourceType,
     MonitorRevisionTopic,
 )
+from app.models.owner_policy import OwnerPolicyOverride, OwnerPolicyOverrideEvent
 from app.models.source import Source
 from app.models.source_endpoint import SourceEndpoint
 from app.models.source_reference import (
@@ -270,6 +271,8 @@ __all__ = [
     "MonitorRevisionSource",
     "MonitorRevisionSourceType",
     "MonitorRevisionTopic",
+    "OwnerPolicyOverride",
+    "OwnerPolicyOverrideEvent",
     "Platform",
     "SecretReference",
     "SecretReferenceEvent",

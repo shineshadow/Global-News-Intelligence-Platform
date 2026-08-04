@@ -78,6 +78,35 @@ Do not treat free bytes from `df -h` as sufficient. Check `df -i /var`;
 PostgreSQL returns `No space left on device` when the filesystem exhausts
 inodes even if gigabytes remain free.
 
+## Owner Policy Authority
+
+Apply migrations before using owner policy commands. Inspect the registered
+defaults and effective scoped value with:
+
+```bash
+.venv/bin/python -m scripts.owner_policy effective \
+    acquisition.retry_after.enforce \
+    --endpoint-id 47
+```
+
+Create an endpoint override:
+
+```bash
+.venv/bin/python -m scripts.owner_policy set \
+    acquisition.retry_after.enforce false \
+    --scope-type endpoint \
+    --scope-identity 47 \
+    --actor shine \
+    --reason "Owner-authorized endpoint behavior" \
+    --acknowledge-risk "I accept responsibility for this policy change"
+```
+
+Use `--once` for a single-use request-scoped decision, `list --active-only` to
+inspect live authority, `history OVERRIDE_ID` for immutable evidence, and
+`revoke OVERRIDE_ID` to end an active override. JSON values are required;
+strings therefore include JSON quotes. Policy values are ordinary database
+configuration and must never contain credentials or other secret values.
+
 ## Artifact Signature Bootstrap
 
 Import and activate the exact repository-pinned signature release with:

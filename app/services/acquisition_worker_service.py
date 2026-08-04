@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from time import perf_counter
 from typing import Protocol
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from sqlalchemy import select
@@ -35,6 +36,15 @@ from app.services.ingestion_service import (
     finish_feed_poll,
     record_feed_poll_delay,
     record_feed_poll_failure,
+)
+from app.services.owner_policy_service import (
+    MANUAL_POLL_RATE_ENFORCEMENT,
+    PROVIDER_HARD_LIMIT_ENFORCEMENT,
+    RETRY_AFTER_ENFORCEMENT,
+    ROBOTS_ENFORCEMENT,
+    EffectiveOwnerPolicy,
+    OwnerPolicyContext,
+    OwnerPolicyService,
 )
 from ingestion.adapters import SourceAcquisitionAdapter
 from ingestion.adapters.types import RateLimitFeedback
@@ -87,6 +97,7 @@ class Phase3AcquisitionWorker:
         lease_service: AcquisitionLeaseService | None = None,
         secret_service: AcquisitionSecretService | None = None,
         rate_service: AcquisitionRateLimitService | None = None,
+        owner_policy_service: OwnerPolicyService | None = None,
     ) -> None:
         keyed: dict[tuple[str, str], SourceAcquisitionAdapter] = {}
         for adapter in adapters:
@@ -102,6 +113,7 @@ class Phase3AcquisitionWorker:
         self._lease_service = lease_service or AcquisitionLeaseService()
         self._secret_service = secret_service or AcquisitionSecretService()
         self._rate_service = rate_service or AcquisitionRateLimitService()
+        self._owner_policy_service = owner_policy_service or OwnerPolicyService()
 
     async def run(
         self,
@@ -126,6 +138,9 @@ class Phase3AcquisitionWorker:
 
         reservation_id: int | None = None
         response_feedback: RateLimitFeedback | None = None
+        enforce_retry_after = True
+        enforce_provider_hard_limits = True
+        owner_authority_evidence: dict[str, object] = {}
         try:
             async with self._session_factory() as session, session.begin():
                 resolved_secrets = await self._secret_service.resolve_required(
@@ -133,12 +148,47 @@ class Phase3AcquisitionWorker:
                     source_endpoint_id=source_endpoint_id,
                     actor=owner_identifier,
                 )
+                owner_context = self._owner_context(
+                    execution,
+                    credential_ids=resolved_secrets.secret_reference_ids,
+                    request_identity=execution_identity,
+                )
+                owner_decisions = {
+                    key: await self._owner_policy_service.resolve_bool(
+                        session,
+                        policy_key=key,
+                        default=True,
+                        context=owner_context,
+                        consume=True,
+                        runtime_actor=owner_identifier,
+                    )
+                    for key in (
+                        ROBOTS_ENFORCEMENT,
+                        RETRY_AFTER_ENFORCEMENT,
+                        PROVIDER_HARD_LIMIT_ENFORCEMENT,
+                        MANUAL_POLL_RATE_ENFORCEMENT,
+                    )
+                }
+                enforce_retry_after = bool(owner_decisions[RETRY_AFTER_ENFORCEMENT].value)
+                enforce_provider_hard_limits = bool(
+                    owner_decisions[PROVIDER_HARD_LIMIT_ENFORCEMENT].value
+                )
+                enforce_robots = bool(owner_decisions[ROBOTS_ENFORCEMENT].value)
+                bypass_limits = (
+                    trigger_type == "manual"
+                    and not owner_decisions[MANUAL_POLL_RATE_ENFORCEMENT].value
+                )
+                owner_authority_evidence = self._owner_authority_evidence(owner_decisions)
                 decision = await self._rate_service.reserve(
                     session,
                     ingestion_run_id=execution.poll_context.run_id,
                     source_endpoint_id=source_endpoint_id,
                     request_identity=execution_identity,
                     secret_reference_ids=resolved_secrets.secret_reference_ids,
+                    bypass_limits=bypass_limits,
+                    enforce_retry_after=enforce_retry_after,
+                    enforce_provider_hard_limits=enforce_provider_hard_limits,
+                    enforce_robots=enforce_robots,
                 )
                 if decision.permitted and decision.reservation is not None:
                     reservation_id = decision.reservation.id
@@ -232,11 +282,14 @@ class Phase3AcquisitionWorker:
                     reservation_id=reservation_id,
                     succeeded=True,
                     rate_feedback=rate_feedback,
+                    enforce_retry_after=enforce_retry_after,
+                    enforce_provider_hard_limits=enforce_provider_hard_limits,
+                    owner_authority_evidence=owner_authority_evidence,
                 )
                 if next_eligible_at is None:
-                    raise AcquisitionWorkerError(
-                        "Provider rate response did not produce a controlling hold."
-                    ) from exc
+                    next_eligible_at = datetime.now(UTC) + timedelta(
+                        seconds=execution.poll_context.poll_interval_seconds
+                    )
                 await record_feed_poll_delay(
                     execution.poll_context,
                     next_eligible_at=next_eligible_at,
@@ -262,6 +315,9 @@ class Phase3AcquisitionWorker:
                 reservation_id=reservation_id,
                 succeeded=False,
                 rate_feedback=response_feedback,
+                enforce_retry_after=enforce_retry_after,
+                enforce_provider_hard_limits=enforce_provider_hard_limits,
+                owner_authority_evidence=owner_authority_evidence,
             )
             raise
 
@@ -271,6 +327,9 @@ class Phase3AcquisitionWorker:
             reservation_id=reservation_id,
             succeeded=True,
             rate_feedback=response_feedback,
+            enforce_retry_after=enforce_retry_after,
+            enforce_provider_hard_limits=enforce_provider_hard_limits,
+            owner_authority_evidence=owner_authority_evidence,
         )
         return AcquisitionExecutionResult(
             endpoint_id=source_endpoint_id,
@@ -454,6 +513,9 @@ class Phase3AcquisitionWorker:
         reservation_id: int | None,
         succeeded: bool,
         rate_feedback: RateLimitFeedback | None = None,
+        enforce_retry_after: bool = True,
+        enforce_provider_hard_limits: bool = True,
+        owner_authority_evidence: dict[str, object] | None = None,
     ) -> datetime | None:
         next_eligible_at: datetime | None = None
         async with self._session_factory() as session, session.begin():
@@ -465,6 +527,9 @@ class Phase3AcquisitionWorker:
                         session,
                         reservation_id=reservation_id,
                         feedback=rate_feedback,
+                        enforce_retry_after=enforce_retry_after,
+                        enforce_provider_hard_limits=enforce_provider_hard_limits,
+                        authority_evidence=owner_authority_evidence,
                     )
                 await self._rate_service.finalize(
                     session,
@@ -478,3 +543,39 @@ class Phase3AcquisitionWorker:
                 outcome="released" if succeeded else "failed",
             )
         return next_eligible_at
+
+    @staticmethod
+    def _owner_context(
+        execution: _Execution,
+        *,
+        credential_ids: tuple[int, ...],
+        request_identity: str,
+    ) -> OwnerPolicyContext:
+        split = urlsplit(execution.endpoint.url)
+        origin = f"{split.scheme.lower()}://{split.hostname.lower()}"
+        if split.port is not None:
+            origin = f"{origin}:{split.port}"
+        return OwnerPolicyContext(
+            adapter=execution.adapter.slug,
+            platform=execution.endpoint.platform,
+            credential_ids=credential_ids,
+            origin=origin,
+            source_id=execution.endpoint.source_id,
+            endpoint_id=execution.endpoint.id,
+            request_identity=request_identity,
+        )
+
+    @staticmethod
+    def _owner_authority_evidence(
+        decisions: dict[str, EffectiveOwnerPolicy],
+    ) -> dict[str, object]:
+        return {
+            key: {
+                "effective": decision.value,
+                "overridden": decision.overridden,
+                "override_public_id": decision.override_public_id,
+                "scope_type": decision.scope_type,
+                "scope_identity": decision.scope_identity,
+            }
+            for key, decision in decisions.items()
+        }

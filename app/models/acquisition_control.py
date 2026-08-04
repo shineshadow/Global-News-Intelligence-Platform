@@ -860,6 +860,9 @@ class AcquisitionRateLimitBucket(Base):
     active_concurrency: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     last_request_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retry_after_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    provider_limit_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    robots_disallow_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     provider_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_eligible_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
