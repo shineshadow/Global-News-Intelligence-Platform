@@ -44,6 +44,9 @@ class FakeFeedAdapter:
     implementation: str = "ingestion.adapters.feed_parser:FeedParserAdapter"
     retrieval_count: int = 0
 
+    def inspection_configuration(self, *, configuration):
+        return dict(configuration)
+
     def allowed_artifact_formats(self, endpoint, *, configuration):
         assert configuration == {}
         return frozenset({endpoint.endpoint_format})

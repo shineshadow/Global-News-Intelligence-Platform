@@ -44,6 +44,15 @@ class FeedParserAdapter:
             allowed_schemes=frozenset({"http", "https"}),
         )
 
+    def inspection_configuration(
+        self,
+        *,
+        configuration: dict[str, Any],
+    ) -> dict[str, Any]:
+        if configuration:
+            raise ValueError("The feed_parser v1 configuration must be empty.")
+        return {}
+
     def allowed_artifact_formats(
         self,
         endpoint: SourceEndpoint,

@@ -106,7 +106,7 @@ Phase 3 controlled feed cutover/acquisition health   implemented candidate
 Phase 3 live feed canary/parity review                passed
 Phase 3 RSSHub/RSS-Bridge adapters                    implemented candidate
 Phase 3 direct HTTP/listing extraction                implemented candidate
-Phase 3 changedetection/Playwright fallback           next
+Phase 3 changedetection/Playwright fallback           implemented candidate
 Phase 3 formal implementation review                 final gate
 ```
 
@@ -152,6 +152,12 @@ are recorded in
 `../specifications/PHASE_3_DIRECT_HTTP_AND_LISTING_EXTRACTION.md`. The package
 creates no endpoint configuration or cutover and supports no authenticated API
 slot or JavaScript rendering; those remain separate reviewed capabilities.
+The installation-owned changedetection snapshot and disposable Playwright
+renderer adapter contracts, required API-key secret slots, source/policy
+attestation, and non-activating registry migration are recorded in
+`../specifications/PHASE_3_CHANGEDETECTION_AND_PLAYWRIGHT_FALLBACK.md`.
+The repository does not install either service, create watches/render routes,
+or automatically fall back to browser acquisition.
 
 ---
 

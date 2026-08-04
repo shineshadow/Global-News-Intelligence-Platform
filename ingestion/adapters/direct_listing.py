@@ -36,6 +36,14 @@ class _DirectListingAdapter:
             adapter_slug=self.slug, allowed_schemes=frozenset({"http", "https"})
         )
 
+    def inspection_configuration(
+        self,
+        *,
+        configuration: dict[str, Any],
+    ) -> dict[str, Any]:
+        self._validate_configuration(configuration)
+        return dict(configuration)
+
     def allowed_artifact_formats(
         self, endpoint: SourceEndpoint, *, configuration: dict[str, Any]
     ) -> frozenset[str]:

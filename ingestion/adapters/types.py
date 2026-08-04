@@ -31,6 +31,12 @@ class SourceAcquisitionAdapter(Protocol):
     version: str
     implementation: str
 
+    def inspection_configuration(
+        self,
+        *,
+        configuration: dict[str, Any],
+    ) -> dict[str, Any]: ...
+
     def allowed_artifact_formats(
         self,
         endpoint: SourceEndpoint,

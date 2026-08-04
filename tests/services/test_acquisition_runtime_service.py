@@ -91,4 +91,6 @@ def test_phase3_worker_composes_exact_acquisition_adapter_versions(tmp_path) -> 
         ("rss_bridge", "1"),
         ("direct_json_api", "1"),
         ("html_listing", "1"),
+        ("changedetection", "1"),
+        ("playwright", "1"),
     }

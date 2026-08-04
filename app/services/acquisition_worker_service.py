@@ -192,7 +192,9 @@ class Phase3AcquisitionWorker:
                         allowed_format_slugs=allowed_formats,
                         chunks=(retrieval.content,),
                         retrieval_provenance=dict(retrieval.provenance),
-                        parser_configuration=dict(execution.configuration.configuration),
+                        parser_configuration=execution.adapter.inspection_configuration(
+                            configuration=dict(execution.configuration.configuration),
+                        ),
                         original_locator=retrieval.final_url,
                         max_bytes=max(retrieval.response_bytes, 1),
                     )

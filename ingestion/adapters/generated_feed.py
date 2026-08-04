@@ -35,6 +35,14 @@ class _InternalGeneratedFeedAdapter(FeedParserAdapter):
             raise ValueError(f"Endpoint format is incompatible with {self.slug} v1.")
         return frozenset({endpoint.endpoint_format})
 
+    def inspection_configuration(
+        self,
+        *,
+        configuration: dict[str, Any],
+    ) -> dict[str, Any]:
+        self._internal_service_identity(configuration)
+        return {}
+
     def egress_request_policy(
         self,
         *,

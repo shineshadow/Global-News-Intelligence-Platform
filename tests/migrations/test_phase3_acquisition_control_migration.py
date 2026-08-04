@@ -88,7 +88,7 @@ async def test_acquisition_owned_state_blocks_lossless_downgrade(
     downgrade = _alembic("downgrade", "d1b3e5f7a902", check=False)
     assert downgrade.returncode != 0
     assert "lossless-only" in (downgrade.stdout + downgrade.stderr)
-    assert _alembic("current").stdout.strip().endswith("c1e3f5a7b9d2 (head)")
+    assert _alembic("current").stdout.strip().endswith("d3f5a7b9c1e4 (head)")
 
     async with database_session_factory() as session, session.begin():
         await session.execute(

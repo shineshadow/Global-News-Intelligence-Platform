@@ -516,6 +516,99 @@ async def truncate_test_tables() -> None:
                 JOIN artifact_formats AS format
                   ON format.slug = expected.format_slug
                 WHERE adapter.version = '1';
+
+                INSERT INTO acquisition_adapters (
+                    slug, version, display_name, implementation, status,
+                    configuration_schema, provenance, activated_at
+                ) VALUES
+                    (
+                        'changedetection', '1',
+                        'changedetection.io Snapshot Listing',
+                        'ingestion.adapters.monitored_listing:ChangedetectionAdapter',
+                        'active',
+                        jsonb_build_object(
+                            'type', 'object',
+                            'additionalProperties', false,
+                            'required', jsonb_build_array(
+                                'internal_service_identity', 'snapshot_url',
+                                'watch_uuid', 'item_selector', 'fields'
+                            ),
+                            'properties', jsonb_build_object(
+                                'internal_service_identity', jsonb_build_object('type', 'string'),
+                                'snapshot_url', jsonb_build_object('type', 'string'),
+                                'watch_uuid', jsonb_build_object('type', 'string'),
+                                'item_selector', jsonb_build_object('type', 'string'),
+                                'fields', jsonb_build_object('type', 'object')
+                            )
+                        ),
+                        jsonb_build_object(
+                            'migration', 'd3f5a7b9c1e4',
+                            'activation_scope',
+                            'registry-only-no-service-watch-endpoint-or-cutover'
+                        ), now()
+                    ),
+                    (
+                        'playwright', '1',
+                        'Playwright Rendered Listing Fallback',
+                        'ingestion.adapters.monitored_listing:PlaywrightAdapter',
+                        'active',
+                        jsonb_build_object(
+                            'type', 'object',
+                            'additionalProperties', false,
+                            'required', jsonb_build_array(
+                                'internal_service_identity', 'render_url',
+                                'wait_strategy', 'timeout_seconds',
+                                'item_selector', 'fields'
+                            ),
+                            'properties', jsonb_build_object(
+                                'internal_service_identity', jsonb_build_object('type', 'string'),
+                                'render_url', jsonb_build_object('type', 'string'),
+                                'wait_strategy', jsonb_build_object('type', 'string'),
+                                'timeout_seconds', jsonb_build_object('type', 'integer'),
+                                'item_selector', jsonb_build_object('type', 'string'),
+                                'fields', jsonb_build_object('type', 'object')
+                            )
+                        ),
+                        jsonb_build_object(
+                            'migration', 'd3f5a7b9c1e4',
+                            'activation_scope',
+                            'registry-only-no-service-route-endpoint-or-cutover'
+                        ), now()
+                    );
+
+                INSERT INTO acquisition_adapter_compatibilities (
+                    adapter_id, endpoint_type, endpoint_format,
+                    acquisition_method, platform, platform_key
+                )
+                SELECT adapter.id, 'website', 'html', expected.method, NULL, '*'
+                FROM acquisition_adapters AS adapter
+                JOIN (VALUES
+                    ('changedetection', 'web_scraper'),
+                    ('playwright', 'browser_automation')
+                ) AS expected(slug, method) ON expected.slug = adapter.slug
+                WHERE adapter.version = '1';
+
+                INSERT INTO acquisition_adapter_artifact_capabilities (
+                    adapter_id, artifact_format_id,
+                    identification_supported, safe_parser_supported,
+                    safe_extraction_supported
+                )
+                SELECT adapter.id, format.id, true, true, true
+                FROM acquisition_adapters AS adapter
+                CROSS JOIN artifact_formats AS format
+                WHERE adapter.slug IN ('changedetection', 'playwright')
+                  AND adapter.version = '1' AND format.slug = 'html';
+
+                INSERT INTO acquisition_adapter_secret_slots (
+                    adapter_id, slot_name, is_required,
+                    authentication_types, permitted_scopes
+                )
+                SELECT adapter.id, 'api_key', true,
+                       ARRAY['api_key_header']::varchar[],
+                       ARRAY['installation']::varchar[]
+                FROM acquisition_adapters AS adapter
+                WHERE adapter.slug IN ('changedetection', 'playwright')
+                  AND adapter.version = '1';
                 """
             )
         )

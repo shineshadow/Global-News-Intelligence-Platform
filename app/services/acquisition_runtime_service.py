@@ -20,9 +20,11 @@ from app.services.outbound_egress_service import (
     OutboundEgressGuard,
 )
 from ingestion.adapters import (
+    ChangedetectionAdapter,
     DirectJSONAPIAdapter,
     FeedParserAdapter,
     HTMLListingAdapter,
+    PlaywrightAdapter,
     RSSBridgeAdapter,
     RSSHubAdapter,
 )
@@ -117,6 +119,8 @@ def create_phase3_acquisition_worker(
             RSSBridgeAdapter(http_client=guarded_http_client),
             DirectJSONAPIAdapter(http_client=guarded_http_client),
             HTMLListingAdapter(http_client=guarded_http_client),
+            ChangedetectionAdapter(http_client=guarded_http_client),
+            PlaywrightAdapter(http_client=guarded_http_client),
         ),
         artifact_runtime=_create_feed_artifact_runtime(runtime_settings=runtime_settings),
     )

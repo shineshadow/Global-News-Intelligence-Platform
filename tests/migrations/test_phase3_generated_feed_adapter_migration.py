@@ -13,7 +13,7 @@ from app.models import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "c1e3f5a7b9d2"
+HEAD = "d3f5a7b9c1e4"
 
 
 def _alembic(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
