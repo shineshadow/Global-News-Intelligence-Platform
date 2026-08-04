@@ -391,14 +391,10 @@ async def test_external_mapping_history_accumulates_but_active_exact_identity_is
 ) -> None:
     async with database_session_factory() as session, session.begin():
         json_id = int(
-            await session.scalar(
-                select(ArtifactFormat.id).where(ArtifactFormat.slug == "json")
-            )
+            await session.scalar(select(ArtifactFormat.id).where(ArtifactFormat.slug == "json"))
         )
         pdf_id = int(
-            await session.scalar(
-                select(ArtifactFormat.id).where(ArtifactFormat.slug == "pdf")
-            )
+            await session.scalar(select(ArtifactFormat.id).where(ArtifactFormat.slug == "pdf"))
         )
         await session.execute(
             text(
@@ -422,12 +418,7 @@ async def test_external_mapping_history_accumulates_but_active_exact_identity_is
         )
 
     async with database_session_factory() as session:
-        assert (
-            await session.scalar(
-                select(func.count(ArtifactFormatExternalIdentifier.id))
-            )
-            == 4
-        )
+        assert await session.scalar(select(func.count(ArtifactFormatExternalIdentifier.id))) == 4
 
     async with database_session_factory() as session:
         with pytest.raises(IntegrityError):

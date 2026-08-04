@@ -107,7 +107,7 @@ Phase 3 live feed canary/parity review                passed
 Phase 3 RSSHub/RSS-Bridge adapters                    implemented candidate
 Phase 3 direct HTTP/listing extraction                implemented candidate
 Phase 3 changedetection/Playwright fallback           implemented candidate
-Phase 3 formal implementation review                 final gate
+Phase 3 formal implementation review                 blocked — remediation required
 ```
 
 Phase 3.1 is governed by
@@ -158,6 +158,14 @@ attestation, and non-activating registry migration are recorded in
 `../specifications/PHASE_3_CHANGEDETECTION_AND_PLAYWRIGHT_FALLBACK.md`.
 The repository does not install either service, create watches/render routes,
 or automatically fall back to browser acquisition.
+The formal implementation review is recorded in
+`../specifications/PHASE_3_FORMAL_IMPLEMENTATION_REVIEW.md`. The repository,
+migration, lint, and live RSS gates pass, but Phase 3 is not frozen: mandatory
+archive-tree inspection, composed credential/provider rate authority,
+object-storage promotion, later signature-authority updates, and two direct
+regression proofs remain open. Existing live RSS approval is retained only for
+the exact reviewed CISA endpoint; no unactivated adapter gains live parity from
+the formal review.
 
 ---
 

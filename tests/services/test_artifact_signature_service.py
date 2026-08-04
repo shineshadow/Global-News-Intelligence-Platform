@@ -82,18 +82,10 @@ async def test_repository_pinned_import_is_atomic_and_idempotent(
     async with database_session_factory() as session:
         release = await session.get(ArtifactSignatureRelease, first_id)
         counts = {
-            "releases": await session.scalar(
-                select(func.count(ArtifactSignatureRelease.id))
-            ),
-            "signatures": await session.scalar(
-                select(func.count(ArtifactFormatSignature.id))
-            ),
-            "media_types": await session.scalar(
-                select(func.count(ArtifactFormatMediaType.id))
-            ),
-            "extensions": await session.scalar(
-                select(func.count(ArtifactFormatExtension.id))
-            ),
+            "releases": await session.scalar(select(func.count(ArtifactSignatureRelease.id))),
+            "signatures": await session.scalar(select(func.count(ArtifactFormatSignature.id))),
+            "media_types": await session.scalar(select(func.count(ArtifactFormatMediaType.id))),
+            "extensions": await session.scalar(select(func.count(ArtifactFormatExtension.id))),
         }
 
     assert second_id == first_id
@@ -114,9 +106,7 @@ async def test_import_refuses_existing_cross_format_evidence_without_partial_rel
 ) -> None:
     async with database_session_factory() as session, session.begin():
         png_id = int(
-            await session.scalar(
-                select(ArtifactFormat.id).where(ArtifactFormat.slug == "png")
-            )
+            await session.scalar(select(ArtifactFormat.id).where(ArtifactFormat.slug == "png"))
         )
         session.add(
             ArtifactFormatExtension(
@@ -135,11 +125,5 @@ async def test_import_refuses_existing_cross_format_evidence_without_partial_rel
                 await import_repository_pinned_release(session)
 
     async with database_session_factory() as session:
-        assert (
-            await session.scalar(select(func.count(ArtifactSignatureRelease.id)))
-            == 0
-        )
-        assert (
-            await session.scalar(select(func.count(ArtifactFormatSignature.id)))
-            == 0
-        )
+        assert await session.scalar(select(func.count(ArtifactSignatureRelease.id))) == 0
+        assert await session.scalar(select(func.count(ArtifactFormatSignature.id))) == 0

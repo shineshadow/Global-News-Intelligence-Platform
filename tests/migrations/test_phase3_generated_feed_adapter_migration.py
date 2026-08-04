@@ -50,9 +50,7 @@ async def test_generated_feed_adapter_seed_is_exact_and_non_activating(
         ).all()
         expected_schema = {
             "type": "object",
-            "properties": {
-                "internal_service_identity": {"type": "string", "minLength": 1}
-            },
+            "properties": {"internal_service_identity": {"type": "string", "minLength": 1}},
             "required": ["internal_service_identity"],
             "additionalProperties": False,
         }

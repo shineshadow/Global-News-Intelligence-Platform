@@ -205,9 +205,7 @@ async def test_exact_payload_is_promoted_and_persisted(
         tmp_path,
     )
 
-    outcome = await runtime.ingest(
-        _request(endpoint_id=endpoint_id, run_id=run_id)
-    )
+    outcome = await runtime.ingest(_request(endpoint_id=endpoint_id, run_id=run_id))
 
     assert outcome.accepted is True
     assert outcome.format_slug == "pdf"
@@ -218,16 +216,8 @@ async def test_exact_payload_is_promoted_and_persisted(
     assert stored_files[0].read_bytes() == PDF_BYTES
     async with database_session_factory() as session:
         assert await session.scalar(select(func.count(ArtifactPayload.id))) == 1
-        assert (
-            await session.scalar(select(func.count(AcquisitionArtifact.id)))
-            == 1
-        )
-        assert (
-            await session.scalar(
-                select(func.count(AcquisitionArtifactObservation.id))
-            )
-            == 1
-        )
+        assert await session.scalar(select(func.count(AcquisitionArtifact.id))) == 1
+        assert await session.scalar(select(func.count(AcquisitionArtifactObservation.id))) == 1
         assert await session.scalar(select(func.count(ArtifactRejection.id))) == 0
 
 
@@ -264,9 +254,7 @@ async def test_declared_evidence_mismatch_deletes_before_rejection(
     assert list(staging.iterdir()) == []
     assert [path for path in canonical.rglob("*") if path.is_file()] == []
     async with database_session_factory() as session:
-        rejection = (
-            await session.execute(select(ArtifactRejection))
-        ).scalar_one()
+        rejection = (await session.execute(select(ArtifactRejection))).scalar_one()
         assert rejection.deletion_verified is True
         assert rejection.detected_metadata["format_slug"] == "pdf"
         assert await session.scalar(select(func.count(ArtifactPayload.id))) == 0
@@ -322,17 +310,13 @@ async def test_scanner_and_parser_failure_delete_before_metadata(
         parser=parser,
     )
 
-    outcome = await runtime.ingest(
-        _request(endpoint_id=endpoint_id, run_id=run_id)
-    )
+    outcome = await runtime.ingest(_request(endpoint_id=endpoint_id, run_id=run_id))
 
     assert outcome.reason_code == reason_code
     assert list(staging.iterdir()) == []
     assert [path for path in canonical.rglob("*") if path.is_file()] == []
     async with database_session_factory() as session:
-        rejection = (
-            await session.execute(select(ArtifactRejection))
-        ).scalar_one()
+        rejection = (await session.execute(select(ArtifactRejection))).scalar_one()
         assert rejection.deleted_at <= rejection.recorded_at
 
 
@@ -394,9 +378,7 @@ async def test_stream_limit_deletes_partial_bytes_and_records_rejection(
     assert list(staging.iterdir()) == []
     assert [path for path in canonical.rglob("*") if path.is_file()] == []
     async with database_session_factory() as session:
-        rejection = (
-            await session.execute(select(ArtifactRejection))
-        ).scalar_one()
+        rejection = (await session.execute(select(ArtifactRejection))).scalar_one()
         assert rejection.deletion_verified is True
 
 
@@ -411,9 +393,7 @@ async def test_identical_reacquisition_reuses_payload_and_artifact(
     async with database_session_factory() as session, session.begin():
         source_id = int(
             await session.scalar(
-                text(
-                    "SELECT source_id FROM source_endpoints WHERE id = :endpoint_id"
-                ),
+                text("SELECT source_id FROM source_endpoints WHERE id = :endpoint_id"),
                 {"endpoint_id": endpoint_id},
             )
         )
@@ -437,9 +417,7 @@ async def test_identical_reacquisition_reuses_payload_and_artifact(
             ).scalar_one()
         )
 
-    first = await runtime.ingest(
-        _request(endpoint_id=endpoint_id, run_id=first_run_id)
-    )
+    first = await runtime.ingest(_request(endpoint_id=endpoint_id, run_id=first_run_id))
     second = await runtime.ingest(
         _request(
             endpoint_id=endpoint_id,
@@ -451,16 +429,8 @@ async def test_identical_reacquisition_reuses_payload_and_artifact(
     assert first.artifact_id == second.artifact_id
     async with database_session_factory() as session:
         assert await session.scalar(select(func.count(ArtifactPayload.id))) == 1
-        assert (
-            await session.scalar(select(func.count(AcquisitionArtifact.id)))
-            == 1
-        )
-        assert (
-            await session.scalar(
-                select(func.count(AcquisitionArtifactObservation.id))
-            )
-            == 2
-        )
+        assert await session.scalar(select(func.count(AcquisitionArtifact.id))) == 1
+        assert await session.scalar(select(func.count(AcquisitionArtifactObservation.id))) == 2
 
 
 async def test_database_failure_removes_newly_promoted_bytes(
@@ -485,11 +455,7 @@ async def test_runtime_acceptance_uses_sandboxed_mandatory_scanner(
 ) -> None:
     scanner_path = tmp_path / "fake-clamscan"
     scanner_path.write_bytes(
-        (
-            Path(__file__).resolve().parents[1]
-            / "fixtures"
-            / "fake_clamscan.py"
-        ).read_bytes()
+        (Path(__file__).resolve().parents[1] / "fixtures" / "fake_clamscan.py").read_bytes()
     )
     scanner_path.chmod(0o755)
     signatures = tmp_path / "signatures"
@@ -509,9 +475,7 @@ async def test_runtime_acceptance_uses_sandboxed_mandatory_scanner(
         scanner=scanner,
     )
 
-    outcome = await runtime.ingest(
-        _request(endpoint_id=endpoint_id, run_id=run_id)
-    )
+    outcome = await runtime.ingest(_request(endpoint_id=endpoint_id, run_id=run_id))
 
     assert outcome.accepted is True
     assert list(staging.iterdir()) == []
@@ -529,11 +493,7 @@ async def test_runtime_accepts_structurally_identified_rss_with_sandbox_provenan
 ) -> None:
     scanner_path = tmp_path / "fake-clamscan"
     scanner_path.write_bytes(
-        (
-            Path(__file__).resolve().parents[1]
-            / "fixtures"
-            / "fake_clamscan.py"
-        ).read_bytes()
+        (Path(__file__).resolve().parents[1] / "fixtures" / "fake_clamscan.py").read_bytes()
     )
     scanner_path.chmod(0o755)
     signatures = tmp_path / "signatures"
@@ -559,8 +519,7 @@ async def test_runtime_accepts_structurally_identified_rss_with_sandbox_provenan
         },
     )
     rss_bytes = (
-        b"<?xml version='1.0'?><rss version='2.0'><channel>"
-        b"<title>Exact RSS</title></channel></rss>"
+        b"<?xml version='1.0'?><rss version='2.0'><channel><title>Exact RSS</title></channel></rss>"
     )
 
     await runtime.preflight(frozenset({"rss"}))
