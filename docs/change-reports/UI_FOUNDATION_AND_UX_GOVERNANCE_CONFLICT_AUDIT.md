@@ -1,6 +1,6 @@
 # UI Foundation and UX Governance Conflict Audit
 
-**Date:** 2026-08-03  
+**Date:** 08-03-2026  
 **Input:** Owner-supplied 23-page `GNI UI Foundation and UX Governance.pdf`  
 **Input SHA-256:** `95f00f8d7154002d9a8613947e12758a3fac78b617a07da078adcd58b0c4b344`  
 **Supplement:** Owner-supplied 27-page `GNI UI Governance Records and Standards Supplement.pdf`  

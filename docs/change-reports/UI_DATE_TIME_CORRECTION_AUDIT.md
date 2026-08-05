@@ -1,6 +1,6 @@
 # UI Date and Time Correction Audit
 
-**Date:** 2026-08-03
+**Date:** 08-03-2026
 **Adopted input:** Owner-supplied 9-page `GNI UI Date and Time Display Standard.pdf`
 **Adopted SHA-256:** `bd3e6d9e9a8c026d00f25869b4f2f9cb18b7438d81d2d457f51d7d8a8597eb4a`
 **Abandoned input:** Owner-supplied 11-page `Correction- Mandatory American Date and Time Formats.pdf`
