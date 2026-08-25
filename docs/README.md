@@ -12,6 +12,8 @@ Generated files:
 - `change-reports/PHASE_3_PROOF_34_OWNER_APPROVAL_DECISIONS.md` — Owner-approved Proof 34 version-one defaults, validation bounds, parser distribution, and provenance pin
 - `change-reports/PHASE_3_PROOF_34_MEDIATED_ROBOTS_AND_UI_OVERRIDE_DECISION.md` — Owner-confirmed publisher URL, intermediary robots evidence, status badge, and existing-authority browser override workflow
 - `change-reports/PHASE_3_PROOF_34A_OWNER_POLICY_AND_EVIDENCE_FOUNDATION.md` — fresh Owner-policy registry, explain/preview/staleness service, constrained robots evidence persistence, focused evidence, and explicit exclusions
+- `change-reports/PHASE_3_PROOF_34A1_UNAVAILABLE_INFORMATION_OWNER_DECISION.md` — Owner-approved closed unavailable-evidence taxonomy, dual internal/Owner information classification, and future Admin UI access obligation
+- `change-reports/PHASE_3_PROOF_34A1_UNAVAILABLE_INFORMATION_IMPLEMENTATION.md` — implemented registry, constrained persistence migration, verification evidence, and explicit Proof 34B/Admin UI exclusions
 - `change-reports/PHASE_3_PROOF_34_OWNER_AUTHORITY_CONFORMANCE_AUDIT.md` — Cross-document audit proving the Proof 34 documentation preserves governing Owner authority and identifying runtime evidence still required
 - `ui-governance/` — operational component registry, permanent UX decisions, acceptance/exception records, reusable templates, and standards supplement
 - `change-reports/UI_FOUNDATION_AND_UX_GOVERNANCE_CONFLICT_AUDIT.md` — integration audit and approval questions for the owner-supplied governance draft

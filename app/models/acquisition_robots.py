@@ -77,6 +77,65 @@ class AcquisitionRobotsSnapshot(Base):
             "AND reuses_snapshot_id IS NOT NULL) OR retrieval_state <> 'not_modified'",
             name="not_modified_linkage",
         ),
+        CheckConstraint(
+            "((retrieval_state IN ('retrieved', 'not_modified') "
+            "AND parse_state IN ('parsed', 'empty') AND failure_phase IS NULL) OR "
+            "((retrieval_state NOT IN ('retrieved', 'not_modified') "
+            "OR parse_state NOT IN ('parsed', 'empty')) AND failure_phase IS NOT NULL))",
+            name="unavailable_information_required",
+        ),
+        CheckConstraint(
+            "(failure_phase IS NULL AND unavailable_reason IS NULL AND retryable IS NULL "
+            "AND owner_summary IS NULL) OR "
+            "(failure_phase IS NOT NULL AND unavailable_reason IS NOT NULL "
+            "AND retryable IS NOT NULL AND owner_summary IS NOT NULL)",
+            name="unavailable_information_complete",
+        ),
+        CheckConstraint(
+            "failure_phase IS NULL OR failure_phase IN "
+            "('retrieval', 'validation', 'parsing', 'evaluation', 'evidence_binding')",
+            name="failure_phase",
+        ),
+        CheckConstraint(
+            "retryable IS NULL OR retryable IN ('true', 'false', 'unknown')",
+            name="retryable",
+        ),
+        CheckConstraint(
+            "owner_summary IS NULL OR "
+            "(char_length(owner_summary) BETWEEN 1 AND 500 "
+            "AND owner_summary !~ '[[:cntrl:]]')",
+            name="owner_summary_bounded_sanitized",
+        ),
+        CheckConstraint(
+            "unavailable_reason IS NULL OR "
+            "(failure_phase = 'retrieval' AND unavailable_reason IN "
+            "('http_not_found', 'http_client_error', 'http_server_error', 'dns_failure', "
+            "'connection_failure', 'connection_timeout', 'read_timeout', 'tls_failure', "
+            "'redirect_limit_reached', 'response_too_large')) OR "
+            "(failure_phase = 'validation' AND unavailable_reason IN "
+            "('redirect_destination_rejected', 'egress_guard_rejected', "
+            "'parser_provenance_untrusted')) OR "
+            "(failure_phase = 'parsing' AND unavailable_reason IN "
+            "('robots_body_empty', 'robots_body_malformed', 'parser_failure')) OR "
+            "(failure_phase = 'evaluation' AND unavailable_reason = 'evaluation_failure') OR "
+            "(failure_phase = 'evidence_binding' AND unavailable_reason IN "
+            "('evidence_missing', 'evidence_stale', 'evidence_target_mismatch', "
+            "'evidence_user_agent_mismatch', 'evidence_untrusted'))",
+            name="unavailable_reason_phase",
+        ),
+        CheckConstraint(
+            "unavailable_reason <> 'http_not_found' OR http_status IN (404, 410)",
+            name="http_not_found_status",
+        ),
+        CheckConstraint(
+            "unavailable_reason <> 'http_client_error' OR "
+            "(http_status BETWEEN 400 AND 499 AND http_status NOT IN (404, 410))",
+            name="http_client_error_status",
+        ),
+        CheckConstraint(
+            "unavailable_reason <> 'http_server_error' OR http_status BETWEEN 500 AND 599",
+            name="http_server_error_status",
+        ),
         UniqueConstraint("retrieval_identity", name="uq_robots_snapshots_retrieval_identity"),
         Index("ix_robots_snapshots_origin_fresh", "origin", "fresh_until"),
         Index("ix_robots_snapshots_ingestion_run", "ingestion_run_id"),
@@ -114,6 +173,10 @@ class AcquisitionRobotsSnapshot(Base):
     parser_name: Mapped[str] = mapped_column(String(100), nullable=False)
     parser_version: Mapped[str] = mapped_column(String(100), nullable=False)
     parse_state: Mapped[str] = mapped_column(String(30), nullable=False)
+    failure_phase: Mapped[str | None] = mapped_column(String(30))
+    unavailable_reason: Mapped[str | None] = mapped_column(String(64))
+    retryable: Mapped[str | None] = mapped_column(String(10))
+    owner_summary: Mapped[str | None] = mapped_column(String(500))
     warnings: Mapped[list[dict[str, Any] | str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
@@ -160,6 +223,47 @@ class AcquisitionRobotsEvaluation(Base):
             "(external_decision = 'allowed' AND matched_directive IN ('allow', 'none')) OR "
             "(external_decision = 'unavailable' AND matched_directive = 'none')",
             name="decision_directive",
+        ),
+        CheckConstraint(
+            "(external_decision = 'unavailable' AND failure_phase IS NOT NULL "
+            "AND unavailable_reason IS NOT NULL AND retryable IS NOT NULL "
+            "AND owner_summary IS NOT NULL) OR "
+            "(external_decision <> 'unavailable' AND failure_phase IS NULL "
+            "AND unavailable_reason IS NULL AND retryable IS NULL "
+            "AND owner_summary IS NULL)",
+            name="unavailable_information_matches_decision",
+        ),
+        CheckConstraint(
+            "failure_phase IS NULL OR failure_phase IN "
+            "('retrieval', 'validation', 'parsing', 'evaluation', 'evidence_binding')",
+            name="failure_phase",
+        ),
+        CheckConstraint(
+            "retryable IS NULL OR retryable IN ('true', 'false', 'unknown')",
+            name="retryable",
+        ),
+        CheckConstraint(
+            "owner_summary IS NULL OR "
+            "(char_length(owner_summary) BETWEEN 1 AND 500 "
+            "AND owner_summary !~ '[[:cntrl:]]')",
+            name="owner_summary_bounded_sanitized",
+        ),
+        CheckConstraint(
+            "unavailable_reason IS NULL OR "
+            "(failure_phase = 'retrieval' AND unavailable_reason IN "
+            "('http_not_found', 'http_client_error', 'http_server_error', 'dns_failure', "
+            "'connection_failure', 'connection_timeout', 'read_timeout', 'tls_failure', "
+            "'redirect_limit_reached', 'response_too_large')) OR "
+            "(failure_phase = 'validation' AND unavailable_reason IN "
+            "('redirect_destination_rejected', 'egress_guard_rejected', "
+            "'parser_provenance_untrusted')) OR "
+            "(failure_phase = 'parsing' AND unavailable_reason IN "
+            "('robots_body_empty', 'robots_body_malformed', 'parser_failure')) OR "
+            "(failure_phase = 'evaluation' AND unavailable_reason = 'evaluation_failure') OR "
+            "(failure_phase = 'evidence_binding' AND unavailable_reason IN "
+            "('evidence_missing', 'evidence_stale', 'evidence_target_mismatch', "
+            "'evidence_user_agent_mismatch', 'evidence_untrusted'))",
+            name="unavailable_reason_phase",
         ),
         CheckConstraint("jsonb_typeof(provenance) = 'object'", name="provenance_object"),
         CheckConstraint("jsonb_typeof(details) = 'object'", name="details_object"),
@@ -212,6 +316,10 @@ class AcquisitionRobotsEvaluation(Base):
     match_specificity: Mapped[int] = mapped_column(Integer, nullable=False)
     crawl_delay_seconds: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
     external_decision: Mapped[str] = mapped_column(String(30), nullable=False)
+    failure_phase: Mapped[str | None] = mapped_column(String(30))
+    unavailable_reason: Mapped[str | None] = mapped_column(String(64))
+    retryable: Mapped[str | None] = mapped_column(String(10))
+    owner_summary: Mapped[str | None] = mapped_column(String(500))
     evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     provenance: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")

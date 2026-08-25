@@ -382,6 +382,25 @@ controls are implementation gaps, not Owner lockouts. Browser mutation uses
 the shared Owner-policy service and implements the safeguards in
 `OWNER_POLICY_DECISION_CONTEXT_STANDARD.md`.
 
+### 8.1 Internal And Owner Information
+
+Information may serve both internal operation and Owner explanation. A field
+used by workers, diagnostics, or authorized agent models is not therefore
+internal-only. When a domain standard marks information as Owner information:
+
+```text
+the authoritative structured value must be retained
+the implemented operational/API/CLI surface must preserve Owner access
+the future Admin UI must expose the registered Owner-visible projection
+the User UI may omit administrative diagnostic detail
+Admin-UI placement does not create or limit the Owner's information right
+missing UI presentation remains an explicit implementation gap
+```
+
+The Owner-facing projection shall use the same registered codes and evidence
+as internal consumers. It may translate labels and messages for readability,
+but it shall not hide, merge, or reinterpret distinct reasons.
+
 ## 9. Initial Acquisition Vocabulary
 
 Proof 34 shall register at least these operation types:
@@ -472,9 +491,10 @@ Proof 34 is the first complete acceptance of this standard.
 owner-policy ledger and precedence                    implemented foundation
 acquisition run and domain evidence                   implemented foundation
 common OwnerOperationResult DTO/service               not implemented
-domain result/reason/details registries                not implemented
+robots unavailable reason/details registry             implemented foundation
+other domain result/reason/details registries           not implemented
 cross-domain history projection                        not implemented
-robots snapshots and evaluations                      not implemented
+robots snapshots and evaluations                       persistence foundation implemented
 proof-34 owner-facing detail view                      not implemented
 ```
 

@@ -60,6 +60,14 @@ python -m scripts.owner_policy revoke OVERRIDE_ID \
 Database and script access remain installation-controlled. A future UI may
 call the same service, but it may not create a second authority model.
 
+Owner information access is not created by a UI role or screen. Information
+defined by a governing standard as Owner information shall remain available
+through the implemented operational surface and shall be carried forward into
+the designated Owner/Admin UI when that surface is built. An internal service,
+worker, diagnostic, or authorized agent use of the same information does not
+make it internal-only. Missing UI presentation is an implementation gap, not
+an Owner-information lockout.
+
 ## Precedence
 
 Among matching owner policies, the most exact scope wins:

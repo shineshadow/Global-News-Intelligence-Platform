@@ -123,6 +123,10 @@ raw_evidence_reference, nullable
 parser_name
 parser_version
 parse_state
+failure_phase, nullable
+unavailable_reason, nullable
+retryable, nullable
+owner_summary, nullable
 warnings
 directives_digest, nullable
 provenance
@@ -181,6 +185,10 @@ matched_line_or_location, nullable
 match_specificity
 crawl_delay_seconds, nullable
 external_decision
+failure_phase, nullable
+unavailable_reason, nullable
+retryable, nullable
+owner_summary, nullable
 evaluated_at
 provenance
 details
@@ -206,6 +214,111 @@ unavailable
 The evaluation shall retain the selected user agent, matched rule, pattern,
 specificity, parser identity, and snapshot identity so the result is
 explainable and reproducible.
+
+#### 4.2.1 Unavailable-Evidence Information Contract
+
+`unavailable` is an aggregate external-decision category. It shall never be
+the only explanation when GNI has structured information identifying why the
+evidence is unavailable.
+
+The version-one contract identifier is:
+
+```text
+acquisition.robots.unavailable-information.v1
+```
+
+Every unavailable evaluation, and every snapshot whose retrieval or parsing
+did not produce usable evidence, shall provide the complete tuple:
+
+```text
+failure_phase
+unavailable_reason
+retryable
+owner_summary
+http_status, when applicable
+```
+
+`failure_phase` is one of:
+
+```text
+retrieval
+validation
+parsing
+evaluation
+evidence_binding
+```
+
+`retryable` is one of:
+
+```text
+true
+false
+unknown
+```
+
+`unknown` means the retained evidence does not establish whether another
+attempt is useful. It shall not be rewritten as `false` merely for scheduling
+convenience.
+
+The closed version-one unavailable-reason registry is:
+
+| Failure phase | Machine reason | Owner label |
+| --- | --- | --- |
+| retrieval | `http_not_found` | HTTP not found |
+| retrieval | `http_client_error` | HTTP client error |
+| retrieval | `http_server_error` | HTTP server error |
+| retrieval | `dns_failure` | DNS failure |
+| retrieval | `connection_failure` | Connection failure |
+| retrieval | `connection_timeout` | Connection timeout |
+| retrieval | `read_timeout` | Read timeout |
+| retrieval | `tls_failure` | TLS failure |
+| retrieval | `redirect_limit_reached` | Redirect limit reached |
+| retrieval | `response_too_large` | Response too large |
+| validation | `redirect_destination_rejected` | Redirect destination rejected |
+| validation | `egress_guard_rejected` | Destination rejected |
+| validation | `parser_provenance_untrusted` | Parser provenance untrusted |
+| parsing | `robots_body_empty` | Robots body empty |
+| parsing | `robots_body_malformed` | Robots body malformed |
+| parsing | `parser_failure` | Parser failure |
+| evaluation | `evaluation_failure` | Evaluation failure |
+| evidence_binding | `evidence_missing` | Evidence missing |
+| evidence_binding | `evidence_stale` | Evidence stale |
+| evidence_binding | `evidence_target_mismatch` | Target mismatch |
+| evidence_binding | `evidence_user_agent_mismatch` | User-agent mismatch |
+| evidence_binding | `evidence_untrusted` | Evidence untrusted |
+
+HTTP reasons retain the numeric status. `http_not_found` requires `404` or
+`410`; `http_client_error` requires another `4xx`; and `http_server_error`
+requires `5xx`.
+
+The registry is code-owned and versioned. Unknown free-form reasons fail
+explicitly. Adding, removing, merging, or changing the meaning of a reason
+requires a new Owner decision and compatible schema/version treatment.
+
+`owner_summary` is generated from the registered reason definition. It is
+bounded to 500 characters, contains no raw exception, response body, secret,
+cookie, credential, authorization header, or unrestricted URL material, and
+is safe for an Owner-facing interface. For example:
+
+```text
+external_decision: unavailable
+failure_phase: retrieval
+unavailable_reason: http_not_found
+http_status: 404
+retryable: unknown
+owner_summary: The publisher returned HTTP 404 for /robots.txt.
+```
+
+These fields are both **internal operational information** and **Owner
+information**. Workers, GNI services, diagnostics, and authorized agent models
+may consume the machine fields. The Owner shall receive the same facts through
+operational tooling and the future administrative GUI. Internal availability
+shall never be used to classify the information as hidden from the Owner.
+
+The reason describes the evidence failure only. It does not select the GNI
+response. The effective Owner value of
+`acquisition.robots.unavailable_action` independently determines `allow`,
+`delay`, or `deny`.
 
 ### 4.3 Robots gates
 
@@ -749,7 +862,11 @@ parse_state
 latest_snapshot_public_id, nullable
 fresh_until, nullable
 stale_until, nullable
+failure_phase
 unavailable_reason
+retryable
+owner_summary
+http_status, nullable
 effective_unavailable_action
 next_eligible_at, nullable
 selected_override_public_id, nullable
@@ -758,6 +875,19 @@ selected_override_public_id, nullable
 All fields are bounded and sanitized.
 
 ## 13. Owner-Facing UI
+
+Unavailable-evidence information is a required future administrative
+presentation, not optional diagnostics. Until a separate User UI and Admin UI
+exist, operational, API, CLI, or database access shall preserve Owner access.
+Once those surfaces exist, the compact User UI may omit the diagnostic detail,
+but the Admin UI shall expose the failure phase, reason label and stable code,
+HTTP status when present, retryability, sanitized summary, controlling
+unavailable action, evidence identity, and history.
+
+Admin-UI placement is a presentation decision. It does not grant, define, or
+narrow Owner authority or information access. A missing Admin UI is an
+implementation gap that must remain tracked; it is not permission to discard,
+hide, or stop producing the information.
 
 The Acquisition Health row may add only a compact summary:
 
@@ -844,6 +974,11 @@ viewing and previewing do not consume authority
 changed disallow to allow clears exact gate
 changed disallow replaces older gate
 stale, unreachable, and malformed evidence follow unavailable policy
+every unavailable result has a registered phase, reason, retryability value, and Owner summary
+HTTP failure reasons retain and validate the applicable status
+unknown reason/phase combinations are rejected
+Owner summaries are registered, bounded, sanitized, and contain no raw exception or secret material
+internal, agent-readable, operational, API, CLI, and Admin-UI projections preserve the same reason semantics
 304 revalidation retains prior parsed evidence with explicit linkage
 expired evidence is not treated as current
 override revocation causes still-valid disallow to govern again
@@ -896,6 +1031,9 @@ gate reconciliation                                 not implemented
 remaining robots policy keys                        registered; runtime use pending
 OwnerOperationResult integration                    not implemented
 Owner policy explain/preview                        service foundation implemented
+unavailable reason registry                         implemented foundation
+unavailable structured persistence                  implemented foundation
+unavailable Admin-UI presentation                   not implemented
 proof-34 detail UI                                  not implemented
 proof 34                                           incomplete
 ```
