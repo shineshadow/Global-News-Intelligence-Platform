@@ -523,8 +523,10 @@ acquisition.robots.cache.max_stale_seconds
 acquisition.robots.fetch_limits
 ```
 
-Only `acquisition.robots.enforce` is currently registered and connected to the
-worker. The other keys remain pending until registered and implemented under
+All six Proof 34 robots policy keys are now registered in the shared registry.
+Only `acquisition.robots.enforce` is connected to the existing worker
+foundation. Retrieval, evaluation, gate reconciliation, operation-result, API,
+and UI consumers remain pending under
 `ROBOTS_ACQUISITION_AND_ENFORCEMENT_STANDARD.md`.
 
 ## 14. Current Implementation Status
@@ -534,13 +536,14 @@ owner_policy_overrides ledger                       implemented
 owner_policy_override_events                        implemented
 scope precedence and priority                       implemented
 runtime resolve and bounded-use consumption         implemented foundation
-complete registered policy-definition catalog       not implemented
-non-consuming explain DTO/service                   not implemented
-hypothetical preview DTO/service                    not implemented
-basis fingerprint and stale-preview rejection       not implemented
+registered definitions for current ledger keys      implemented
+non-consuming explain DTO/service                   implemented foundation
+hypothetical preview DTO/service                    implemented foundation
+basis fingerprint and stale-preview rejection       implemented foundation
 authenticated UI mutation                           not implemented
-proof-34 full policy family                         not implemented
+proof-34 policy family registration                 implemented
+proof-34 runtime consumers                          not implemented
 ```
 
-This standard governs the pending implementation and does not claim those
-items are complete.
+The foundation items above have focused database-backed tests. This standard
+does not claim the remaining runtime consumers or Proof 34 are complete.

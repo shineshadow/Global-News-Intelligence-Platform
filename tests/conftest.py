@@ -109,6 +109,9 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            acquisition_robots_gates,
+            acquisition_robots_evaluations,
+            acquisition_robots_snapshots,
             owner_policy_override_events,
             owner_policy_overrides,
             acquisition_endpoint_cutover_events,

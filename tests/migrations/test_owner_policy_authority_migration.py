@@ -9,7 +9,7 @@ from app.config import settings
 from app.models import OwnerPolicyOverride
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "a9c1e3f5b7d2"
+HEAD = "c2f4a6b8d0e1"
 PREVIOUS = "d3f5a7b9c1e4"
 
 

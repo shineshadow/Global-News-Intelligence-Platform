@@ -2,7 +2,7 @@
 
 **Audit date:** 08-24-2026<br>
 **Scope:** Proof 34 approval, robots, mediated acquisition, GUI status, and Override documentation changed after restart<br>
-**Disposition:** Documentation corrected to conform; runtime implementation and acceptance evidence pending
+**Disposition:** Documentation corrected; Owner-policy and robots persistence foundation implemented and focused-tested; runtime/UI acceptance pending
 
 ## Governing Authority
 
@@ -102,8 +102,8 @@ Documentation conformance does not prove runtime conformance. Proof 34 still
 must demonstrate:
 
 ```text
-every robots policy is registered in the shared Owner policy service
-every supported scope and precedence path works
+every robots policy is consumed at its registered runtime resolution point
+every supported scope and precedence path works across worker, API, CLI, and UI
 default, stronger, weaker, bounded-use, and exact-request Owner values work
 GUI, CLI, API, and worker resolve the same decision
 GUI viewing and preview do not consume authority
@@ -111,7 +111,7 @@ the GUI Override writes through the shared ledger
 external Disallows evidence remains unchanged beside an effective override
 unavailable_action allow, delay, and deny each govern correctly
 no generic rate bucket becomes hidden robots authority
-no implementation constant silently narrows the approved Owner policy
+no runtime consumer or installation egress limit silently narrows the approved Owner policy
 ```
 
 Proof 34 cannot pass until those behaviors have focused tests, runtime evidence,
@@ -120,6 +120,7 @@ and final requirement-to-evidence traceability.
 ## Audit Conclusion
 
 After the corrections recorded above, the edited documentation conforms to the
-four governing `OWNER_*` documents. This conclusion applies to documentation
-only. Runtime code has not yet been implemented or accepted, so implementation
-conformance remains unproven.
+four governing `OWNER_*` documents. The shared registry, resolution-context
+service, and robots persistence foundation now have focused implementation
+evidence. Retrieval, parser, worker reconciliation, API/UI integration, and
+complete Proof 34 acceptance remain unproven.

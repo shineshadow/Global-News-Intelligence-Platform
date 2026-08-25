@@ -889,13 +889,13 @@ worker resolution of robots enforcement             implemented foundation
 generic robots bucket field                         implemented but not adequate
 robots retrieval                                    not implemented
 robots parser                                       not implemented
-robots snapshots                                    not implemented
-robots evaluations                                  not implemented
-exact robots gates                                  not implemented
+robots snapshots                                    persistence foundation implemented
+robots evaluations                                  persistence foundation implemented
+exact robots gates                                  persistence foundation implemented
 gate reconciliation                                 not implemented
-remaining robots policy keys                        not implemented
+remaining robots policy keys                        registered; runtime use pending
 OwnerOperationResult integration                    not implemented
-Owner policy explain/preview                        not implemented
+Owner policy explain/preview                        service foundation implemented
 proof-34 detail UI                                  not implemented
 proof 34                                           incomplete
 ```

@@ -33,6 +33,11 @@ from app.models.acquisition_control import (
     SecretReference,
     SecretReferenceEvent,
 )
+from app.models.acquisition_robots import (
+    AcquisitionRobotsEvaluation,
+    AcquisitionRobotsGate,
+    AcquisitionRobotsSnapshot,
+)
 from app.models.alert import (
     Alert,
     AlertDelivery,
@@ -168,6 +173,9 @@ __all__ = [
     "AcquisitionRateLimitPolicy",
     "AcquisitionRateLimitReservation",
     "AcquisitionRateLimitReservationBucket",
+    "AcquisitionRobotsEvaluation",
+    "AcquisitionRobotsGate",
+    "AcquisitionRobotsSnapshot",
     "AcquisitionSecretBinding",
     "AcquisitionSecretBindingEvent",
     "Alert",

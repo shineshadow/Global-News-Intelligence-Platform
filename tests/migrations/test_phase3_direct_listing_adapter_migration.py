@@ -8,7 +8,7 @@ from sqlalchemy import text
 from app.config import settings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "a9c1e3f5b7d2"
+HEAD = "c2f4a6b8d0e1"
 PREVIOUS = "b7d9e1f3a5c2"
 
 

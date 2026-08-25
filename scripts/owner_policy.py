@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import sys
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
@@ -10,7 +11,6 @@ from sqlalchemy import select
 from app.database import async_session_factory, engine
 from app.models import OwnerPolicyOverride, OwnerPolicyOverrideEvent
 from app.services.owner_policy_service import (
-    OWNER_POLICY_DEFAULTS,
     OwnerPolicyContext,
     OwnerPolicyError,
     OwnerPolicyService,
@@ -38,6 +38,8 @@ def build_parser() -> argparse.ArgumentParser:
     set_command.add_argument("--valid-until", type=_instant)
     set_command.add_argument("--max-uses", type=int)
     set_command.add_argument("--once", action="store_true")
+    set_command.add_argument("--basis-fingerprint")
+    _add_context_arguments(set_command)
 
     revoke = commands.add_parser("revoke", help="Revoke an active override by database ID.")
     revoke.add_argument("override_id", type=int)
@@ -50,18 +52,51 @@ def build_parser() -> argparse.ArgumentParser:
 
     effective = commands.add_parser("effective", help="Resolve one effective policy value.")
     effective.add_argument("policy_key")
-    effective.add_argument("--default", help="JSON default; registered defaults are automatic.")
-    effective.add_argument("--adapter")
-    effective.add_argument("--platform")
-    effective.add_argument("--credential-id", type=int, action="append", default=[])
-    effective.add_argument("--origin")
-    effective.add_argument("--source-id", type=int)
-    effective.add_argument("--endpoint-id", type=int)
-    effective.add_argument("--request-identity")
+    effective.add_argument("--default", help="Defensive check against the registered JSON default.")
+    _add_context_arguments(effective)
+
+    explain = commands.add_parser(
+        "explain", help="Explain a registered policy without consuming it."
+    )
+    explain.add_argument("policy_key")
+    _add_context_arguments(explain)
+
+    preview = commands.add_parser("preview", help="Preview an override without persisting it.")
+    preview.add_argument("policy_key")
+    preview.add_argument("value", help="Proposed registered JSON value.")
+    preview.add_argument("--scope-type", choices=SCOPES, default="global")
+    preview.add_argument("--scope-identity", default="*")
+    preview.add_argument("--priority", type=int, default=0)
+    preview.add_argument("--valid-from", type=_instant)
+    preview.add_argument("--valid-until", type=_instant)
+    preview.add_argument("--max-uses", type=int)
+    _add_context_arguments(preview)
 
     history = commands.add_parser("history", help="List append-only events for an override.")
     history.add_argument("override_id", type=int)
     return parser
+
+
+def _add_context_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--adapter")
+    parser.add_argument("--platform")
+    parser.add_argument("--credential-id", type=int, action="append", default=[])
+    parser.add_argument("--origin")
+    parser.add_argument("--source-id", type=int)
+    parser.add_argument("--endpoint-id", type=int)
+    parser.add_argument("--request-identity")
+
+
+def _context(arguments: argparse.Namespace) -> OwnerPolicyContext:
+    return OwnerPolicyContext(
+        adapter=arguments.adapter,
+        platform=arguments.platform,
+        credential_ids=tuple(arguments.credential_id),
+        origin=arguments.origin,
+        source_id=arguments.source_id,
+        endpoint_id=arguments.endpoint_id,
+        request_identity=arguments.request_identity,
+    )
 
 
 def _instant(value: str) -> datetime:
@@ -102,6 +137,8 @@ async def _run(arguments: argparse.Namespace) -> int:
                 valid_from=arguments.valid_from,
                 valid_until=arguments.valid_until,
                 max_uses=max_uses,
+                expected_basis_fingerprint=arguments.basis_fingerprint,
+                basis_context=_context(arguments),
             )
             result = _override_dict(override)
         _print(result)
@@ -128,32 +165,43 @@ async def _run(arguments: argparse.Namespace) -> int:
         _print([_override_dict(row) for row in rows])
         return 0
     if arguments.command == "effective":
-        if arguments.default is None and arguments.policy_key not in OWNER_POLICY_DEFAULTS:
-            raise OwnerPolicyError("Unknown policy requires an explicit JSON --default value.")
-        default = (
-            OWNER_POLICY_DEFAULTS[arguments.policy_key]
-            if arguments.default is None
-            else _json(arguments.default)
-        )
         async with async_session_factory() as session:
-            decision = await service.resolve(
+            kwargs = {
+                "policy_key": arguments.policy_key,
+                "context": _context(arguments),
+            }
+            if arguments.default is not None:
+                kwargs["default"] = _json(arguments.default)
+            effective_decision = await service.resolve(session, **kwargs)
+        _print(asdict(effective_decision))
+        return 0
+    if arguments.command == "explain":
+        async with async_session_factory() as session:
+            explanation = await service.explain(
                 session,
                 policy_key=arguments.policy_key,
-                default=default,
-                context=OwnerPolicyContext(
-                    adapter=arguments.adapter,
-                    platform=arguments.platform,
-                    credential_ids=tuple(arguments.credential_id),
-                    origin=arguments.origin,
-                    source_id=arguments.source_id,
-                    endpoint_id=arguments.endpoint_id,
-                    request_identity=arguments.request_identity,
-                ),
+                context=_context(arguments),
             )
-        _print(decision.__dict__)
+        _print(explanation.as_dict())
+        return 0
+    if arguments.command == "preview":
+        async with async_session_factory() as session:
+            override_preview = await service.preview_override(
+                session,
+                policy_key=arguments.policy_key,
+                proposed_value=_json(arguments.value),
+                scope_type=arguments.scope_type,
+                scope_identity=arguments.scope_identity,
+                context=_context(arguments),
+                priority=arguments.priority,
+                valid_from=arguments.valid_from,
+                valid_until=arguments.valid_until,
+                max_uses=arguments.max_uses,
+            )
+        _print(override_preview.as_dict())
         return 0
     async with async_session_factory() as session:
-        rows = (
+        event_rows = (
             await session.scalars(
                 select(OwnerPolicyOverrideEvent)
                 .where(OwnerPolicyOverrideEvent.override_id == arguments.override_id)
@@ -170,7 +218,7 @@ async def _run(arguments: argparse.Namespace) -> int:
                 "details": row.details,
                 "recorded_at": row.recorded_at,
             }
-            for row in rows
+            for row in event_rows
         ]
     )
     return 0

@@ -4,7 +4,7 @@
 **Approval date:** 08-24-2026<br>
 **Decision:** Approved<br>
 **Scope:** Proof 34 version-one robots policy defaults, validation bounds, parser distribution, and parser provenance<br>
-**Implementation status:** Approved for implementation; implementation and acceptance evidence pending
+**Implementation status:** Policy registration and persistence foundation implemented; focused and complete repository suites pass; parser/runtime/UI acceptance pending
 
 ## Decision
 
@@ -90,6 +90,7 @@ The mediated-adapter architecture decision was subsequently resolved by
 ## Completion Boundary
 
 This record preserves the Owner's selected values; it does not grant or define
-the Owner's authority. It does not claim that policy registration, persistence,
-retrieval, parser integration, evaluation, gates, reconciliation, UI,
-migrations, tests, runtime proof, or final Proof 34 acceptance are complete.
+the Owner's authority. Policy registration, constrained persistence models, and
+the migration now exist with focused tests. It does not claim that retrieval,
+parser integration, runtime evaluation/gate reconciliation, UI, runtime proof,
+or final Proof 34 acceptance are complete.
