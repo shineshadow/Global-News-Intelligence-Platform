@@ -1019,23 +1019,24 @@ change report records exact evidence and remaining exclusions
 ## 17. Current Implementation Status
 
 ```text
-acquisition.robots.enforce registration            implemented foundation
-worker resolution of robots enforcement             implemented foundation
-generic robots bucket field                         implemented but not adequate
-robots retrieval                                    not implemented
-robots parser                                       not implemented
-robots snapshots                                    persistence foundation implemented
-robots evaluations                                  persistence foundation implemented
-exact robots gates                                  persistence foundation implemented
-gate reconciliation                                 not implemented
-remaining robots policy keys                        registered; runtime use pending
-OwnerOperationResult integration                    not implemented
+acquisition.robots.enforce registration            implemented
+worker resolution of robots enforcement             implemented at exact decision point
+generic robots bucket field                         retained but deauthorized for Phase 3 robots
+robots retrieval                                    implemented through guarded outbound boundary
+robots parser                                       pinned Protego 0.6.2 adapter implemented
+robots snapshots                                    immutable runtime persistence implemented
+robots evaluations                                  immutable exact runtime persistence implemented
+exact robots gates                                  separate runtime persistence implemented
+gate reconciliation                                 implemented for exact request scope
+remaining robots policy keys                        registered and applied by runtime
+OwnerOperationResult integration                    implemented in Phase 3 run evidence
 Owner policy explain/preview                        service foundation implemented
 unavailable reason registry                         implemented foundation
-unavailable structured persistence                  implemented foundation
+unavailable structured persistence                  implemented runtime
 unavailable Admin-UI presentation                   not implemented
 proof-34 detail UI                                  not implemented
-proof 34                                           incomplete
+proof 34B runtime                                  implemented; final acceptance pending 34C/34D
+proof 34                                           incomplete pending authentication, UI, and acceptance
 ```
 
 The existing generic all-bucket robots hold behavior shall not be treated as

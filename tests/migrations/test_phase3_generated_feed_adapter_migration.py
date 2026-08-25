@@ -14,7 +14,7 @@ from app.models import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "e5a7c9d1f3b2"
+HEAD = "a7c9e1f3b5d4"
 
 
 def _alembic(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -51,8 +51,16 @@ async def test_generated_feed_adapter_seed_is_exact_and_non_activating(
         ).all()
         expected_schema = {
             "type": "object",
-            "properties": {"internal_service_identity": {"type": "string", "minLength": 1}},
-            "required": ["internal_service_identity"],
+            "properties": {
+                "internal_service_identity": {"type": "string", "minLength": 1},
+                "publisher_target_url": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192,
+                    "pattern": "^https?://",
+                },
+            },
+            "required": ["internal_service_identity", "publisher_target_url"],
             "additionalProperties": False,
         }
         assert [tuple(row) for row in adapters] == [
@@ -179,7 +187,10 @@ async def test_generated_feed_configuration_blocks_lossless_downgrade(
                 source_endpoint_id=endpoint.id,
                 adapter_id=adapter.id,
                 configuration_version="generated-feed-downgrade-1",
-                configuration={"internal_service_identity": "local-rsshub"},
+                configuration={
+                    "internal_service_identity": "local-rsshub",
+                    "publisher_target_url": "https://publisher.example/news/feed.xml",
+                },
                 status="active",
                 actor="test",
                 reason="prove lossless downgrade refusal",
@@ -188,5 +199,7 @@ async def test_generated_feed_configuration_blocks_lossless_downgrade(
 
     downgrade = _alembic("downgrade", "a4c2e8f0b6d1", check=False)
     assert downgrade.returncode != 0
-    assert "generated-feed adapter downgrade" in (downgrade.stdout + downgrade.stderr)
+    assert "generated-feed publisher target configurations" in (
+        downgrade.stdout + downgrade.stderr
+    )
     assert _alembic("current").stdout.strip().endswith(f"{HEAD} (head)")

@@ -34,7 +34,7 @@ def test_feed_cutover_migration_clean_downgrade_and_reupgrade() -> None:
     _alembic("downgrade", "f3a1c7d9e2b4")
     assert _alembic("current").stdout.strip().endswith("f3a1c7d9e2b4")
     _alembic("upgrade", "head")
-    assert _alembic("current").stdout.strip().endswith("e5a7c9d1f3b2 (head)")
+    assert _alembic("current").stdout.strip().endswith("a7c9e1f3b5d4 (head)")
 
 
 async def test_cutover_migration_creates_no_operational_state(
@@ -103,4 +103,4 @@ async def test_cutover_history_blocks_destructive_downgrade(
     downgrade = _alembic("downgrade", "f3a1c7d9e2b4", check=False)
     assert downgrade.returncode != 0
     assert "cutover audit history exists" in (downgrade.stdout + downgrade.stderr)
-    assert _alembic("current").stdout.strip().endswith("e5a7c9d1f3b2 (head)")
+    assert _alembic("current").stdout.strip().endswith("a7c9e1f3b5d4 (head)")

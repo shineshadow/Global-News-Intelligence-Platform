@@ -64,12 +64,19 @@ async def test_generated_feed_adapter_requires_exact_internal_service_policy(
 ) -> None:
     client = FakeGuardedClient()
     adapter = adapter_type(http_client=client)
-    configuration = {"internal_service_identity": identity}
+    configuration = {
+        "internal_service_identity": identity,
+        "publisher_target_url": "https://publisher.example/news/feed.xml",
+    }
 
     retrieval = await adapter.retrieve(
         _endpoint(url),
         configuration=configuration,
         credentials={},
+    )
+    assert (
+        adapter.robots_target_url(_endpoint(url), configuration=configuration)
+        == "https://publisher.example/news/feed.xml"
     )
     normalized = await adapter.normalize(retrieval)
 
@@ -95,7 +102,15 @@ async def test_generated_feed_adapter_requires_exact_internal_service_policy(
         {},
         {"internal_service_identity": ""},
         {"internal_service_identity": 1},
-        {"internal_service_identity": "service", "unexpected": True},
+        {
+            "internal_service_identity": "service",
+            "publisher_target_url": "not-a-url",
+        },
+        {
+            "internal_service_identity": "service",
+            "publisher_target_url": "https://publisher.example/feed",
+            "unexpected": True,
+        },
     ],
 )
 async def test_generated_feed_adapter_rejects_unsafe_configuration(
@@ -104,7 +119,10 @@ async def test_generated_feed_adapter_rejects_unsafe_configuration(
 ) -> None:
     adapter = adapter_type(http_client=FakeGuardedClient())
 
-    with pytest.raises(ValueError, match="internal_service_identity|requires only"):
+    with pytest.raises(
+        ValueError,
+        match="internal_service_identity|publisher_target_url|requires",
+    ):
         await adapter.retrieve(
             _endpoint("http://internal.example/feed"),
             configuration=configuration,

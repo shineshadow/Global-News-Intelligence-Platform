@@ -11,7 +11,7 @@ approved a permanent lockout.
 
 | Policy family | Current default | Owner authority status | Next integration |
 |---|---|---|---|
-| Robots access/crawl decision | Enforce observed restriction | Owner authority foundation wired; v1 defaults, parser, mediated workflow, and GUI override confirmed; full runtime pending | Implement retrieval, persistence, parsing, evaluation, gates, GUI access, and default/override proofs without narrowing supported Owner scopes |
+| Robots access/crawl decision | Enforce observed restriction | Proof 34B runtime wired through exact Owner policy, evidence, evaluation, and gates; authenticated GUI override remains pending | Build the site-wide Authentication and Authority Foundation, then expose the existing authority through 34C without narrowing supported Owner scopes |
 | HTTP Retry-After | Honor bounded valid value | Implemented | Extend effective-policy diagnostics/UI if desired |
 | Provider quota/reset and HTTP 429 fallback | Enforce provider hold | Implemented | Extend effective-policy diagnostics/UI if desired |
 | Manual-poll rate denial | Same buckets as scheduled work | Implemented | Extend effective-policy diagnostics/UI if desired |
@@ -22,7 +22,7 @@ approved a permanent lockout.
 | Sandbox limits and detector availability | Fixed limits and fail closed | Pending | Add bounded resource/action policy adapters |
 | SSRF/private/internal destination policy | Public-only except installation registrations | Pending | Add exact owner network/host authorization without weakening destination evidence |
 | Redirect credential forwarding | Strip/deny across origins | Pending | Add exact destination/credential authorization policy |
-| Response byte/header/redirect/time limits | Installation-owned fixed limits | Generic family pending; Proof 34 robots fetch defaults and bounds Owner-approved, policy adapter pending | Route limit values through scoped owner policy; preserve explicit Owner disposition for installation egress bounds |
+| Response byte/header/redirect/time limits | Installation-owned fixed limits | Generic family pending; Proof 34 robots fetch defaults, bounds, and guarded runtime adapter implemented | Route non-robots limit families through scoped owner policy; preserve explicit Owner disposition for installation egress bounds |
 | Missing/invalid secret behavior | Send no request | Pending | Add explicit fallback behavior policy without persisting secret values |
 | Adapter/legacy fallback | Fail closed for configured Phase 3 endpoint | Pending | Add exact fallback and degraded-operation policies |
 | Signature/hash/scanner bypass behavior | Always rescan known bytes | Pending | Add explicit owner acceptance path with provenance |

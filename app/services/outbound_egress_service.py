@@ -29,6 +29,10 @@ CLOUD_METADATA_ADDRESSES = frozenset(
 class OutboundEgressError(RuntimeError):
     """Base failure for guarded outbound retrieval."""
 
+    def __init__(self, message: str, *, reason_code: str | None = None) -> None:
+        self.reason_code = reason_code
+        super().__init__(message)
+
 
 class OutboundDestinationRejected(OutboundEgressError):
     """A URL, resolved address, redirect, or internal identity was refused."""
@@ -216,7 +220,8 @@ class AsyncioControlledResolver:
             )
         except OSError as exc:
             raise OutboundDestinationRejected(
-                "Controlled DNS resolution failed."
+                "Controlled DNS resolution failed.",
+                reason_code="dns_failure",
             ) from exc
         addresses: list[str] = []
         for _, _, _, _, socket_address in rows:
@@ -225,7 +230,8 @@ class AsyncioControlledResolver:
                 addresses.append(address)
         if not addresses:
             raise OutboundDestinationRejected(
-                "Controlled DNS resolution returned no addresses."
+                "Controlled DNS resolution returned no addresses.",
+                reason_code="dns_failure",
             )
         return tuple(addresses)
 
@@ -426,7 +432,15 @@ class GuardedHTTPClient:
         try:
             async with asyncio.timeout(self._limits.total_seconds):
                 while True:
-                    destination = await self._guard.validate(current_url, policy)
+                    try:
+                        destination = await self._guard.validate(current_url, policy)
+                    except OutboundDestinationRejected as exc:
+                        if redirect_count:
+                            raise OutboundDestinationRejected(
+                                "Outbound redirect destination was rejected.",
+                                reason_code="redirect_destination_rejected",
+                            ) from exc
+                        raise
                     if (
                         previous_origin is not None
                         and destination.origin != previous_origin
@@ -474,7 +488,8 @@ class GuardedHTTPClient:
                         ):
                             if redirect_count >= self._limits.max_redirects:
                                 raise OutboundResponseLimitError(
-                                    "Outbound redirect limit was exceeded."
+                                    "Outbound redirect limit was exceeded.",
+                                    reason_code="redirect_limit_reached",
                                 )
                             redirect_url = destination.url.join(
                                 response.headers["Location"]
@@ -516,7 +531,8 @@ class GuardedHTTPClient:
                         )
         except TimeoutError as exc:
             raise OutboundResponseLimitError(
-                "Outbound request exceeded its total duration limit."
+                "Outbound request exceeded its total duration limit.",
+                reason_code="read_timeout",
             ) from exc
 
 
@@ -618,7 +634,8 @@ def _enforce_header_limit(headers: httpx.Headers, byte_limit: int) -> None:
     total = sum(len(name) + len(value) + 4 for name, value in headers.raw)
     if total > byte_limit:
         raise OutboundResponseLimitError(
-            "Outbound response headers exceeded their byte limit."
+            "Outbound response headers exceeded their byte limit.",
+            reason_code="response_too_large",
         )
 
 
@@ -640,14 +657,16 @@ async def _read_limited_body(
             )
         if declared_length > byte_limit:
             raise OutboundResponseLimitError(
-                "Outbound response exceeded its declared byte limit."
+                "Outbound response exceeded its declared byte limit.",
+                reason_code="response_too_large",
             )
     content = bytearray()
     async for chunk in response.aiter_bytes():
         content.extend(chunk)
         if len(content) > byte_limit:
             raise OutboundResponseLimitError(
-                "Outbound response exceeded its streaming byte limit."
+                "Outbound response exceeded its streaming byte limit.",
+                reason_code="response_too_large",
             )
     return bytes(content)
 

@@ -19,6 +19,7 @@ from app.models import (
     AcquisitionAdapterArtifactCapability,
     AcquisitionEndpointConfiguration,
     ArtifactFormat,
+    IngestionRun,
     SourceEndpoint,
 )
 from app.repositories import ingestion_run_repository, source_repository
@@ -38,16 +39,21 @@ from app.services.ingestion_service import (
     record_feed_poll_delay,
     record_feed_poll_failure,
 )
+from app.services.owner_operation_result_service import OwnerOperationResult
 from app.services.owner_policy_service import (
     ARCHIVE_INSPECTION_LIMITS,
     DEFAULT_ARCHIVE_INSPECTION_LIMITS,
     MANUAL_POLL_RATE_ENFORCEMENT,
     PROVIDER_HARD_LIMIT_ENFORCEMENT,
     RETRY_AFTER_ENFORCEMENT,
-    ROBOTS_ENFORCEMENT,
     EffectiveOwnerPolicy,
     OwnerPolicyContext,
     OwnerPolicyService,
+)
+from app.services.robots_runtime_service import (
+    RobotsAuthorizationResult,
+    RobotsRuntimeService,
+    canonicalize_robots_target,
 )
 from ingestion.adapters import SourceAcquisitionAdapter
 from ingestion.adapters.types import RateLimitFeedback
@@ -101,6 +107,7 @@ class Phase3AcquisitionWorker:
         secret_service: AcquisitionSecretService | None = None,
         rate_service: AcquisitionRateLimitService | None = None,
         owner_policy_service: OwnerPolicyService | None = None,
+        robots_service: RobotsRuntimeService | None = None,
     ) -> None:
         keyed: dict[tuple[str, str], SourceAcquisitionAdapter] = {}
         for adapter in adapters:
@@ -117,6 +124,9 @@ class Phase3AcquisitionWorker:
         self._secret_service = secret_service or AcquisitionSecretService()
         self._rate_service = rate_service or AcquisitionRateLimitService()
         self._owner_policy_service = owner_policy_service or OwnerPolicyService()
+        self._robots_service = robots_service or RobotsRuntimeService(
+            owner_policy_service=self._owner_policy_service
+        )
 
     async def run(
         self,
@@ -146,6 +156,9 @@ class Phase3AcquisitionWorker:
         owner_authority_evidence: dict[str, object] = {}
         archive_limits = ArchiveInspectionLimits()
         archive_policy_evidence: dict[str, object] = {}
+        robots_authorization: RobotsAuthorizationResult | None = None
+        robots_target_url: str | None = None
+        robots_owner_context: OwnerPolicyContext | None = None
         try:
             async with self._session_factory() as session, session.begin():
                 resolved_secrets = await self._secret_service.resolve_required(
@@ -158,6 +171,43 @@ class Phase3AcquisitionWorker:
                     credential_ids=resolved_secrets.secret_reference_ids,
                     request_identity=execution_identity,
                 )
+                robots_target_selector = getattr(execution.adapter, "robots_target_url", None)
+                if not callable(robots_target_selector):
+                    raise AcquisitionWorkerError(
+                        "The exact adapter does not declare its publisher robots target."
+                    )
+                robots_target_url = robots_target_selector(
+                    execution.endpoint,
+                    configuration=dict(execution.configuration.configuration),
+                )
+                robots_target = canonicalize_robots_target(robots_target_url)
+                robots_owner_context = OwnerPolicyContext(
+                    adapter=owner_context.adapter,
+                    platform=owner_context.platform,
+                    credential_ids=owner_context.credential_ids,
+                    origin=robots_target.origin,
+                    source_id=owner_context.source_id,
+                    endpoint_id=owner_context.endpoint_id,
+                    request_identity=owner_context.request_identity,
+                )
+                robots_authorization = await self._robots_service.authorize(
+                    session,
+                    source_endpoint_id=source_endpoint_id,
+                    ingestion_run_id=execution.poll_context.run_id,
+                    request_identity=execution_identity,
+                    target_url=robots_target_url,
+                    owner_context=robots_owner_context,
+                    runtime_actor=owner_identifier,
+                    adapter_slug=execution.adapter.slug,
+                    unavailable_retry_at=datetime.now(UTC)
+                    + timedelta(seconds=execution.poll_context.poll_interval_seconds),
+                    consume_permitting_authority=False,
+                )
+                await self._record_robots_operations(
+                    session,
+                    ingestion_run_id=execution.poll_context.run_id,
+                    authorization=robots_authorization,
+                )
                 owner_decisions = {
                     key: await self._owner_policy_service.resolve_bool(
                         session,
@@ -168,7 +218,6 @@ class Phase3AcquisitionWorker:
                         runtime_actor=owner_identifier,
                     )
                     for key in (
-                        ROBOTS_ENFORCEMENT,
                         RETRY_AFTER_ENFORCEMENT,
                         PROVIDER_HARD_LIMIT_ENFORCEMENT,
                         MANUAL_POLL_RATE_ENFORCEMENT,
@@ -201,25 +250,70 @@ class Phase3AcquisitionWorker:
                 enforce_provider_hard_limits = bool(
                     owner_decisions[PROVIDER_HARD_LIMIT_ENFORCEMENT].value
                 )
-                enforce_robots = bool(owner_decisions[ROBOTS_ENFORCEMENT].value)
                 bypass_limits = (
                     trigger_type == "manual"
                     and not owner_decisions[MANUAL_POLL_RATE_ENFORCEMENT].value
                 )
                 owner_authority_evidence = self._owner_authority_evidence(owner_decisions)
-                decision = await self._rate_service.reserve(
-                    session,
-                    ingestion_run_id=execution.poll_context.run_id,
-                    source_endpoint_id=source_endpoint_id,
-                    request_identity=execution_identity,
-                    secret_reference_ids=resolved_secrets.secret_reference_ids,
-                    bypass_limits=bypass_limits,
-                    enforce_retry_after=enforce_retry_after,
-                    enforce_provider_hard_limits=enforce_provider_hard_limits,
-                    enforce_robots=enforce_robots,
+                if robots_authorization.permitted:
+                    decision = await self._rate_service.reserve(
+                        session,
+                        ingestion_run_id=execution.poll_context.run_id,
+                        source_endpoint_id=source_endpoint_id,
+                        request_identity=execution_identity,
+                        secret_reference_ids=resolved_secrets.secret_reference_ids,
+                        bypass_limits=bypass_limits,
+                        enforce_retry_after=enforce_retry_after,
+                        enforce_provider_hard_limits=enforce_provider_hard_limits,
+                        enforce_robots=False,
+                    )
+                    if decision.permitted and decision.reservation is not None:
+                        reservation_id = decision.reservation.id
+                        if robots_authorization.pending_policy_key is not None:
+                            consumer = getattr(
+                                self._robots_service,
+                                "consume_permitting_authority",
+                                None,
+                            )
+                            if not callable(consumer):
+                                raise AcquisitionWorkerError(
+                                    "Robots service cannot consume pending Owner authority."
+                                )
+                            await consumer(
+                                session,
+                                authorization=robots_authorization,
+                                owner_context=robots_owner_context,
+                                runtime_actor=owner_identifier,
+                            )
+
+            if robots_authorization is not None and not robots_authorization.permitted:
+                robots_next_eligible_at = robots_authorization.next_eligible_at or (
+                    datetime.now(UTC)
+                    + timedelta(seconds=execution.poll_context.poll_interval_seconds)
                 )
-                if decision.permitted and decision.reservation is not None:
-                    reservation_id = decision.reservation.id
+                await record_feed_poll_delay(
+                    execution.poll_context,
+                    next_eligible_at=robots_next_eligible_at,
+                    started_clock=started_clock,
+                    session_factory=self._session_factory,
+                )
+                await self._finalize_authority(
+                    execution,
+                    owner_identifier=owner_identifier,
+                    reservation_id=None,
+                    succeeded=True,
+                )
+                return AcquisitionExecutionResult(
+                    endpoint_id=source_endpoint_id,
+                    state=(
+                        "robots_delayed"
+                        if robots_authorization.state == "delay"
+                        else "robots_denied"
+                    ),
+                    run_id=execution.poll_context.run_id,
+                    poll=None,
+                    next_eligible_at=robots_next_eligible_at,
+                )
 
             if reservation_id is None:
                 assert decision.next_eligible_at is not None
@@ -277,6 +371,23 @@ class Phase3AcquisitionWorker:
                 configuration=dict(execution.configuration.configuration),
                 credentials=dict(resolved_secrets.values),
             )
+            assert robots_authorization is not None and robots_target_url is not None
+            await self._record_resource_operation(
+                ingestion_run_id=execution.poll_context.run_id,
+                operation=OwnerOperationResult(
+                    operation_type="acquisition.retrieve_resource",
+                    outcome="not_modified" if retrieval.not_modified else "retrieved",
+                    reason_code="acquisition.resource_retrieval_authorized",
+                    detail_schema="acquisition.resource_retrieval_authorized.v1",
+                    details={
+                        "publisher_target_url": robots_target_url,
+                        "status_code": retrieval.status_code,
+                        "response_bytes": retrieval.response_bytes,
+                        "snapshot_id": robots_authorization.snapshot_id,
+                        "evaluation_id": robots_authorization.evaluation_id,
+                    },
+                ),
+            )
             response_feedback = retrieval.rate_limit_feedback
             if not retrieval.not_modified:
                 outcome = await self._artifact_runtime.ingest(
@@ -328,7 +439,7 @@ class Phase3AcquisitionWorker:
         except Exception as exc:
             rate_feedback = getattr(exc, "rate_limit_feedback", None)
             if isinstance(rate_feedback, RateLimitFeedback) and rate_feedback.requires_hold:
-                next_eligible_at = await self._finalize_authority(
+                rate_next_eligible_at = await self._finalize_authority(
                     execution,
                     owner_identifier=owner_identifier,
                     reservation_id=reservation_id,
@@ -337,14 +448,17 @@ class Phase3AcquisitionWorker:
                     enforce_retry_after=enforce_retry_after,
                     enforce_provider_hard_limits=enforce_provider_hard_limits,
                     owner_authority_evidence=owner_authority_evidence,
+                    robots_authorization=robots_authorization,
+                    robots_target_url=robots_target_url,
+                    robots_owner_context=robots_owner_context,
                 )
-                if next_eligible_at is None:
-                    next_eligible_at = datetime.now(UTC) + timedelta(
+                if rate_next_eligible_at is None:
+                    rate_next_eligible_at = datetime.now(UTC) + timedelta(
                         seconds=execution.poll_context.poll_interval_seconds
                     )
                 await record_feed_poll_delay(
                     execution.poll_context,
-                    next_eligible_at=next_eligible_at,
+                    next_eligible_at=rate_next_eligible_at,
                     started_clock=started_clock,
                     session_factory=self._session_factory,
                     http_status=rate_feedback.http_status,
@@ -354,7 +468,7 @@ class Phase3AcquisitionWorker:
                     state="delayed",
                     run_id=execution.poll_context.run_id,
                     poll=None,
-                    next_eligible_at=next_eligible_at,
+                    next_eligible_at=rate_next_eligible_at,
                 )
             await self._record_failure(
                 execution,
@@ -370,6 +484,9 @@ class Phase3AcquisitionWorker:
                 enforce_retry_after=enforce_retry_after,
                 enforce_provider_hard_limits=enforce_provider_hard_limits,
                 owner_authority_evidence=owner_authority_evidence,
+                robots_authorization=robots_authorization,
+                robots_target_url=robots_target_url,
+                robots_owner_context=robots_owner_context,
             )
             raise
 
@@ -382,6 +499,9 @@ class Phase3AcquisitionWorker:
             enforce_retry_after=enforce_retry_after,
             enforce_provider_hard_limits=enforce_provider_hard_limits,
             owner_authority_evidence=owner_authority_evidence,
+            robots_authorization=robots_authorization,
+            robots_target_url=robots_target_url,
+            robots_owner_context=robots_owner_context,
         )
         return AcquisitionExecutionResult(
             endpoint_id=source_endpoint_id,
@@ -568,6 +688,9 @@ class Phase3AcquisitionWorker:
         enforce_retry_after: bool = True,
         enforce_provider_hard_limits: bool = True,
         owner_authority_evidence: dict[str, object] | None = None,
+        robots_authorization: RobotsAuthorizationResult | None = None,
+        robots_target_url: str | None = None,
+        robots_owner_context: OwnerPolicyContext | None = None,
     ) -> datetime | None:
         next_eligible_at: datetime | None = None
         async with self._session_factory() as session, session.begin():
@@ -588,6 +711,23 @@ class Phase3AcquisitionWorker:
                     reservation_id=reservation_id,
                     outcome="completed" if succeeded else "failed",
                 )
+                if (
+                    robots_authorization is not None
+                    and robots_target_url is not None
+                    and robots_owner_context is not None
+                ):
+                    crawl_eligible_at = await self._robots_service.record_crawl_delay(
+                        session,
+                        authorization=robots_authorization,
+                        source_endpoint_id=execution.endpoint.id,
+                        target_url=robots_target_url,
+                        owner_context=robots_owner_context,
+                        runtime_actor=owner_identifier,
+                    )
+                    if crawl_eligible_at is not None and (
+                        next_eligible_at is None or crawl_eligible_at > next_eligible_at
+                    ):
+                        next_eligible_at = crawl_eligible_at
             await self._lease_service.finalize(
                 session,
                 lease_token=execution.lease_token,
@@ -597,6 +737,62 @@ class Phase3AcquisitionWorker:
         return next_eligible_at
 
     @staticmethod
+    async def _record_robots_operations(
+        session: AsyncSession,
+        *,
+        ingestion_run_id: int,
+        authorization: RobotsAuthorizationResult,
+    ) -> None:
+        run = await session.get(IngestionRun, ingestion_run_id)
+        if run is None:
+            raise AcquisitionWorkerError("Robots operation lost its ingestion run.")
+        metadata = dict(run.run_metadata or {})
+        metadata["robots"] = {
+            "external_decision": authorization.external_decision,
+            "effective_action": authorization.effective_action,
+            "snapshot_id": authorization.snapshot_id,
+            "evaluation_id": authorization.evaluation_id,
+            "gate_id": authorization.gate_id,
+            "operations": [
+                {
+                    "operation_type": operation.operation_type,
+                    "outcome": operation.outcome,
+                    "reason_code": operation.reason_code,
+                    "detail_schema": operation.detail_schema,
+                    "details": operation.details,
+                }
+                for operation in authorization.operations
+            ],
+        }
+        run.run_metadata = metadata
+
+    async def _record_resource_operation(
+        self,
+        *,
+        ingestion_run_id: int,
+        operation: OwnerOperationResult,
+    ) -> None:
+        async with self._session_factory() as session, session.begin():
+            run = await session.get(IngestionRun, ingestion_run_id, with_for_update=True)
+            if run is None:
+                raise AcquisitionWorkerError("Resource operation lost its ingestion run.")
+            metadata = dict(run.run_metadata or {})
+            robots = dict(metadata.get("robots") or {})
+            operations = list(robots.get("operations") or [])
+            operations.append(
+                {
+                    "operation_type": operation.operation_type,
+                    "outcome": operation.outcome,
+                    "reason_code": operation.reason_code,
+                    "detail_schema": operation.detail_schema,
+                    "details": operation.details,
+                }
+            )
+            robots["operations"] = operations
+            metadata["robots"] = robots
+            run.run_metadata = metadata
+
+    @staticmethod
     def _owner_context(
         execution: _Execution,
         *,
@@ -604,6 +800,8 @@ class Phase3AcquisitionWorker:
         request_identity: str,
     ) -> OwnerPolicyContext:
         split = urlsplit(execution.endpoint.url)
+        if split.scheme.lower() not in {"http", "https"} or split.hostname is None:
+            raise AcquisitionWorkerError("Endpoint URL cannot produce an HTTP(S) Owner scope.")
         origin = f"{split.scheme.lower()}://{split.hostname.lower()}"
         if split.port is not None:
             origin = f"{origin}:{split.port}"

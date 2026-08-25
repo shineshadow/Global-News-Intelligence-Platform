@@ -490,11 +490,12 @@ Proof 34 is the first complete acceptance of this standard.
 ```text
 owner-policy ledger and precedence                    implemented foundation
 acquisition run and domain evidence                   implemented foundation
-common OwnerOperationResult DTO/service               not implemented
-robots unavailable reason/details registry             implemented foundation
+common OwnerOperationResult DTO/registry              Proof 34B bounded backend subset implemented
+robots unavailable reason/details registry             implemented and runtime-integrated
 other domain result/reason/details registries           not implemented
 cross-domain history projection                        not implemented
-robots snapshots and evaluations                       persistence foundation implemented
+robots snapshots, evaluations, and gates               immutable runtime persistence implemented
+cross-domain append-only result index                  not implemented
 proof-34 owner-facing detail view                      not implemented
 ```
 

@@ -219,6 +219,38 @@ may not exceed installation-owned egress hard limits.
 | R34-068 | Completion | Proof 34 cannot be declared complete until policy registration/default approval, DB, retrieval/cache/parser, evaluations/gates, Owner context/results, approved UI/Override workflow, tests, runtime proof and report are complete. | Governing standard explicitly says Proof 34 is incomplete at reset. | All rows above that are implementation/acceptance obligations must close. | **NOT COMPLETE** |
 | R34-069 | Owner information access | Robots unavailable phase, reason, status, retryability, summary, evidence, and history are internal **and** Owner information. | No explicit dual-use/access guarantee or future Admin UI obligation at reset. | Persist the structured contract; keep operational Owner access; expose identical registered semantics in the future Admin UI; treat missing UI as a tracked gap, never as permission to hide or discard information. | **OWNER APPROVED / FOUNDATION IMPLEMENTED / UI PENDING** |
 
+### Proof 34B Superseding Runtime Disposition
+
+The baseline row descriptions above remain the restart audit record. Proof 34B
+supersedes their runtime-gap status as follows:
+
+- R34-018 through R34-041 are implemented for the shared Phase 3 worker:
+  canonical publisher target/origin binding, guarded bounded retrieval,
+  credential-free requests, fresh/stale selection, conditional 304 linkage,
+  pinned Protego parsing, exact evaluation persistence, exact gate
+  reconciliation, Crawl-delay, all three unavailable actions, direct and
+  mediated target selection, and worker ordering before generic reservation.
+- R34-020 is runtime-proven: an external `disallowed` evaluation remains
+  `disallowed` when an Owner `enforce=false` decision permits the attempt.
+- R34-035 and R34-056 are runtime-proven: exact gates clear, supersede, or
+  return after evidence/policy change, while Phase 3 reservations always pass
+  `enforce_robots=false` to the legacy generic bucket field.
+- R34-042 through R34-044 have a registered bounded DTO/reason/schema service
+  and all three required operation types recorded in Phase 3 run evidence.
+  The complete cross-domain projection/history service in
+  `OWNER_OPERATION_INFORMATION_MODEL.md` remains a final Proof 34 acceptance
+  obligation and is not claimed complete by 34B.
+- R34-045 is satisfied for authoritative robots snapshots/evaluations and gate
+  history. A common append-only cross-domain result index remains pending.
+- R34-057 through R34-060 and R34-063 have backend/runtime tests. UI portions
+  of R34-061 and R34-062 remain assigned to 34C after the site-wide
+  Authentication and Authority Foundation.
+- R34-046 through R34-053 remain UI/read-model work and were deliberately not
+  implemented in 34B.
+- R34-066 live external-publisher acceptance remains assigned to 34D; 34B uses
+  controlled guarded-response evidence and does not claim a live-internet
+  proof.
+
 ---
 
 ## 6. Cross-Cutting Implementation Controls
@@ -452,9 +484,11 @@ Implementation begins only after:
 
 ### Current State
 
-**Proof 34 status: PRE-IMPLEMENTATION — NOT YET ELIGIBLE FOR FINAL ACCEPTANCE**
+**Proof 34 status: 34B RUNTIME IMPLEMENTED — AUTHENTICATION, 34C UI, AND 34D FINAL ACCEPTANCE PENDING**
 
-This section is intentionally established before implementation so final acceptance cannot be reconstructed informally after the fact.
+The restart requirements remain the controlling acceptance ledger. The 34B
+change report records backend implementation evidence without claiming the
+future authenticated UI or final live acceptance work.
 
 ### Final Acceptance Ledger
 
@@ -474,18 +508,19 @@ At completion, record:
 
 ### Verification
 
-- Focused Proof 34 tests: TBD
-- Migration tests: TBD
-- Complete repository test suite: TBD
-- Schema drift: TBD
-- Runtime allow proof: TBD
-- Runtime disallow/enforcement proof: TBD
-- Runtime unavailable-evidence proof: TBD
-- Runtime Owner-override proof: TBD
-- Runtime gate-reconciliation proof: TBD
+- Focused Proof 34B tests: PASS; see 34B change report
+- Migration tests: PASS; 38 tests
+- Complete repository test suite: PASS after 34B correction; see 34B change report
+- Schema drift: PASS; Alembic head `a7c9e1f3b5d4`
+- Runtime allow proof: PASS under controlled guarded response
+- Runtime disallow/enforcement proof: PASS under controlled guarded response
+- Runtime unavailable-evidence proof: PASS for default and Owner-selected actions
+- Runtime Owner-override proof: PASS, including deferred one-use consumption
+- Runtime gate-reconciliation proof: PASS, including change and revocation
 - UI/worker policy parity proof: TBD
 - UI acceptance record: TBD
-- Change report: TBD
+- 34B backend change report: PASS;
+  `docs/change-reports/PHASE_3_PROOF_34B_ROBOTS_RUNTIME_IMPLEMENTATION.md`
 
 ### Final Acceptance Rule
 
@@ -502,6 +537,6 @@ Proof 34 may be marked **PASS** only when:
 
 ### Final Disposition
 
-**Current disposition:** NOT ACCEPTED — 34A AND 34A.1 FOUNDATIONS IMPLEMENTED; RUNTIME AND UI WORK REMAIN
+**Current disposition:** NOT FINALLY ACCEPTED — 34A, 34A.1, AND 34B IMPLEMENTED; SITE-WIDE AUTHENTICATION, 34C UI, AND 34D ACCEPTANCE REMAIN
 
 **Final disposition:** TBD
