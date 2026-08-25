@@ -9,6 +9,9 @@ Generated files:
 - `specifications/PHASE_3_CONTROLLED_FEED_CUTOVER_AND_ACQUISITION_HEALTH.md` — Audited bounded feed activation, rollback, operational-state projection, and Acquisition Health UI
 - `specifications/PHASE_3_LIVE_FEED_CANARY_PARITY_REVIEW.md` — Passed CISA RSS canary, Artifact/Document parity, scheduled acquisition, live rollback, and versioned reactivation record
 - `specifications/PHASE_3_RSSHUB_AND_RSS_BRIDGE_ADAPTERS.md` — Installation-bound generated-feed adapters using exact internal-service egress identities and the shared Artifact boundary
+- `change-reports/PHASE_3_PROOF_34_OWNER_APPROVAL_DECISIONS.md` — Owner-approved Proof 34 version-one defaults, validation bounds, parser distribution, and provenance pin
+- `change-reports/PHASE_3_PROOF_34_MEDIATED_ROBOTS_AND_UI_OVERRIDE_DECISION.md` — Owner-confirmed publisher URL, intermediary robots evidence, status badge, and existing-authority browser override workflow
+- `change-reports/PHASE_3_PROOF_34_OWNER_AUTHORITY_CONFORMANCE_AUDIT.md` — Cross-document audit proving the Proof 34 documentation preserves governing Owner authority and identifying runtime evidence still required
 - `ui-governance/` — operational component registry, permanent UX decisions, acceptance/exception records, reusable templates, and standards supplement
 - `change-reports/UI_FOUNDATION_AND_UX_GOVERNANCE_CONFLICT_AUDIT.md` — integration audit and approval questions for the owner-supplied governance draft
 - `change-reports/UI_DATE_TIME_CORRECTION_AUDIT.md` — adoption record for the 9-page UI-only standard and rejection of the 11-page universal proposal

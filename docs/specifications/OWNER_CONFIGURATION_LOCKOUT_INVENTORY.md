@@ -1,6 +1,6 @@
 # Owner Configuration Lockout Inventory
 
-**Audit date:** 2026-08-03  
+**Audit dates:** 2026-08-03; Proof 34 authority review 2026-08-24<br>
 **Status:** ACTIVE REMEDIATION INVENTORY
 
 This inventory records policy areas previously described or implemented as
@@ -11,7 +11,7 @@ approved a permanent lockout.
 
 | Policy family | Current default | Owner authority status | Next integration |
 |---|---|---|---|
-| Robots access/crawl decision | Enforce observed restriction | Registered and rate path wired; retrieval/parser pending | Fetch and parse robots evidence, then test allow, deny, and override |
+| Robots access/crawl decision | Enforce observed restriction | Owner authority foundation wired; v1 defaults, parser, mediated workflow, and GUI override confirmed; full runtime pending | Implement retrieval, persistence, parsing, evaluation, gates, GUI access, and default/override proofs without narrowing supported Owner scopes |
 | HTTP Retry-After | Honor bounded valid value | Implemented | Extend effective-policy diagnostics/UI if desired |
 | Provider quota/reset and HTTP 429 fallback | Enforce provider hold | Implemented | Extend effective-policy diagnostics/UI if desired |
 | Manual-poll rate denial | Same buckets as scheduled work | Implemented | Extend effective-policy diagnostics/UI if desired |
@@ -22,7 +22,7 @@ approved a permanent lockout.
 | Sandbox limits and detector availability | Fixed limits and fail closed | Pending | Add bounded resource/action policy adapters |
 | SSRF/private/internal destination policy | Public-only except installation registrations | Pending | Add exact owner network/host authorization without weakening destination evidence |
 | Redirect credential forwarding | Strip/deny across origins | Pending | Add exact destination/credential authorization policy |
-| Response byte/header/redirect/time limits | Installation-owned fixed limits | Pending | Route limit values through scoped owner policy |
+| Response byte/header/redirect/time limits | Installation-owned fixed limits | Generic family pending; Proof 34 robots fetch defaults and bounds Owner-approved, policy adapter pending | Route limit values through scoped owner policy; preserve explicit Owner disposition for installation egress bounds |
 | Missing/invalid secret behavior | Send no request | Pending | Add explicit fallback behavior policy without persisting secret values |
 | Adapter/legacy fallback | Fail closed for configured Phase 3 endpoint | Pending | Add exact fallback and degraded-operation policies |
 | Signature/hash/scanner bypass behavior | Always rescan known bytes | Pending | Add explicit owner acceptance path with provenance |
@@ -32,7 +32,7 @@ approved a permanent lockout.
 | Migration downgrade refusal | Lossless-only | Pending | Add owner-authorized destructive downgrade tooling with backup/evidence requirements |
 | Cutover cohort size | Environment value, default one | Configurable through installation environment | Surface effective value and consider database owner policy |
 | Date/time display format | American User-local standard | Pending project-wide preference authority | Replace universal formatting mandate with owner/user preference configuration |
-| UI visibility and administrative controls | Several operational outcomes read-only | Pending | Route mutations through owner-authorized services; UI remains optional |
+| UI visibility and administrative controls | Several mutations not yet surfaced | Owner authority exists independently of UI; Proof 34 robots GUI Override workflow confirmed, implementation pending | Route GUI mutations through owner-authorized services; never treat absent UI as an Owner lockout |
 | Celery schedules and dispatch limits | Environment-backed defaults | Configurable through installation environment | Inventory restart requirements and optionally bridge to owner policies |
 | Internal service identities | Installation environment registration | Configurable through installation environment | Add owner diagnostics and controlled runtime reload if desired |
 | Artifact staging/canonical roots | Installation environment paths | Configurable through installation environment | Document restart and permission requirements |

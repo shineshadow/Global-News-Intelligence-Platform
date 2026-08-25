@@ -377,9 +377,10 @@ What is the complete history?
 A compact health row may show operation, status, outcome, gate, severity, next
 eligibility, and `Review decision`. Details belong in a dedicated view.
 
-The first UI implementation is read-only for policy mutation unless the
-security requirements in `OWNER_POLICY_DECISION_CONTEXT_STANDARD.md` have been
-implemented and accepted.
+UI implementation state does not define Owner authority. Missing UI mutation
+controls are implementation gaps, not Owner lockouts. Browser mutation uses
+the shared Owner-policy service and implements the safeguards in
+`OWNER_POLICY_DECISION_CONTEXT_STANDARD.md`.
 
 ## 9. Initial Acquisition Vocabulary
 

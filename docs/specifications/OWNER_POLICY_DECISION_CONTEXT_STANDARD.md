@@ -413,8 +413,12 @@ History shall retain superseded, revoked, exhausted, and expired records.
 
 ## 10. UI and API Requirements
 
-The first owner-facing UI implementation shall be read-only for policy
-mutation.
+Browser implementation state does not define or narrow Owner authority.
+Missing UI mutation controls are implementation gaps, not permanent read-only
+policy restrictions. A browser interface may expose Owner-authorized creation,
+supersession, and revocation through the same policy ledger and precedence
+service after implementing the applicable browser safeguards below. The Proof
+34 robots Override workflow is the first required browser mutation surface.
 
 It shall display:
 
@@ -438,7 +442,8 @@ history
 
 UI time display follows `AMERICAN_DATE_TIME_DISPLAY_STANDARD.md`.
 
-Browser-based creation, supersession, or revocation shall not be enabled until:
+Each exposed browser-based creation, supersession, or revocation control shall
+implement:
 
 ```text
 server-derived authenticated Owner identity

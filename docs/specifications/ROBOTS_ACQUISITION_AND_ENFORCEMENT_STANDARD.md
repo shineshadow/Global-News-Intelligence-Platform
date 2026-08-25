@@ -1,8 +1,8 @@
 # Robots Acquisition and Enforcement Standard
 
-**Owner approval:** 08-04-2026  
+**Owner approvals:** 08-04-2026; version-one defaults, bounds, and parser approved 08-24-2026<br>
 **Status:** GOVERNING — PROOF 34 NORMATIVE DESIGN; IMPLEMENTATION REQUIRED  
-**Authority:** `../change-reports/OWNER_OPERATION_INFORMATION_AND_POLICY_DECISION_CONTEXT_ADOPTION.md`  
+**Authority:** `../change-reports/OWNER_OPERATION_INFORMATION_AND_POLICY_DECISION_CONTEXT_ADOPTION.md`, `../change-reports/PHASE_3_PROOF_34_OWNER_APPROVAL_DECISIONS.md`, `../change-reports/PHASE_3_PROOF_34_MEDIATED_ROBOTS_AND_UI_OVERRIDE_DECISION.md`<br>
 **Parent standards:** `OWNER_AUTHORITY_AND_CONFIGURATION_STANDARD.md`, `OWNER_OPERATION_INFORMATION_MODEL.md`, `OWNER_POLICY_DECISION_CONTEXT_STANDARD.md`  
 **Phase:** Main Track Phase 3 — Robots acquisition and enforcement — proof 34
 
@@ -275,9 +275,45 @@ available.
 The fetch implementation shall identify itself with the registered GNI robots
 user agent. The exact user agent used for evaluation shall be retained.
 
+### 5.1 Mediated Publisher Retrieval
+
+For RSSHub, RSS-Bridge, changedetection, and Playwright acquisition, the Owner
+supplies publisher target URLs through the GNI GUI. The intermediary retrieves
+the exact publisher origin's `robots.txt`, evaluates the supplied publisher
+target before content retrieval, and returns bounded versioned evidence to GNI.
+
+The evidence contract must bind retrieval, parsing, exact evaluation, and the
+subsequent target fetch. It includes the canonical publisher target and origin,
+robots URL, retrieval identity/state/time and bounded digest, parser
+provenance, selected user agent, matched rule evidence, external decision,
+Crawl-delay observation, warnings, and unavailable reason when applicable.
+
+GNI validates and persists this evidence before applying Owner policy and
+authorizing the intermediary's target fetch. Missing, malformed, stale,
+mismatched, untrusted, or unregistered evidence is `unavailable` and follows
+`acquisition.robots.unavailable_action`.
+
+The intermediary must use the Owner-approved parser and fetch controls or a
+GNI-controlled component using those exact controls. Each mediated adapter
+requires boundary and target-binding acceptance tests.
+
 ## 6. Parsing and Matching Contract
 
 The parser implementation and version shall be registered and pinned.
+
+The Owner-approved version-one parser identity and supply-chain pin are:
+
+```text
+distribution: protego==0.6.2
+parser_name: protego
+parser_version: 0.6.2
+source_commit: efe5039d39ee51f117acd0b01ffd8109ae265c22
+wheel_sha256: 714de21d82527c9be900066c3211b266985dd6a19b6e70c57e033fc1a589f3ff
+```
+
+The installed wheel must match the approved SHA-256 value. Approval of the
+distribution does not replace implementation evidence for the decision-trace
+adapter, malformed-input behavior, or Crawl-delay capability.
 
 Matching shall be deterministic for the same snapshot, selected user agent,
 and canonical target URL.
@@ -415,8 +451,10 @@ value type:
     boolean
 
 default:
-    true only if the selected parser supports and registers Crawl-delay;
-    otherwise the key remains unsupported and cannot be enabled
+    true for the approved version-one parser distribution
+
+validation:
+    boolean only
 
 supported scopes:
     global, adapter, platform, credential, origin, Source, endpoint, request
@@ -441,7 +479,10 @@ value type:
     positive integer
 
 default:
-    implementation candidate shall propose a bounded value for Owner review
+    86400
+
+validation:
+    integer, excluding boolean; minimum 300; maximum 86400
 
 supported scopes:
     global, adapter, platform, origin, Source, endpoint
@@ -464,7 +505,10 @@ value type:
     nonnegative integer
 
 default:
-    implementation candidate shall propose a bounded value for Owner review
+    604800
+
+validation:
+    integer, excluding boolean; minimum 0; maximum 2592000
 
 supported scopes:
     global, adapter, platform, origin, Source, endpoint
@@ -489,11 +533,18 @@ required fields:
     read_timeout_seconds
 
 validation:
-    bounded positive integers; no unknown fields in v1
+    all fields are integers and boolean values are rejected;
+    max_response_bytes: 524288 through 2097152;
+    max_redirects: 5 through 10;
+    connect_timeout_seconds: 1 through 30;
+    read_timeout_seconds: 1 through 60;
+    missing or unknown fields are rejected in v1
 
 default:
-    implementation candidate shall propose conservative bounded values for
-    Owner review
+    max_response_bytes: 524288
+    max_redirects: 5
+    connect_timeout_seconds: 10
+    read_timeout_seconds: 30
 
 supported scopes:
     global, adapter, platform, origin, Source, endpoint
@@ -504,6 +555,9 @@ resolution point:
 restart requirement:
     none
 ```
+
+Scoped cache and fetch-limit values may be more conservative than the approved
+defaults. No scoped value may exceed installation-owned egress hard limits.
 
 Any default values not fixed above require explicit Owner approval before this
 specification may be marked implemented.
@@ -709,7 +763,7 @@ The Acquisition Health row may add only a compact summary:
 
 ```text
 Robots:
-    Allowed | Disallowed | Unavailable | Stale | Not checked
+    Allows | Disallows | Unavailable | Stale | Not checked
 
 Effective enforcement:
     On | Owner override
@@ -718,7 +772,7 @@ Next robots review:
     date only by default
 
 Action:
-    Review decision
+    Override when Disallows | Review decision
 ```
 
 The dedicated detail view shall show:
@@ -734,8 +788,23 @@ The dedicated detail view shall show:
 9. snapshot/evaluation/gate history;
 10. available Owner action.
 
-Time is not displayed by default. The first implementation is read-only for
-override mutation and may display the exact CLI command.
+For an external `disallowed` result, the compact publisher-relative interface
+shows a red `Disallows` badge with an adjacent `Override` button. After an
+authenticated Owner override becomes effective, the badge becomes green while
+retaining `Disallows`; an accessible `Owner override active` state separately
+communicates effective enforcement. The external result remains disallowed.
+
+For an external `allowed` result, the interface shows a green `Allows` badge.
+Color never replaces the external-result text or accessible effective-policy
+state.
+
+The Override action authorizes an intermediary fetch attempt but cannot force
+an external publisher or network to return content. It does not silently alter
+other independently resolved GNI policies; each remains subject to Owner
+authority under its registered definition. Browser mutation implements the
+authentication, authorization, CSRF, reauthentication, confirmation,
+stale-preview, transactional, and append-only audit safeguards in the
+Owner-policy standard. Time is not displayed by default.
 
 ## 14. Concurrency and Transactions
 
@@ -780,6 +849,12 @@ expired evidence is not treated as current
 override revocation causes still-valid disallow to govern again
 observation references exact snapshot and evaluation
 UI and worker show the same effective decision
+missing or invalid target-bound robots evidence remains unavailable and the Owner-controlled unavailable action governs
+missing, stale, mismatched, or untrusted intermediary evidence follows unavailable policy
+allowed evidence renders green Allows relative to the publisher
+enforced disallowed evidence renders red Disallows with Override action
+effective Owner override renders green Disallows and preserves the external disallow
+Override mutation satisfies authentication, confirmation, stale-preview, and audit controls
 stale UI preview is rejected
 secret headers and credentials are absent from evidence
 oversized body is rejected according to fetch limits
@@ -800,7 +875,7 @@ exact evaluations are persisted
 exact gates reconcile without generic bucket contamination
 Owner policy context is linked and non-consuming explanations work
 OwnerOperationResult projections are implemented
-read-only owner-facing detail UI is implemented
+owner-facing detail UI and approved exact Override action are implemented
 all focused and repository tests pass
 runtime proof demonstrates allow, deny, unavailable, override, reconciliation
 change report records exact evidence and remaining exclusions

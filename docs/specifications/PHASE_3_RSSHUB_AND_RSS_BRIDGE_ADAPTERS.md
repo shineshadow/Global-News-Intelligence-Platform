@@ -2,7 +2,7 @@
 
 Status: IMPLEMENTED CANDIDATE
 
-Date: 2026-08-03
+Date: 08-03-2026
 
 ## Scope
 
