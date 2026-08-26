@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en" data-bs-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in — Global News Intelligence</title><link rel="stylesheet" href="{{ url_for('static', path='vendor/tabler.min.css') }}"><link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}"></head>
 <body class="d-flex flex-column"><main class="page page-center"><div class="container container-tight py-4"><div class="card card-md"><div class="card-body">
-<h1 class="h2 text-center mb-3">Sign in to GNI</h1><p class="text-secondary">Use a passkey and verify with your authenticator's PIN, biometric, or device unlock.</p>
-<button class="btn btn-primary w-100" id="signin" type="button">Sign in with a passkey</button><div class="alert alert-danger mt-3 d-none" id="error" role="alert"></div>
+<h1 class="h2 text-center mb-3">{% if reauth %}Confirm Owner authority{% else %}Sign in to GNI{% endif %}</h1><p class="text-secondary">Use a passkey and verify with your authenticator's PIN, biometric, or device unlock.{% if reauth %} This fresh verification is required before changing Owner policy.{% endif %}</p>
+<button class="btn btn-primary w-100" id="signin" type="button">{% if reauth %}Verify with a passkey{% else %}Sign in with a passkey{% endif %}</button><div class="alert alert-danger mt-3 d-none" id="error" role="alert"></div>
 <div class="text-center mt-3"><a href="/auth/recover">Use a recovery code</a></div>
 </div></div></div></main>
 <script>

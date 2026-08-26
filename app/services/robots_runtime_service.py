@@ -1036,6 +1036,62 @@ class RobotsRuntimeService:
             },
         )
 
+    async def reconcile_persisted_disallow(
+        self,
+        session: AsyncSession,
+        *,
+        evaluation_id: int,
+        owner_context: OwnerPolicyContext,
+        now: datetime | None = None,
+    ) -> AcquisitionRobotsGate | None:
+        """Reconcile the exact current gate after an audited Owner-policy mutation."""
+
+        current_time = now or datetime.now(UTC)
+        evaluation = await session.get(AcquisitionRobotsEvaluation, evaluation_id)
+        if evaluation is None or evaluation.external_decision != "disallowed":
+            raise RobotsRuntimeError("Current persisted robots evidence is not a disallow.")
+        await session.execute(
+            select(SourceEndpoint.id)
+            .where(SourceEndpoint.id == evaluation.source_endpoint_id)
+            .with_for_update()
+        )
+        latest_id = await session.scalar(
+            select(AcquisitionRobotsEvaluation.id)
+            .where(
+                AcquisitionRobotsEvaluation.source_endpoint_id
+                == evaluation.source_endpoint_id
+            )
+            .order_by(
+                AcquisitionRobotsEvaluation.evaluated_at.desc(),
+                AcquisitionRobotsEvaluation.id.desc(),
+            )
+            .limit(1)
+        )
+        if latest_id != evaluation.id:
+            raise RobotsRuntimeError(
+                "Robots evidence changed before gate reconciliation; review it again."
+            )
+        snapshot = await session.get(AcquisitionRobotsSnapshot, evaluation.snapshot_id)
+        if snapshot is None or not (snapshot.valid_from <= current_time < snapshot.fresh_until):
+            raise RobotsRuntimeError(
+                "Robots evidence expired before gate reconciliation; review it again."
+            )
+        policy = await self._owner_policy.resolve_bool(
+            session,
+            policy_key=ROBOTS_ENFORCEMENT,
+            context=owner_context,
+            consume=False,
+        )
+        return await self._reconcile_gate(
+            session,
+            evaluation=evaluation,
+            target=canonicalize_robots_target(evaluation.canonical_target_url),
+            gate_state="robots_denied" if policy.value else None,
+            valid_until=snapshot.fresh_until,
+            policy=policy,
+            now=current_time,
+        )
+
     async def _reconcile_gate(
         self,
         session: AsyncSession,

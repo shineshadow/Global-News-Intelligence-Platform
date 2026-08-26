@@ -267,6 +267,8 @@ class OwnerPolicyService:
         override_id: int,
         actor: str,
         reason: str,
+        expected_basis_fingerprint: str | None = None,
+        basis_context: OwnerPolicyContext | None = None,
     ) -> OwnerPolicyOverride:
         self._audit(actor, reason)
         policy_key = await session.scalar(
@@ -275,6 +277,16 @@ class OwnerPolicyService:
         if policy_key is None:
             raise OwnerPolicyError("Owner policy override does not exist.")
         await self._authority_lock(session, policy_key)
+        if expected_basis_fingerprint is not None:
+            current = await self.explain(
+                session,
+                policy_key=policy_key,
+                context=basis_context,
+            )
+            if current.basis_fingerprint != expected_basis_fingerprint:
+                raise OwnerPolicyPreviewStaleError(
+                    "Owner policy preview is stale; review a new preview before mutation."
+                )
         override = await session.scalar(
             select(OwnerPolicyOverride)
             .where(OwnerPolicyOverride.id == override_id)
@@ -291,7 +303,7 @@ class OwnerPolicyService:
                 event_type="revoked",
                 actor=actor.strip(),
                 reason=reason.strip(),
-                details={},
+                details={"basis_fingerprint": expected_basis_fingerprint},
             )
         )
         await session.flush()

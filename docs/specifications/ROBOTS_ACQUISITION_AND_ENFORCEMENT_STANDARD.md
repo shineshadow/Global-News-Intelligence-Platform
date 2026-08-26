@@ -1033,10 +1033,10 @@ OwnerOperationResult integration                    implemented in Phase 3 run e
 Owner policy explain/preview                        service foundation implemented
 unavailable reason registry                         implemented foundation
 unavailable structured persistence                  implemented runtime
-unavailable Admin-UI presentation                   not implemented
-proof-34 detail UI                                  not implemented
-proof 34B runtime                                  implemented; final acceptance pending 34C/34D
-proof 34                                           incomplete pending authentication, UI, and acceptance
+unavailable Owner/Admin presentation                implemented candidate in authenticated detail view
+proof-34 detail UI                                  implemented candidate
+proof 34C authenticated GUI                        implemented candidate; Owner review pending
+proof 34                                           incomplete pending Owner UI review and 34D acceptance
 ```
 
 The existing generic all-bucket robots hold behavior shall not be treated as

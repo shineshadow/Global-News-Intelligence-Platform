@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Revoke Robots Override — Global News Intelligence{% endblock %}
+{% block page_header %}<div class="page-header d-print-none"><div class="container-xl"><div class="page-pretitle">Owner authority confirmation</div><h2 class="page-title">Revoke robots override</h2></div></div>{% endblock %}
+
+{% block content %}
+{% if action_error %}<div class="alert alert-danger">{{ action_error }}</div>{% endif %}
+<div class="alert alert-warning">Revocation restores enforcement for the retained current <strong>Disallows</strong> finding. The exact runtime gate is reconciled immediately with this change.</div>
+<div class="card"><div class="card-body">
+    <dl class="row">
+        <dt class="col-4">Publisher</dt><dd class="col-8">{{ status.source_name }} — {{ status.endpoint_name }}</dd>
+        <dt class="col-4">Effective override</dt><dd class="col-8 small text-break">{{ selected.override_public_id }}</dd>
+        <dt class="col-4">Scope</dt><dd class="col-8">{{ selected.scope_type }}: {{ selected.scope_identity }}</dd>
+        <dt class="col-4">Original reason</dt><dd class="col-8">{{ selected.reason }}</dd>
+        <dt class="col-4">After revocation</dt><dd class="col-8">Red Disallows; fetch prevented by robots enforcement.</dd>
+    </dl>
+    {% if not recently_verified %}<div class="alert alert-info"><strong>Fresh passkey verification required.</strong> <a class="btn btn-sm btn-primary ms-2" href="{{ reauth_url }}">Verify with passkey</a></div>{% endif %}
+    <form method="post" action="{{ url_for('web_robots_override_revoke', endpoint_id=status.endpoint_id) }}">
+        <input type="hidden" name="_csrf_token" value="{{ request.state.csrf_token }}">
+        <input type="hidden" name="override_public_id" value="{{ selected.override_public_id }}">
+        <input type="hidden" name="basis_fingerprint" value="{{ status.decision_context.basis_fingerprint }}">
+        <input type="hidden" name="subject_basis_fingerprint" value="{{ subject_basis_fingerprint }}">
+        <div class="mb-3"><label class="form-label" for="reason">Revocation reason</label><textarea class="form-control" id="reason" name="reason" required maxlength="2000"></textarea></div>
+        <label class="form-check mb-3"><input class="form-check-input" type="checkbox" name="confirm_revoke" value="accepted" required><span class="form-check-label">I confirm revocation of this exact Owner override.</span></label>
+        <button class="btn btn-warning" type="submit" {% if not recently_verified %}disabled{% endif %}>Revoke override</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('web_robots_detail', endpoint_id=status.endpoint_id) }}">Cancel</a>
+    </form>
+</div></div>
+{% endblock %}

@@ -146,3 +146,51 @@ async def require_site_access(
 
 
 CurrentPrincipal = Annotated[AuthPrincipal, Depends(require_site_access)]
+
+
+async def require_owner_policy(
+    principal: CurrentPrincipal,
+    session: DatabaseSession,
+) -> AuthPrincipal:
+    if principal.can("owner.policy"):
+        return principal
+    session.add(
+        AuthEvent(
+            event_type="authorization_denied",
+            outcome="denied",
+            reason_code="missing_owner_policy_capability",
+            user_id=principal.user_id,
+            actor_user_id=principal.user_id,
+            session_public_id=principal.session_public_id,
+            details={"capability": "owner.policy"},
+        )
+    )
+    await session.commit()
+    raise AuthorizationDeniedError("owner.policy")
+
+
+OwnerPolicyPrincipal = Annotated[AuthPrincipal, Depends(require_owner_policy)]
+
+
+async def require_site_administration(
+    principal: CurrentPrincipal,
+    session: DatabaseSession,
+) -> AuthPrincipal:
+    if principal.can("site.admin"):
+        return principal
+    session.add(
+        AuthEvent(
+            event_type="authorization_denied",
+            outcome="denied",
+            reason_code="missing_site_admin_capability",
+            user_id=principal.user_id,
+            actor_user_id=principal.user_id,
+            session_public_id=principal.session_public_id,
+            details={"capability": "site.admin"},
+        )
+    )
+    await session.commit()
+    raise AuthorizationDeniedError("site.admin")
+
+
+AdministrativePrincipal = Annotated[AuthPrincipal, Depends(require_site_administration)]

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Publisher Robots Decision — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none"><div class="container-xl"><div class="row g-2 align-items-center">
+    <div class="col">
+        <div class="page-pretitle">Internal and Owner information</div>
+        <h2 class="page-title">Publisher Robots Decision</h2>
+        <div class="text-secondary mt-1">{{ status.source_name }} — {{ status.endpoint_name }}</div>
+    </div>
+    <div class="col-auto ms-auto"><a class="btn btn-outline-secondary" href="{{ url_for('web_acquisition_health') }}#endpoint-{{ status.endpoint_id }}">Back to Acquisition Health</a></div>
+</div></div></div>
+{% endblock %}
+
+{% block content %}
+<div class="row row-cards">
+    <div class="col-lg-5"><div class="card h-100"><div class="card-body">
+        <h3 class="card-title">Current decision</h3>
+        <p><span class="badge bg-{{ status.badge_tone }}-lt" aria-label="External robots finding: {{ status.badge_label }}">{{ status.badge_label }}</span></p>
+        <dl class="row mb-0">
+            <dt class="col-5">External finding</dt><dd class="col-7">{{ status.external_decision or "Not checked" }}</dd>
+            <dt class="col-5">Effective fetch</dt><dd class="col-7">{% if status.effective_fetch_permitted is sameas true %}Permitted{% elif status.effective_fetch_permitted is sameas false %}Prevented{% else %}No current decision{% endif %}</dd>
+            <dt class="col-5">Enforcement</dt><dd class="col-7">{% if status.owner_override_active %}<span class="text-success fw-bold">Owner override active</span>{% elif status.effective_enforcement is sameas true %}On{% elif status.effective_enforcement is sameas false %}Off{% else %}—{% endif %}</dd>
+            <dt class="col-5">Evaluated</dt><dd class="col-7">{{ status.external_evaluated_at | datetime_user }}</dd>
+            <dt class="col-5">Next review</dt><dd class="col-7">{{ status.next_robots_review_at | datetime_user(false) }}</dd>
+            <dt class="col-5">Exact target</dt><dd class="col-7 text-break">{{ status.evaluation.canonical_target_url if status.evaluation else status.endpoint_url }}</dd>
+        </dl>
+        {% if principal.can("owner.policy") and status.can_override %}
+        <a class="btn btn-danger mt-3" href="{{ url_for('web_robots_override_review', endpoint_id=status.endpoint_id) }}">Review Owner override</a>
+        {% elif principal.can("owner.policy") and status.owner_override_active %}
+        <a class="btn btn-warning mt-3" href="{{ url_for('web_robots_override_revoke_review', endpoint_id=status.endpoint_id) }}">Review or revoke override</a>
+        {% endif %}
+    </div></div></div>
+
+    <div class="col-lg-7"><div class="card h-100"><div class="card-body">
+        <h3 class="card-title">External evidence</h3>
+        {% if status.evaluation and status.snapshot %}
+        <dl class="row mb-0">
+            <dt class="col-4">Publisher origin</dt><dd class="col-8 text-break">{{ status.snapshot.origin }}</dd>
+            <dt class="col-4">Robots URL</dt><dd class="col-8 text-break">{{ status.snapshot.robots_url }}</dd>
+            <dt class="col-4">HTTP status</dt><dd class="col-8">{{ status.http_status or "—" }}</dd>
+            <dt class="col-4">Retrieval / parse</dt><dd class="col-8">{{ status.snapshot.retrieval_state }} / {{ status.snapshot.parse_state }}</dd>
+            <dt class="col-4">User agent</dt><dd class="col-8 text-break">{{ status.selected_user_agent }}</dd>
+            <dt class="col-4">Matched rule</dt><dd class="col-8 text-break">{{ status.matched_directive }} {{ status.matched_pattern or "—" }} (group {{ status.matched_group or "—" }})</dd>
+            <dt class="col-4">Crawl-delay</dt><dd class="col-8">{{ status.crawl_delay_seconds if status.crawl_delay_seconds is not none else "—" }}</dd>
+            <dt class="col-4">Parser</dt><dd class="col-8">{{ status.snapshot.parser_name }} {{ status.snapshot.parser_version }}</dd>
+            <dt class="col-4">Evidence IDs</dt><dd class="col-8 small text-break">Snapshot {{ status.snapshot.public_id }}<br>Evaluation {{ status.evaluation.public_id }}</dd>
+        </dl>
+        {% else %}<p class="text-secondary mb-0">No robots evaluation exists for this endpoint.</p>{% endif %}
+    </div></div></div>
+</div>
+
+{% if status.external_decision == "unavailable" %}
+<div class="card mt-3"><div class="card-body"><h3 class="card-title">Unavailable information</h3>
+    <dl class="row mb-0">
+        <dt class="col-3">Failure phase</dt><dd class="col-9">{{ status.failure_phase }}</dd>
+        <dt class="col-3">Reason</dt><dd class="col-9">{{ status.unavailable_reason }}{% if status.http_status %} (HTTP {{ status.http_status }}){% endif %}</dd>
+        <dt class="col-3">Retryability</dt><dd class="col-9">{{ status.retryable }}</dd>
+        <dt class="col-3">Owner summary</dt><dd class="col-9">{{ status.owner_summary }}</dd>
+        <dt class="col-3">Effective action</dt><dd class="col-9">{{ status.effective_unavailable_action }}</dd>
+    </dl>
+</div></div>
+{% endif %}
+
+<div class="row row-cards mt-1">
+    <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+        <h3 class="card-title">Owner-policy resolution</h3>
+        {% if status.decision_context %}
+        <dl class="row">
+            <dt class="col-4">Policy</dt><dd class="col-8">{{ status.decision_context.policy_key }}</dd>
+            <dt class="col-4">Effective value</dt><dd class="col-8">{{ status.decision_context.effective_value }}</dd>
+            <dt class="col-4">Rule</dt><dd class="col-8">{{ status.decision_context.resolution_rule }}</dd>
+            <dt class="col-4">Basis</dt><dd class="col-8 small text-break">{{ status.decision_context.basis_fingerprint }}</dd>
+        </dl>
+        {% if status.decision_context.selected_override %}<p class="mb-0">Selected scope: <strong>{{ status.decision_context.selected_override.scope_type }}</strong> — {{ status.decision_context.selected_override.scope_identity }}</p>{% else %}<p class="text-secondary mb-0">Repository default controls.</p>{% endif %}
+        {% else %}<p class="text-secondary mb-0">No current policy resolution exists for stale or missing evidence.</p>{% endif %}
+    </div></div></div>
+    <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+        <h3 class="card-title">Exact gate</h3>
+        {% if status.gate %}
+        <dl class="row mb-0">
+            <dt class="col-4">State</dt><dd class="col-8">{{ status.gate.gate_state }}</dd>
+            <dt class="col-4">Status</dt><dd class="col-8">{{ status.gate.status }}</dd>
+            <dt class="col-4">Valid until</dt><dd class="col-8">{{ status.gate.valid_until | datetime_user }}</dd>
+            <dt class="col-4">Gate ID</dt><dd class="col-8 small text-break">{{ status.gate.public_id }}</dd>
+        </dl>
+        {% else %}<p class="text-secondary mb-0">No active exact robots gate.</p>{% endif %}
+    </div></div></div>
+</div>
+
+<div class="card mt-3"><div class="card-header"><h3 class="card-title">Snapshot and evaluation history</h3></div><div class="table-responsive"><table class="table card-table">
+    <thead><tr><th>Evaluated</th><th>External finding</th><th>Target</th><th>Evidence</th><th>Failure</th></tr></thead>
+    <tbody>{% for item in detail.evaluation_history %}<tr>
+        <td>{{ item.evaluation.evaluated_at | datetime_user }}</td><td>{{ item.evaluation.external_decision }}</td><td class="text-break">{{ item.evaluation.canonical_target_url }}</td>
+        <td class="small">{{ item.snapshot.retrieval_state if item.snapshot else "missing" }} / {{ item.snapshot.parse_state if item.snapshot else "missing" }}<br>{{ item.evaluation.public_id }}</td>
+        <td>{{ item.evaluation.unavailable_reason or "—" }}</td>
+    </tr>{% else %}<tr><td colspan="5" class="text-secondary">No history.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+
+<div class="row row-cards mt-1">
+    <div class="col-lg-6"><div class="card h-100"><div class="card-header"><h3 class="card-title">Gate history</h3></div><div class="table-responsive"><table class="table card-table">
+        <thead><tr><th>Created</th><th>State</th><th>Status</th></tr></thead><tbody>{% for gate in detail.gate_history %}<tr><td>{{ gate.created_at | datetime_user }}</td><td>{{ gate.gate_state }}</td><td>{{ gate.status }}</td></tr>{% else %}<tr><td colspan="3" class="text-secondary">No gate history.</td></tr>{% endfor %}</tbody>
+    </table></div></div></div>
+    <div class="col-lg-6"><div class="card h-100"><div class="card-header"><h3 class="card-title">Owner override history</h3></div><div class="table-responsive"><table class="table card-table">
+        <thead><tr><th>Created</th><th>Scope</th><th>Status</th><th>Reason</th></tr></thead><tbody>{% for override in detail.override_history %}<tr><td>{{ override.created_at | datetime_user }}</td><td>{{ override.scope_type }}: {{ override.scope_identity }}</td><td>{{ override.status }}</td><td>{{ override.reason }}</td></tr>{% else %}<tr><td colspan="4" class="text-secondary">No matching override history.</td></tr>{% endfor %}</tbody>
+    </table></div></div></div>
+</div>
+{% endblock %}
