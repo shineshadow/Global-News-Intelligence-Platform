@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Account — Global News Intelligence{% endblock %}
+
+{% block page_header %}
+<div class="page-header d-print-none"><div class="container-xl"><h1>Account</h1></div></div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <dl>
+            <dt>Display name</dt><dd>{{ principal.display_name }}</dd>
+            <dt>Username</dt><dd>{{ principal.username }}</dd>
+            <dt>Stable actor</dt><dd><code>{{ principal.actor_ref }}</code></dd>
+            <dt>Roles</dt><dd>{{ principal.roles | join(', ') }}</dd>
+        </dl>
+        <h2 class="h3">Passkeys ({{ credentials | length }}/6)</h2>
+        <ul>{% for credential in credentials %}<li>{{ credential.label }} — {{ credential.device_type }}{% if credential.backed_up %}, backed up{% endif %}; credProtect: {{ 'confirmed' if credential.cred_protect_confirmed else 'unconfirmed' }}</li>{% endfor %}</ul>
+        {% if credentials | length < 6 %}<form method="post" action="/auth/account/passkeys/enroll"><input type="hidden" name="_csrf_token" value="{{ request.state.csrf_token }}"><button class="btn btn-primary" type="submit">Add passkey</button></form>{% endif %}
+        <form class="mt-2" method="post" action="/auth/recovery-codes/rotate"><input type="hidden" name="_csrf_token" value="{{ request.state.csrf_token }}"><button class="btn btn-outline-warning" type="submit">Replace recovery codes</button></form>
+        <form method="post" action="{{ url_for('auth_logout') }}">
+            <input type="hidden" name="_csrf_token" value="{{ request.state.csrf_token }}">
+            <button class="btn btn-outline-danger" type="submit">Sign out</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

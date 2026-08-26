@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, status
 
-from app.api.dependencies import DatabaseSession
+from app.api.dependencies import CurrentPrincipal, DatabaseSession
 from app.api.responses import MANAGEMENT_ERROR_RESPONSES
 from app.schemas.calendar import (
     CalendarActor,
@@ -107,13 +107,16 @@ async def set_occurrence_policy(
     occurrence_id: Annotated[int, Path(gt=0)],
     data: CalendarOccurrencePolicyOverrideInput,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> CalendarOccurrencePolicyRead:
     return await calendar_policy_service.set_occurrence_policy(
         session,
         event_id=event_id,
         policy_id=policy_id,
         occurrence_id=occurrence_id,
-        data=data,
+        data=data.model_copy(
+            update={"actor_ref": principal.actor_ref, "actor_label": principal.display_name}
+        ),
     )
 
 
@@ -128,13 +131,16 @@ async def delete_occurrence_policy(
     occurrence_id: Annotated[int, Path(gt=0)],
     data: CalendarOccurrencePolicyOverrideDelete,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> CalendarOccurrencePolicyRead:
     return await calendar_policy_service.delete_occurrence_policy(
         session,
         event_id=event_id,
         policy_id=policy_id,
         occurrence_id=occurrence_id,
-        data=data,
+        data=data.model_copy(
+            update={"actor_ref": principal.actor_ref, "actor_label": principal.display_name}
+        ),
     )
 
 
@@ -180,9 +186,7 @@ async def reschedule_occurrence(
     data: CalendarRescheduleInput,
     session: DatabaseSession,
 ) -> CalendarEventDetail:
-    await calendar_service.reschedule_occurrence(
-        session, event_id, occurrence_id, data
-    )
+    await calendar_service.reschedule_occurrence(session, event_id, occurrence_id, data)
     return await calendar_service.get_event(session, event_id)
 
 
@@ -258,12 +262,16 @@ async def link_monitor(
     event_id: Annotated[int, Path(gt=0)],
     data: CalendarMonitorLink,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> CalendarMonitorLinkRead:
     link = await calendar_service.link_monitor(
         session,
         event_id,
         data,
-        actor=CalendarActor(),
+        actor=CalendarActor(
+            actor_ref=principal.actor_ref,
+            actor_label=principal.display_name,
+        ),
     )
     return CalendarMonitorLinkRead.model_validate(link)
 
@@ -278,11 +286,15 @@ async def create_monitor(
     event_id: Annotated[int, Path(gt=0)],
     data: CalendarMonitorCreate,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> CalendarMonitorLinkRead:
     link = await calendar_service.create_and_link_monitor(
         session,
         event_id,
         data,
-        actor=CalendarActor(),
+        actor=CalendarActor(
+            actor_ref=principal.actor_ref,
+            actor_label=principal.display_name,
+        ),
     )
     return CalendarMonitorLinkRead.model_validate(link)

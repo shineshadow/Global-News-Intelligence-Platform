@@ -45,6 +45,17 @@ from app.models.alert import (
     AlertDestination,
     MonitorAlertDestination,
 )
+from app.models.auth import (
+    AuthEnrollmentToken,
+    AuthEvent,
+    AuthRecoveryCode,
+    AuthRole,
+    AuthSession,
+    AuthUser,
+    AuthUserRole,
+    AuthWebAuthnCeremony,
+    AuthWebAuthnCredential,
+)
 from app.models.base import Base
 from app.models.calendar import (
     IntelligenceCalendarEvent,
@@ -192,6 +203,15 @@ __all__ = [
     "ArtifactPayload",
     "ArtifactRejection",
     "ArtifactSignatureRelease",
+    "AuthEnrollmentToken",
+    "AuthEvent",
+    "AuthRecoveryCode",
+    "AuthRole",
+    "AuthSession",
+    "AuthUser",
+    "AuthUserRole",
+    "AuthWebAuthnCeremony",
+    "AuthWebAuthnCredential",
     "Base",
     "ClassificationRun",
     "ContentFormat",

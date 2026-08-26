@@ -1,7 +1,9 @@
 import os
+import secrets
 import subprocess
 import sys
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -16,9 +18,12 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.api.dependencies import auth_cookie_names
 from app.config import settings
 from app.database import get_db_session
 from app.main import app
+from app.models import AuthSession, AuthUser, AuthUserRole, AuthWebAuthnCredential
+from app.services.auth_service import AuthService
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -109,6 +114,14 @@ async def truncate_test_tables() -> None:
     statement = text(
         """
         TRUNCATE TABLE
+            auth_events,
+            auth_sessions,
+            auth_recovery_codes,
+            auth_webauthn_ceremonies,
+            auth_enrollment_tokens,
+            auth_webauthn_credentials,
+            auth_user_roles,
+            auth_users,
             acquisition_robots_gates,
             acquisition_robots_evaluations,
             acquisition_robots_snapshots,
@@ -744,12 +757,69 @@ async def client() -> AsyncIterator[AsyncClient]:
         raise_app_exceptions=True,
     )
 
+    auth_service = AuthService()
+    token, csrf_token = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+    async with test_session_factory() as session, session.begin():
+        owner = AuthUser(
+            username="test-owner",
+            display_name="Test Owner",
+            user_handle=secrets.token_bytes(32),
+            status="active",
+        )
+        session.add(owner)
+        await session.flush()
+        session.add(
+            AuthUserRole(
+                user_id=owner.id,
+                role_slug="owner",
+                assigned_by_user_id=owner.id,
+                reason="Authenticated test fixture",
+            )
+        )
+        credential = AuthWebAuthnCredential(
+            user_id=owner.id,
+            credential_id=secrets.token_bytes(32),
+            credential_public_key=b"test-public-key",
+            label="Test passkey",
+            device_type="single_device",
+            backed_up=False,
+        )
+        session.add(credential)
+        await session.flush()
+        auth_session = AuthSession(
+            user_id=owner.id,
+            token_digest=auth_service.digest(token),
+            csrf_digest=auth_service.digest(csrf_token),
+            credential_public_id=credential.public_id,
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        session.add(auth_session)
+
     async with AsyncClient(
         transport=transport,
         base_url="http://test",
+        headers={"X-CSRF-Token": csrf_token},
     ) as test_client:
+        session_cookie, csrf_cookie = auth_cookie_names()
+        test_client.cookies.set(session_cookie, token)
+        test_client.cookies.set(csrf_cookie, csrf_token)
         yield test_client
 
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def unauthenticated_client() -> AsyncIterator[AsyncClient]:
+    """Provide a client with the test database but no authenticated session."""
+
+    async def override_get_db_session() -> AsyncIterator[AsyncSession]:
+        async with test_session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    transport = ASGITransport(app=app, raise_app_exceptions=True)
+    async with AsyncClient(transport=transport, base_url="http://test") as test_client:
+        yield test_client
     app.dependency_overrides.clear()
 
 

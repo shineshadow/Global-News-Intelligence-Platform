@@ -111,13 +111,11 @@
                     <td style="min-width: 19rem">
                         {% if endpoint.cutover_path == "phase3" %}
                         <form method="post" action="{{ url_for('web_acquisition_rollback', endpoint_id=endpoint.endpoint_id) }}">
-                            <input class="form-control form-control-sm mb-1" name="actor" required placeholder="Operator">
                             <input class="form-control form-control-sm mb-1" name="reason" required placeholder="Rollback reason">
                             <button class="btn btn-sm btn-warning" type="submit">Roll back to legacy</button>
                         </form>
                         {% elif endpoint.eligible_for_cutover %}
                         <form method="post" action="{{ url_for('web_acquisition_activate', endpoint_id=endpoint.endpoint_id) }}">
-                            <input class="form-control form-control-sm mb-1" name="actor" required placeholder="Operator">
                             <input class="form-control form-control-sm mb-1" name="reason" required placeholder="Cutover reason">
                             <button class="btn btn-sm btn-primary" type="submit">Activate Phase 3</button>
                         </form>

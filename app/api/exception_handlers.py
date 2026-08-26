@@ -1,11 +1,17 @@
 import logging
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
+from app.services.auth_service import (
+    AuthenticationRequiredError,
+    AuthorizationDeniedError,
+    CsrfRejectedError,
+)
 from app.services.exceptions import (
     InvalidUpdateError,
     ResourceConflictError,
@@ -14,8 +20,47 @@ from app.services.exceptions import (
     ServiceUnavailableError,
 )
 
-
 logger = logging.getLogger(__name__)
+
+
+async def authentication_required_handler(
+    request: Request,
+    _exception: AuthenticationRequiredError,
+) -> JSONResponse | RedirectResponse:
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content=_error_content("authentication_required", "Authentication is required."),
+            headers={"WWW-Authenticate": "Cookie"},
+        )
+    next_path = request.url.path
+    if request.url.query:
+        next_path += f"?{request.url.query}"
+    return RedirectResponse(
+        url=f"/auth/login?next_path={quote(next_path, safe='')}", status_code=303
+    )
+
+
+async def authorization_denied_handler(
+    request: Request,
+    _exception: AuthorizationDeniedError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content=_error_content(
+            "authorization_denied", "The authenticated account lacks required authority."
+        ),
+    )
+
+
+async def csrf_rejected_handler(
+    request: Request,
+    _exception: CsrfRejectedError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content=_error_content("csrf_rejected", "The request failed CSRF validation."),
+    )
 
 
 def _error_content(
@@ -129,6 +174,18 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register application-wide exception handlers."""
 
     app.add_exception_handler(
+        AuthenticationRequiredError,
+        authentication_required_handler,
+    )
+    app.add_exception_handler(
+        AuthorizationDeniedError,
+        authorization_denied_handler,
+    )
+    app.add_exception_handler(
+        CsrfRejectedError,
+        csrf_rejected_handler,
+    )
+    app.add_exception_handler(
         ResourceNotFoundError,
         resource_not_found_handler,
     )
@@ -156,4 +213,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         ServiceUnavailableError,
         service_unavailable_handler,
-    )    
+    )

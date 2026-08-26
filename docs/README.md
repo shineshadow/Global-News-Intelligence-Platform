@@ -20,6 +20,9 @@ Generated files:
 - `change-reports/UI_DATE_TIME_CORRECTION_AUDIT.md` — adoption record for the 9-page UI-only standard and rejection of the 11-page universal proposal
 - `CONTENT_ATTENTION_AND_ENRICHMENT_POLICY.md` — profile-specific 0–39 attention scoring, Story floors, enrichment gates, operator precedence, and Admin configuration
 - `IDENTITY_PROFILE_AND_PREFERENCE_ARCHITECTURE.md` — future-safe User, Coverage Profile, Attention Profile, feedback, and preference ownership boundary
+- `specifications/SITE_WIDE_AUTHENTICATION_AND_AUTHORITY_FOUNDATION.md` — passwordless passkeys, required user verification, six-credential ceiling, recovery-only enrollment, sessions, roles, and preserved Owner authority
+- `change-reports/SITE_WIDE_AUTHENTICATION_AND_AUTHORITY_FOUNDATION_IMPLEMENTATION.md` — implementation boundary and review evidence for the site-wide authentication foundation
+- `deployment/PRODUCTION_DOMAIN_AND_WEBAUTHN_CUTOVER.md` — final-domain WebAuthn identity, HTTPS/proxy deployment, Owner credential transition, production gates, verification, and rollback
 - `SEMANTIC_WATCH_TECHNICAL_SPECIFICATION.md` — one-click item-derived semantic monitoring without changing frozen literal Monitor semantics
 - `VIDEO_INTELLIGENCE_TECHNICAL_SPECIFICATION.md` — metadata/subtitle-first video acquisition and explicit Video Processing workflow
 - `change-reports/ATTENTION_SPECIFICATION_CONFLICT_AUDIT.md` — cross-spec conflict results and executable consistency-check scope

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Register passkey — Global News Intelligence</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='vendor/tabler.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body class="d-flex flex-column"><main class="page page-center"><div class="container container-tight py-4">
+<div class="card card-md"><div class="card-body">
+    <h1 class="h2 text-center mb-3">Register a passkey</h1>
+    <p>Your authenticator must verify you with its PIN, biometric, or device unlock.</p>
+    <label class="form-label" for="label">Passkey label</label>
+    <input class="form-control mb-3" id="label" maxlength="255" placeholder="Debian laptop" required>
+    <button class="btn btn-primary w-100" id="register" type="button">Register passkey</button>
+    <div class="alert alert-danger mt-3 d-none" id="error" role="alert"></div>
+    <section class="mt-3 d-none" id="codes">
+      <div class="alert alert-warning"><strong>Save these recovery codes now.</strong> Each is single-use and cannot sign you in; it only permits registration of a replacement passkey.</div>
+      <pre id="code-list"></pre><a class="btn btn-success w-100" href="/web/">I saved them — continue</a>
+    </section>
+</div></div></div></main>
+<script>
+const fromB64 = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4-value.length%4)%4)), c => c.charCodeAt(0));
+const toB64 = value => btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const prepCreate = o => { o.challenge=fromB64(o.challenge); o.user.id=fromB64(o.user.id); (o.excludeCredentials||[]).forEach(c=>c.id=fromB64(c.id)); return o; };
+const serialize = c => ({id:c.id,rawId:toB64(c.rawId),type:c.type,authenticatorAttachment:c.authenticatorAttachment,response:{clientDataJSON:toB64(c.response.clientDataJSON),attestationObject:toB64(c.response.attestationObject),transports:c.response.getTransports?c.response.getTransports():[]},clientExtensionResults:c.getClientExtensionResults()});
+document.getElementById('register').addEventListener('click', async () => {
+  const error=document.getElementById('error'); error.classList.add('d-none');
+  try {
+    const start=await fetch('/auth/webauthn/registration/options',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:document.getElementById('label').value})});
+    const data=await start.json(); if(!start.ok) throw new Error(data.error);
+    const credential=await navigator.credentials.create({publicKey:prepCreate(data.publicKey)});
+    const done=await fetch('/auth/webauthn/registration/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ceremony_id:data.ceremony_id,credential:serialize(credential)})});
+    const result=await done.json(); if(!done.ok) throw new Error(result.error);
+    document.getElementById('register').classList.add('d-none'); document.getElementById('label').classList.add('d-none');
+    document.getElementById('codes').classList.remove('d-none');
+    document.getElementById('code-list').textContent=(result.recovery_codes||[]).join('\n') || 'Your existing recovery-code set remains active.';
+  } catch(e) { error.textContent=e.message||'Passkey registration failed.'; error.classList.remove('d-none'); }
+});
+</script></body></html>

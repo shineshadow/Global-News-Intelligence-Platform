@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Path, Query, status
 
-from app.api.dependencies import DatabaseSession
+from app.api.dependencies import CurrentPrincipal, DatabaseSession
 from app.api.responses import MANAGEMENT_ERROR_RESPONSES
 from app.schemas.calendar_administration import (
     CalendarAdministrativeActionResult,
@@ -74,11 +74,14 @@ async def resolve_administrative_exception(
     exception_id: Annotated[int, Path(gt=0)],
     data: CalendarAdministrativeResolution,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> CalendarAdministrativeActionResult:
     return await calendar_administration_service.resolve_administrative_exception(
         session,
         exception_id,
-        data,
+        data.model_copy(
+            update={"actor_ref": principal.actor_ref, "actor_label": principal.display_name}
+        ),
     )
 
 
@@ -92,11 +95,14 @@ async def deny_administrative_proposal(
     exception_id: Annotated[int, Path(gt=0)],
     data: CalendarAdministrativeDenial,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> CalendarAdministrativeActionResult:
     return await calendar_administration_service.deny_administrative_proposal(
         session,
         exception_id,
-        data,
+        data.model_copy(
+            update={"actor_ref": principal.actor_ref, "actor_label": principal.display_name}
+        ),
     )
 
 
@@ -114,18 +120,20 @@ async def record_administrative_action(
     ],
     data: CalendarAdministrativeActor,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> CalendarAdministrativeActionResult:
+    authenticated_data = data.model_copy(
+        update={"actor_ref": principal.actor_ref, "actor_label": principal.display_name}
+    )
     if action_kind == "withdraw":
-        return (
-            await calendar_administration_service.withdraw_administrative_override(
-                session,
-                exception_id,
-                data,
-            )
+        return await calendar_administration_service.withdraw_administrative_override(
+            session,
+            exception_id,
+            authenticated_data,
         )
     return await calendar_administration_service.record_administrative_action(
         session,
         exception_id,
         action_kind=action_kind,
-        data=data,
+        data=authenticated_data,
     )

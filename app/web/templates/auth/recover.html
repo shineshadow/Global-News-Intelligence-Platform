@@ -1,0 +1,6 @@
+<!doctype html><html lang="en" data-bs-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Recover account — GNI</title><link rel="stylesheet" href="{{ url_for('static', path='vendor/tabler.min.css') }}"></head>
+<body class="d-flex flex-column"><main class="page page-center"><div class="container container-tight py-4"><div class="card card-md"><div class="card-body">
+<h1 class="h2 text-center mb-3">Recover account</h1><p>A valid single-use code permits only replacement-passkey registration. It does not create a signed-in session.</p>
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label class="form-label">Username</label><input class="form-control mb-3" name="username" autocomplete="username" required><label class="form-label">Recovery code</label><input class="form-control mb-3" name="recovery_code" autocomplete="one-time-code" required><button class="btn btn-primary w-100">Continue to passkey registration</button></form>
+</div></div></div></main></body></html>

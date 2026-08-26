@@ -118,8 +118,6 @@
                                                 selected
                                                 {% endif %}>Ignore</option>
                                         </select>
-                                        <input class="form-control mb-2" name="actor_ref"
-                                            placeholder="Operator reference" required>
                                         <textarea class="form-control mb-2" name="reason"
                                             placeholder="Reason for this operational override"
                                             required></textarea>
@@ -152,8 +150,6 @@
                                         policy_id=policy.policy_id,
                                         occurrence_id=policy.occurrence_id
                                     ) }}">
-                                    <input class="form-control mb-2" name="actor_ref"
-                                        placeholder="Operator reference" required>
                                     <input class="form-control mb-2" name="reason"
                                         placeholder="Reason for removing override" required>
                                     <button class="btn btn-sm" type="submit">

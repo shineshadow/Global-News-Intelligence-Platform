@@ -1,5 +1,6 @@
 from fastapi import (
     APIRouter,
+    Depends,
     Query,
     Request,
 )
@@ -8,7 +9,7 @@ from fastapi.responses import (
     RedirectResponse,
 )
 
-from app.api.dependencies import DatabaseSession
+from app.api.dependencies import DatabaseSession, require_site_access
 from app.services.exceptions import (
     InvalidUpdateError,
     ResourceConflictError,
@@ -46,6 +47,7 @@ from app.web.templating import templates
 
 router = APIRouter(
     include_in_schema=False,
+    dependencies=[Depends(require_site_access)],
 )
 
 # Lifecycle routes contain fixed paths such as

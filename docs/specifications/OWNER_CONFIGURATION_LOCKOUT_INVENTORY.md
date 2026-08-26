@@ -11,7 +11,8 @@ approved a permanent lockout.
 
 | Policy family | Current default | Owner authority status | Next integration |
 |---|---|---|---|
-| Robots access/crawl decision | Enforce observed restriction | Proof 34B runtime wired through exact Owner policy, evidence, evaluation, and gates; authenticated GUI override remains pending | Build the site-wide Authentication and Authority Foundation, then expose the existing authority through 34C without narrowing supported Owner scopes |
+| Site authentication and authority | Passwordless passkeys; required UV; six credentials; recovery registration only | Implemented foundation; Owner remains highest application authority; authentication and recovery information is internal and Owner information | Complete authenticated Owner/Admin management UI and route Proof 34C through the existing Owner-policy service |
+| Robots access/crawl decision | Enforce observed restriction | Proof 34B runtime wired through exact Owner policy, evidence, evaluation, and gates; site authentication foundation implemented; authenticated GUI override remains pending | Expose the existing authority through 34C without narrowing supported Owner scopes |
 | HTTP Retry-After | Honor bounded valid value | Implemented | Extend effective-policy diagnostics/UI if desired |
 | Provider quota/reset and HTTP 429 fallback | Enforce provider hold | Implemented | Extend effective-policy diagnostics/UI if desired |
 | Manual-poll rate denial | Same buckets as scheduled work | Implemented | Extend effective-policy diagnostics/UI if desired |

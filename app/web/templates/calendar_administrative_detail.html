@@ -192,8 +192,9 @@
             ) }}">
             <div class="card-header"><h3 class="card-title">Resolve explicitly</h3></div>
             <div class="card-body">
-                <label class="form-label">Operator reference</label>
-                <input class="form-control mb-3" name="actor_ref" required>
+                <p class="text-secondary small">
+                    Recorded as {{ request.state.auth_principal.display_name }}.
+                </p>
                 <label class="form-label">Select competing assertion</label>
                 <select class="form-select mb-3" name="selected_assertion_id">
                     <option value="">Use explicit validation state</option>
@@ -235,8 +236,6 @@
             <div class="card-body">
                 <input type="hidden" name="assertion_id"
                     value="{{ detail.proposed_assertion.id }}">
-                <input class="form-control mb-3" name="actor_ref"
-                    placeholder="Operator reference" required>
                 <textarea class="form-control" name="reason"
                     placeholder="Reason for denial" required></textarea>
             </div>
@@ -256,8 +255,6 @@
             ) }}">
             <div class="card-header"><h3 class="card-title">Leave unresolved / note</h3></div>
             <div class="card-body">
-                <input class="form-control mb-3" name="actor_ref"
-                    placeholder="Operator reference" required>
                 <textarea class="form-control" name="reason"
                     placeholder="Inspection note" required></textarea>
             </div>
@@ -282,8 +279,6 @@
                 <h3 class="card-title">{{ state_action|title }} exception</h3>
             </div>
             <div class="card-body">
-                <input class="form-control mb-3" name="actor_ref"
-                    placeholder="Operator reference" required>
                 <textarea class="form-control" name="reason"
                     placeholder="Reason" required></textarea>
             </div>
@@ -302,8 +297,6 @@
             ) }}">
             <div class="card-header"><h3 class="card-title">Withdraw override</h3></div>
             <div class="card-body">
-                <input class="form-control mb-3" name="actor_ref"
-                    placeholder="Operator reference" required>
                 <textarea class="form-control" name="reason"
                     placeholder="Reason for withdrawal" required></textarea>
             </div>

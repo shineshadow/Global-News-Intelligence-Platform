@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.api.dependencies import DatabaseSession
+from app.api.dependencies import CurrentPrincipal, DatabaseSession
 from app.services.acquisition_health_service import (
     activate_feed_endpoint,
     list_acquisition_health,
@@ -55,13 +55,14 @@ async def activate_endpoint_action(
     request: Request,
     endpoint_id: int,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> HTMLResponse:
     form = await request.form()
     try:
         await activate_feed_endpoint(
             session,
             endpoint_id,
-            actor=str(form.get("actor", "")),
+            actor=principal.actor_ref,
             reason=str(form.get("reason", "")),
         )
     except InvalidUpdateError as exc:
@@ -87,13 +88,14 @@ async def rollback_endpoint_action(
     request: Request,
     endpoint_id: int,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
 ) -> HTMLResponse:
     form = await request.form()
     try:
         await rollback_feed_endpoint(
             session,
             endpoint_id,
-            actor=str(form.get("actor", "")),
+            actor=principal.actor_ref,
             reason=str(form.get("reason", "")),
         )
     except InvalidUpdateError as exc:

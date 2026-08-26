@@ -107,6 +107,7 @@ async def test_acquisition_cutover_actions_require_explicit_operator_evidence(
     monkeypatch,
 ) -> None:
     _, endpoint_id = await create_source(client)
+    authenticated_actor = (await client.get("/api/v1/auth/me")).json()["actor_ref"]
     from app.web import acquisition_routes
 
     calls = []
@@ -122,18 +123,18 @@ async def test_acquisition_cutover_actions_require_explicit_operator_evidence(
 
     activated = await client.post(
         f"/web/acquisition-health/{endpoint_id}/activate",
-        data={"actor": "owner", "reason": "bounded canary"},
+        data={"actor": "forged-caller-value", "reason": "bounded canary"},
     )
     rolled_back = await client.post(
         f"/web/acquisition-health/{endpoint_id}/rollback",
-        data={"actor": "owner", "reason": "parity comparison"},
+        data={"actor": "forged-caller-value", "reason": "parity comparison"},
     )
 
     assert activated.status_code == 303
     assert rolled_back.status_code == 303
     assert calls == [
-        ("activate", endpoint_id, "owner", "bounded canary"),
-        ("rollback", endpoint_id, "owner", "parity comparison"),
+        ("activate", endpoint_id, authenticated_actor, "bounded canary"),
+        ("rollback", endpoint_id, authenticated_actor, "parity comparison"),
     ]
 
 

@@ -13,6 +13,7 @@ from app.api.exception_handlers import register_exception_handlers
 from app.api.router import api_router
 from app.database import async_session_factory, engine
 from app.redis_client import redis_client
+from app.web.auth_routes import router as auth_router
 from app.web.routes import router as web_router
 
 
@@ -41,8 +42,10 @@ app = FastAPI(
 )
 
 register_exception_handlers(app)
+app.include_router(auth_router)
 app.include_router(web_router)
 app.include_router(api_router)
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check(response: Response) -> HealthResponse:
@@ -74,10 +77,8 @@ async def health_check(response: Response) -> HealthResponse:
         redis=redis_status,
     )
 
-WEB_DIR = (
-    Path(__file__).resolve().parent
-    / "web"
-)
+
+WEB_DIR = Path(__file__).resolve().parent / "web"
 
 app.mount(
     "/static",

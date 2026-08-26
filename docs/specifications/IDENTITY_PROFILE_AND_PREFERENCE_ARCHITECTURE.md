@@ -1,7 +1,7 @@
 # Identity, Profile, and Preference Architecture
 
 **Project:** Global News Intelligence Platform  
-**Status:** Development Candidate / Pre-Authentication Boundary  
+**Status:** Development Candidate / Authentication Foundation Implemented
 **Version:** 0.1  
 **Date:** 2026-07-30
 
@@ -43,12 +43,10 @@ These do not create three Documents or mutate global Story evidence.
 
 ## 3. Initial Single-Operator Phase
 
-Before feedback persistence is implemented, GNI must establish a stable actor
-identifier for the local operator. Authentication UI may remain deferred, but
-anonymous or null-owned personal actions are prohibited.
-
-A future authentication migration links the stable actor to a User without
-rewriting action history.
+The site authentication foundation establishes a stable `user:<public UUID>`
+actor from a verified passkey session. Caller-supplied actor strings have no
+authority. Anonymous or null-owned personal actions remain prohibited. See
+`SITE_WIDE_AUTHENTICATION_AND_AUTHORITY_FOUNDATION.md`.
 
 User-owned display preferences include the effective IANA date/time display
 timezone and an extensible owner-approved display preset. The initial defaults

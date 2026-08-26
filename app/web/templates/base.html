@@ -31,6 +31,13 @@
             'static',
             path='vendor/htmx.min.js'
         ) }}"></script>
+    <meta name="gni-csrf-token" content="{{ request.state.csrf_token }}">
+    <script>
+        document.addEventListener("htmx:configRequest", function (event) {
+            const token = document.querySelector('meta[name="gni-csrf-token"]').content;
+            event.detail.headers["X-CSRF-Token"] = token;
+        });
+    </script>
 
     <script defer src="{{ url_for(
             'static',
@@ -151,6 +158,11 @@
                             </li>
 
                         </ul>
+                        <div class="navbar-nav flex-row ms-auto">
+                            <a class="nav-link" href="{{ url_for('auth_account') }}">
+                                {{ request.state.auth_principal.display_name }}
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

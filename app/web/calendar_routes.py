@@ -5,7 +5,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 
-from app.api.dependencies import DatabaseSession
+from app.api.dependencies import CurrentPrincipal, DatabaseSession
 from app.models.coverage_profile import CoverageProfile
 from app.schemas.calendar import (
     CalendarActor,
@@ -175,14 +175,12 @@ async def calendar_administrative_page(
     severity: str | None = None,
     assertion_family: str | None = None,
 ) -> HTMLResponse:
-    exceptions = (
-        await calendar_administration_service.list_administrative_exceptions(
-            session,
-            state=state,
-            severity=severity,
-            assertion_family=assertion_family,
-            limit=500,
-        )
+    exceptions = await calendar_administration_service.list_administrative_exceptions(
+        session,
+        state=state,
+        severity=severity,
+        assertion_family=assertion_family,
+        limit=500,
     )
     return templates.TemplateResponse(
         request=request,
@@ -228,7 +226,7 @@ async def calendar_administrative_detail_page(
 async def calendar_administrative_resolve(
     exception_id: int,
     session: DatabaseSession,
-    actor_ref: str = Form(),
+    principal: CurrentPrincipal,
     reason: str = Form(),
     selected_assertion_id: str | None = Form(default=None),
     validation_state: str | None = Form(default=None),
@@ -237,11 +235,10 @@ async def calendar_administrative_resolve(
         session,
         exception_id,
         CalendarAdministrativeResolution(
-            actor_ref=actor_ref,
+            actor_ref=principal.actor_ref,
+            actor_label=principal.display_name,
             reason=reason,
-            selected_assertion_id=(
-                int(selected_assertion_id) if selected_assertion_id else None
-            ),
+            selected_assertion_id=(int(selected_assertion_id) if selected_assertion_id else None),
             validation_state=validation_state or None,
         ),
     )
@@ -255,7 +252,7 @@ async def calendar_administrative_resolve(
 async def calendar_administrative_deny(
     exception_id: int,
     session: DatabaseSession,
-    actor_ref: str = Form(),
+    principal: CurrentPrincipal,
     reason: str = Form(),
     assertion_id: int = Form(),
 ) -> RedirectResponse:
@@ -263,7 +260,8 @@ async def calendar_administrative_deny(
         session,
         exception_id,
         CalendarAdministrativeDenial(
-            actor_ref=actor_ref,
+            actor_ref=principal.actor_ref,
+            actor_label=principal.display_name,
             reason=reason,
             assertion_id=assertion_id,
         ),
@@ -279,10 +277,14 @@ async def calendar_administrative_action(
     exception_id: int,
     action_kind: str,
     session: DatabaseSession,
-    actor_ref: str = Form(),
+    principal: CurrentPrincipal,
     reason: str = Form(),
 ) -> RedirectResponse:
-    data = CalendarAdministrativeActor(actor_ref=actor_ref, reason=reason)
+    data = CalendarAdministrativeActor(
+        actor_ref=principal.actor_ref,
+        actor_label=principal.display_name,
+        reason=reason,
+    )
     if action_kind == "withdraw":
         await calendar_administration_service.withdraw_administrative_override(
             session,
@@ -310,11 +312,9 @@ async def calendar_detail_page(
     session: DatabaseSession,
 ) -> HTMLResponse:
     detail = await calendar_service.get_event(session, event_id)
-    occurrence_policies = (
-        await calendar_policy_service.list_event_occurrence_policies(
-            session,
-            event_id,
-        )
+    occurrence_policies = await calendar_policy_service.list_event_occurrence_policies(
+        session,
+        event_id,
     )
     return templates.TemplateResponse(
         request=request,
@@ -328,8 +328,7 @@ async def calendar_detail_page(
 
 
 @router.post(
-    "/web/calendar/{event_id}/policies/{policy_id}/occurrences/"
-    "{occurrence_id}",
+    "/web/calendar/{event_id}/policies/{policy_id}/occurrences/{occurrence_id}",
     name="web_calendar_occurrence_policy_set",
 )
 async def calendar_occurrence_policy_set(
@@ -337,7 +336,7 @@ async def calendar_occurrence_policy_set(
     policy_id: int,
     occurrence_id: int,
     session: DatabaseSession,
-    actor_ref: str = Form(),
+    principal: CurrentPrincipal,
     reason: str = Form(),
     monitoring_priority: str | None = Form(default=None),
     expected_news_importance: str | None = Form(default=None),
@@ -349,23 +348,19 @@ async def calendar_occurrence_policy_set(
         policy_id=policy_id,
         occurrence_id=occurrence_id,
         data=CalendarOccurrencePolicyOverrideInput(
-            actor_ref=actor_ref,
+            actor_ref=principal.actor_ref,
+            actor_label=principal.display_name,
             reason=reason,
             monitoring_priority=monitoring_priority or None,
             expected_news_importance=expected_news_importance or None,
-            is_watched=(
-                watch_state == "watch"
-                if watch_state in {"watch", "ignore"}
-                else None
-            ),
+            is_watched=(watch_state == "watch" if watch_state in {"watch", "ignore"} else None),
         ),
     )
     return _event_redirect(event_id)
 
 
 @router.post(
-    "/web/calendar/{event_id}/policies/{policy_id}/occurrences/"
-    "{occurrence_id}/delete",
+    "/web/calendar/{event_id}/policies/{policy_id}/occurrences/{occurrence_id}/delete",
     name="web_calendar_occurrence_policy_delete",
 )
 async def calendar_occurrence_policy_delete(
@@ -373,7 +368,7 @@ async def calendar_occurrence_policy_delete(
     policy_id: int,
     occurrence_id: int,
     session: DatabaseSession,
-    actor_ref: str = Form(),
+    principal: CurrentPrincipal,
     reason: str = Form(),
 ) -> RedirectResponse:
     await calendar_policy_service.delete_occurrence_policy(
@@ -382,7 +377,8 @@ async def calendar_occurrence_policy_delete(
         policy_id=policy_id,
         occurrence_id=occurrence_id,
         data=CalendarOccurrencePolicyOverrideDelete(
-            actor_ref=actor_ref,
+            actor_ref=principal.actor_ref,
+            actor_label=principal.display_name,
             reason=reason,
         ),
     )
@@ -396,6 +392,7 @@ async def calendar_occurrence_policy_delete(
 async def calendar_monitor_link(
     event_id: int,
     session: DatabaseSession,
+    principal: CurrentPrincipal,
     policy_id: int = Form(),
     monitor_id: int = Form(),
     purpose: str = Form(),
@@ -410,6 +407,9 @@ async def calendar_monitor_link(
             purpose=purpose,
             is_calendar_managed=calendar_managed,
         ),
-        actor=CalendarActor(),
+        actor=CalendarActor(
+            actor_ref=principal.actor_ref,
+            actor_label=principal.display_name,
+        ),
     )
     return _event_redirect(event_id)
