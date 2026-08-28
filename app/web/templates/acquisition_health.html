@@ -8,12 +8,7 @@
     <div class="container-xl">
         <div class="row g-2 align-items-center">
             <div class="col">
-                <div class="page-pretitle">Phase 3 Operations</div>
                 <h2 class="page-title">Acquisition Health</h2>
-                <div class="text-secondary mt-1">
-                    Feed cutover is explicit, audited, reversible, and limited to
-                    {{ summary.cutover_limit }} active endpoint{% if summary.cutover_limit != 1 %}s{% endif %}.
-                </div>
             </div>
         </div>
     </div>
@@ -21,22 +16,9 @@
 {% endblock %}
 
 {% block content %}
-{% if request.query_params.get("activated") %}
-<div class="alert alert-success">Endpoint activated on the Phase 3 acquisition path.</div>
-{% endif %}
-{% if request.query_params.get("rolled_back") %}
-<div class="alert alert-warning">Endpoint rolled back to the legacy feed path.</div>
-{% endif %}
-{% if action_error %}
-<div class="alert alert-danger">{{ action_error }}</div>
-{% endif %}
-
 <div class="row row-cards mb-3">
     {% for title, value in [
         ("Feed Endpoints", summary.total),
-        ("Legacy Path", summary.legacy),
-        ("Phase 3 Path", summary.phase3),
-        ("Eligible Now", summary.eligible),
         ("Healthy", summary.healthy),
         ("Gated", summary.gated)
     ] %}
@@ -55,11 +37,8 @@
             <thead>
                 <tr>
                     <th>Endpoint</th>
-                    <th>Path / Configuration</th>
                     <th>Operational State</th>
-                    <th>Feed history</th>
                     <th>Activity</th>
-                    <th>Cutover Control</th>
                 </tr>
             </thead>
             <tbody>
@@ -73,31 +52,10 @@
                         <div class="small mt-1">{{ endpoint.tuple_display }}</div>
                     </td>
                     <td>
-                        {{ badge(endpoint.cutover_path) }}
-                        <div class="small mt-1">
-                            {{ endpoint.adapter_display or "Legacy feed poller" }}
-                        </div>
-                        {% if endpoint.configuration_version %}
-                        <div class="text-secondary small">{{ endpoint.configuration_version }}</div>
-                        {% endif %}
-                        <div class="small">Phase 3 proof: {{ badge(endpoint.cutover_proof_state) }}</div>
-                        <div class="small">Runtime storage: {{ endpoint.runtime_configuration_state }}</div>
-                    </td>
-                    <td>
                         <div>Lifecycle: {{ badge(endpoint.lifecycle_state) }}</div>
                         <div>Verification: {{ badge(endpoint.verification_state) }}</div>
                         <div>Health: {{ badge(endpoint.health_state) }}</div>
                         <div>Gate: {{ badge(endpoint.gate_state or "none") }}</div>
-                    </td>
-                    <td>
-                        <div>{{ endpoint.cutover_event_count | number }} cutover events</div>
-                        {% if endpoint.latest_cutover_event %}
-                        <div class="text-secondary small">
-                            {{ endpoint.latest_cutover_event | replace("_", " ") | title }} by
-                            {{ endpoint.latest_cutover_actor }}:
-                            {{ endpoint.latest_cutover_reason }}
-                        </div>
-                        {% endif %}
                     </td>
                     <td class="text-nowrap">
                         <div>Last success: {{ endpoint.latest_success_at | datetime_user }}</div>
@@ -106,27 +64,9 @@
                         <div>Interval: {{ endpoint.poll_interval_seconds | number }} seconds</div>
                         <div>HTTP: {{ endpoint.last_http_status or "—" }}</div>
                     </td>
-                    <td style="min-width: 19rem">
-                        {% if endpoint.cutover_path == "phase3" %}
-                        <form method="post" action="{{ url_for('web_acquisition_rollback', endpoint_id=endpoint.endpoint_id) }}">
-                            <input class="form-control form-control-sm mb-1" name="reason" required placeholder="Rollback reason">
-                            <button class="btn btn-sm btn-warning" type="submit">Roll back to legacy</button>
-                        </form>
-                        {% elif endpoint.eligible_for_cutover %}
-                        <form method="post" action="{{ url_for('web_acquisition_activate', endpoint_id=endpoint.endpoint_id) }}">
-                            <input class="form-control form-control-sm mb-1" name="reason" required placeholder="Cutover reason">
-                            <button class="btn btn-sm btn-primary" type="submit">Activate Phase 3</button>
-                        </form>
-                        {% else %}
-                        <div class="text-secondary small">Not eligible:</div>
-                        <ul class="small ps-3 mb-0">
-                            {% for reason in endpoint.eligibility_reasons %}<li>{{ reason }}</li>{% endfor %}
-                        </ul>
-                        {% endif %}
-                    </td>
                 </tr>
             {% else %}
-                <tr><td colspan="6" class="text-secondary">No RSS or Atom endpoints exist.</td></tr>
+                <tr><td colspan="3" class="text-secondary">No RSS or Atom endpoints exist.</td></tr>
             {% endfor %}
             </tbody>
         </table>

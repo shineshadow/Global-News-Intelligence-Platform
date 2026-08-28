@@ -165,7 +165,6 @@ both installation paths:
 ```bash
 ARTIFACT_STAGING_ROOT=/var/lib/gni/artifacts/staging
 ARTIFACT_CANONICAL_ROOT=/var/lib/gni/artifacts/canonical
-PHASE3_FEED_CUTOVER_LIMIT=1
 ```
 
 They must be distinct, non-nested directories on approved local storage. The

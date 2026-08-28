@@ -103,7 +103,7 @@ Phase 3 outbound egress guard                         implemented candidate
 Phase 3 leases/adapter registry/secrets/rate policy  implemented candidate
 Phase 3 feed adapter/shared acquisition worker       implemented candidate
 UI foundation and UX governance                      draft candidate
-Phase 3 controlled feed cutover/acquisition health   implemented candidate
+Phase 3 controlled feed cutover UI                   retired development control
 Phase 3 live feed canary/parity review                passed
 Phase 3 RSSHub/RSS-Bridge adapters                    implemented candidate
 Phase 3 direct HTTP/listing extraction                implemented candidate
@@ -134,11 +134,13 @@ inspection, and fail-closed cutover boundary are recorded in
 `../specifications/PHASE_3_FEED_ADAPTER_AND_SHARED_WORKER.md`. Its migration
 configures no endpoints; legacy RSS remains active only for endpoints without
 an explicit Phase 3 configuration.
-The bounded activation, rollback ledger, separate operational-state
-projection, Acquisition Health UI, and canary procedure are recorded in
+The historical bounded activation, rollback ledger, and canary procedure are
+recorded in
 `../specifications/PHASE_3_CONTROLLED_FEED_CUTOVER_AND_ACQUISITION_HEALTH.md`.
-Its migration activates no endpoints and the installation cohort limit
-defaults to one.
+The development-only path, proof, history, eligibility, activation, and
+rollback UI was later removed. Acquisition Health now displays feed health and
+poll activity only; retained configurations and immutable audit history were
+not deleted.
 The bounded CISA RSS activation, manual and scheduled Phase 3 acquisition,
 stable Document parity, live rollback, legacy recovery poll, and versioned
 reactivation proof are recorded in

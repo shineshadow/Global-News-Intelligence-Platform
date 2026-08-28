@@ -99,43 +99,13 @@ async def test_acquisition_health_page(
 
     assert response.status_code == 200
     assert "Acquisition Health" in response.text
-    assert "Feed cutover is explicit, audited, reversible" in response.text
-
-
-async def test_acquisition_cutover_actions_require_explicit_operator_evidence(
-    client,
-    monkeypatch,
-) -> None:
-    _, endpoint_id = await create_source(client)
-    authenticated_actor = (await client.get("/api/v1/auth/me")).json()["actor_ref"]
-    from app.web import acquisition_routes
-
-    calls = []
-
-    async def fake_activate(_session, requested_endpoint_id, *, actor, reason):
-        calls.append(("activate", requested_endpoint_id, actor, reason))
-
-    async def fake_rollback(_session, requested_endpoint_id, *, actor, reason):
-        calls.append(("rollback", requested_endpoint_id, actor, reason))
-
-    monkeypatch.setattr(acquisition_routes, "activate_feed_endpoint", fake_activate)
-    monkeypatch.setattr(acquisition_routes, "rollback_feed_endpoint", fake_rollback)
-
-    activated = await client.post(
-        f"/web/acquisition-health/{endpoint_id}/activate",
-        data={"actor": "forged-caller-value", "reason": "bounded canary"},
-    )
-    rolled_back = await client.post(
-        f"/web/acquisition-health/{endpoint_id}/rollback",
-        data={"actor": "forged-caller-value", "reason": "parity comparison"},
-    )
-
-    assert activated.status_code == 303
-    assert rolled_back.status_code == 303
-    assert calls == [
-        ("activate", endpoint_id, authenticated_actor, "bounded canary"),
-        ("rollback", endpoint_id, authenticated_actor, "parity comparison"),
-    ]
+    assert "Path / Configuration" not in response.text
+    assert "Feed history" not in response.text
+    assert "Cutover Control" not in response.text
+    assert "Phase 3 proof" not in response.text
+    assert "Runtime storage" not in response.text
+    assert (await client.post("/web/acquisition-health/1/activate")).status_code == 404
+    assert (await client.post("/web/acquisition-health/1/rollback")).status_code == 404
 
 
 async def test_web_manual_poll(

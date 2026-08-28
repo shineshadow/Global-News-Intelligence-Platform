@@ -1,8 +1,22 @@
 # Phase 3 Controlled Feed Cutover and Acquisition Health
 
-Status: IMPLEMENTED CANDIDATE — LIVE CANARY PASSED
+Status: HISTORICAL IMPLEMENTATION RECORD — DEVELOPMENT UI RETIRED
 
 Date: 2026-08-03
+
+## Current Status
+
+The development-only path/configuration, cutover history, proof state,
+runtime-storage state, eligibility reasons, activation, and rollback controls
+were removed from Acquisition Health by Owner direction. The cohort-limit
+setting and web mutation routes were removed with them. No replacement UI was
+introduced.
+
+The Acquisition Health projection now reports feed operational state and poll
+activity only. Existing endpoint configurations and immutable historical
+cutover records remain stored and are not changed by the UI cleanup. The
+remainder of this document records the retired development workflow for
+historical context; it is not a current operating procedure.
 
 ## Scope
 
@@ -112,22 +126,10 @@ dates omit the year, other-year dates use two digits, time uses a two-digit
 The former `datetime_utc` template name remains only as a compatibility alias
 to the corrected formatter; it no longer renders UTC.
 
-## Activation Procedure
+## Retired Activation Procedure
 
-Before the first live canary:
-
-1. provision distinct development Artifact staging and canonical directories;
-2. set `ARTIFACT_STAGING_ROOT` and `ARTIFACT_CANONICAL_ROOT` in the active
-   installation environment (`/etc/global-news-intelligence/gni.env` for the
-   provided systemd units, or `.env` for a manual development process);
-3. retain `PHASE3_FEED_CUTOVER_LIMIT=1`;
-4. pass signature-import, inspection, egress, migration, and repository gates;
-5. open Acquisition Health and choose one eligible low-risk feed;
-6. enter the operator identity and concrete cutover reason;
-7. activate, manually poll, and review proof before changing the cohort limit.
-
-Production is not part of this workflow. Development and test Artifact roots
-must remain separate.
+The Acquisition Health activation procedure is retired and is no longer
+available through the web interface.
 
 ## Deliberate Exclusions
 

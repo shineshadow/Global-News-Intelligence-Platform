@@ -40,7 +40,6 @@ class Settings(BaseSettings):
 
     artifact_staging_root: Path | None = None
     artifact_canonical_root: Path | None = None
-    phase3_feed_cutover_limit: int = Field(default=1, ge=1)
     acquisition_internal_services: tuple[AcquisitionInternalServiceSettings, ...] = ()
 
     auth_session_lifetime_seconds: int = Field(default=43_200, ge=300, le=2_592_000)
