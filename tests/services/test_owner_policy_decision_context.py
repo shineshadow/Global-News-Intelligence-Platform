@@ -2,13 +2,13 @@ from sqlalchemy import func, select
 
 from app.models import OwnerPolicyOverride, OwnerPolicyOverrideEvent
 from app.services.owner_policy_service import (
-    ROBOTS_ENFORCEMENT,
+    RETRY_AFTER_ENFORCEMENT,
     OwnerPolicyContext,
     OwnerPolicyPreviewStaleError,
     OwnerPolicyService,
 )
 
-ACKNOWLEDGEMENT = "Owner accepts responsibility for this explicit robots policy change."
+ACKNOWLEDGEMENT = "Owner accepts responsibility for this explicit retry policy change."
 
 
 async def _set(
@@ -21,7 +21,7 @@ async def _set(
 ):
     return await OwnerPolicyService().set_override(
         session,
-        policy_key=ROBOTS_ENFORCEMENT,
+        policy_key=RETRY_AFTER_ENFORCEMENT,
         value=value,
         scope_type=scope_type,
         scope_identity=scope_identity,
@@ -61,9 +61,9 @@ async def test_explain_shows_full_matching_chain_without_consuming_authority(
         )
         decision = await OwnerPolicyService().explain(
             session,
-            policy_key=ROBOTS_ENFORCEMENT,
+            policy_key=RETRY_AFTER_ENFORCEMENT,
             context=context,
-            external_observations=({"robots_external_decision": "disallowed"},),
+            external_observations=({"provider_retry_after": "present"},),
             effective_runtime_decision="allow_by_owner_override",
         )
 
@@ -78,7 +78,7 @@ async def test_explain_shows_full_matching_chain_without_consuming_authority(
     ]
     assert decision.matching_candidates[0]["selected"] is True
     assert decision.uses_would_be_consumed is True
-    assert decision.external_observations == ({"robots_external_decision": "disallowed"},)
+    assert decision.external_observations == ({"provider_retry_after": "present"},)
     assert decision.effective_runtime_decision == "allow_by_owner_override"
     assert endpoint.status == "active"
     assert request.uses_consumed == 0
@@ -106,7 +106,7 @@ async def test_preview_is_non_persisting_and_reports_more_specific_authority(
         before = await session.scalar(select(func.count()).select_from(OwnerPolicyOverride))
         preview = await OwnerPolicyService().preview_override(
             session,
-            policy_key=ROBOTS_ENFORCEMENT,
+            policy_key=RETRY_AFTER_ENFORCEMENT,
             proposed_value=True,
             scope_type="endpoint",
             scope_identity="47",
@@ -132,7 +132,7 @@ async def test_stale_preview_cannot_mutate_owner_authority(
     async with database_session_factory() as session, session.begin():
         preview = await service.preview_override(
             session,
-            policy_key=ROBOTS_ENFORCEMENT,
+            policy_key=RETRY_AFTER_ENFORCEMENT,
             proposed_value=False,
             scope_type="endpoint",
             scope_identity="47",
@@ -143,7 +143,7 @@ async def test_stale_preview_cannot_mutate_owner_authority(
         try:
             await service.set_override(
                 session,
-                policy_key=ROBOTS_ENFORCEMENT,
+                policy_key=RETRY_AFTER_ENFORCEMENT,
                 value=False,
                 scope_type="endpoint",
                 scope_identity="47",

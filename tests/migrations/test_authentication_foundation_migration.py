@@ -10,7 +10,8 @@ from sqlalchemy.exc import DBAPIError
 from app.config import settings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "b8d0f2a4c6e8"
+HEAD = "d9e1f3a5b7c9"
+AUTHENTICATION_REVISION = "b8d0f2a4c6e8"
 PREVIOUS = "a7c9e1f3b5d4"
 
 
@@ -87,12 +88,14 @@ async def test_auth_events_are_database_append_only(database_session_factory) ->
 
 
 async def test_empty_authentication_foundation_round_trips(database_session_factory) -> None:
+    _alembic("stamp", AUTHENTICATION_REVISION)
     _alembic("downgrade", PREVIOUS)
     try:
         async with database_session_factory() as session:
             assert await session.scalar(text("SELECT to_regclass('public.auth_users')")) is None
     finally:
-        _alembic("upgrade", HEAD)
+        _alembic("upgrade", AUTHENTICATION_REVISION)
+        _alembic("stamp", HEAD)
 
 
 async def test_retained_identity_blocks_lossy_downgrade(database_session_factory) -> None:
@@ -105,6 +108,10 @@ async def test_retained_identity_blocks_lossy_downgrade(database_session_factory
                 """
             )
         )
-    result = _alembic("downgrade", PREVIOUS, check=False)
-    assert result.returncode != 0
-    assert "Refusing to remove authentication tables" in (result.stdout + result.stderr)
+    _alembic("stamp", AUTHENTICATION_REVISION)
+    try:
+        result = _alembic("downgrade", PREVIOUS, check=False)
+        assert result.returncode != 0
+        assert "Refusing to remove authentication tables" in (result.stdout + result.stderr)
+    finally:
+        _alembic("stamp", HEAD)

@@ -6,23 +6,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-ROBOTS_ENFORCEMENT = "acquisition.robots.enforce"
-ROBOTS_UNAVAILABLE_ACTION = "acquisition.robots.unavailable_action"
-ROBOTS_CRAWL_DELAY_ENFORCEMENT = "acquisition.robots.crawl_delay.enforce"
-ROBOTS_CACHE_MAX_AGE_SECONDS = "acquisition.robots.cache.max_age_seconds"
-ROBOTS_CACHE_MAX_STALE_SECONDS = "acquisition.robots.cache.max_stale_seconds"
-ROBOTS_FETCH_LIMITS = "acquisition.robots.fetch_limits"
 RETRY_AFTER_ENFORCEMENT = "acquisition.retry_after.enforce"
 PROVIDER_HARD_LIMIT_ENFORCEMENT = "acquisition.provider_hard_limits.enforce"
 MANUAL_POLL_RATE_ENFORCEMENT = "acquisition.rate_limit.manual_poll_enforce"
 ARCHIVE_INSPECTION_LIMITS = "acquisition.archive.inspection_limits"
-
-DEFAULT_ROBOTS_FETCH_LIMITS = {
-    "max_response_bytes": 524_288,
-    "max_redirects": 5,
-    "connect_timeout_seconds": 10,
-    "read_timeout_seconds": 30,
-}
 
 DEFAULT_ARCHIVE_INSPECTION_LIMITS = {
     "max_depth": 4,
@@ -79,44 +66,6 @@ def _boolean(value: Any) -> None:
         raise OwnerPolicyDefinitionError("value must be a boolean")
 
 
-def _unavailable_action(value: Any) -> None:
-    if not isinstance(value, str) or value not in {"delay", "allow", "deny"}:
-        raise OwnerPolicyDefinitionError("value must be one of: delay, allow, deny")
-
-
-def _bounded_integer(*, minimum: int, maximum: int) -> Validator:
-    def validate(value: Any) -> None:
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise OwnerPolicyDefinitionError("value must be an integer and cannot be a boolean")
-        if not minimum <= value <= maximum:
-            raise OwnerPolicyDefinitionError(
-                f"value must be between {minimum} and {maximum}, inclusive"
-            )
-
-    return validate
-
-
-def _robots_fetch_limits(value: Any) -> None:
-    if not isinstance(value, dict):
-        raise OwnerPolicyDefinitionError("value must be a closed object")
-    validators = {
-        "max_response_bytes": _bounded_integer(minimum=524_288, maximum=2_097_152),
-        "max_redirects": _bounded_integer(minimum=5, maximum=10),
-        "connect_timeout_seconds": _bounded_integer(minimum=1, maximum=30),
-        "read_timeout_seconds": _bounded_integer(minimum=1, maximum=60),
-    }
-    if set(value) != set(validators):
-        raise OwnerPolicyDefinitionError(
-            "value must contain exactly max_response_bytes, max_redirects, "
-            "connect_timeout_seconds, and read_timeout_seconds"
-        )
-    for field, validator in validators.items():
-        try:
-            validator(value[field])
-        except OwnerPolicyDefinitionError as exc:
-            raise OwnerPolicyDefinitionError(f"{field} {exc}") from exc
-
-
 def _archive_limits(value: Any) -> None:
     if not isinstance(value, dict):
         raise OwnerPolicyDefinitionError("value must be a closed object")
@@ -164,69 +113,6 @@ def _definition(
 
 
 _DEFINITIONS = {
-    ROBOTS_ENFORCEMENT: _definition(
-        ROBOTS_ENFORCEMENT,
-        value_type="boolean",
-        default=True,
-        resolution_point="after exact robots evaluation and before target authorization",
-        consequences="false permits GNI to attempt a target disallowed by retained robots evidence",
-        display_name="Enforce robots restrictions",
-        risk_summary="Disabling enforcement may request content contrary to observed robots guidance.",
-        validator=_boolean,
-    ),
-    ROBOTS_UNAVAILABLE_ACTION: _definition(
-        ROBOTS_UNAVAILABLE_ACTION,
-        value_type="enum",
-        default="delay",
-        resolution_point="when trustworthy current robots evidence is unavailable",
-        consequences="allow may attempt retrieval without current evidence; deny or delay prevents it",
-        display_name="Unavailable robots evidence action",
-        risk_summary="Allow can issue a request without current trustworthy robots evidence.",
-        validator=_unavailable_action,
-    ),
-    ROBOTS_CRAWL_DELAY_ENFORCEMENT: _definition(
-        ROBOTS_CRAWL_DELAY_ENFORCEMENT,
-        value_type="boolean",
-        default=True,
-        resolution_point="after Crawl-delay observation and before reservation",
-        consequences="false may schedule requests sooner than observed Crawl-delay guidance",
-        display_name="Enforce robots Crawl-delay",
-        risk_summary="Disabling enforcement may increase request frequency.",
-        validator=_boolean,
-    ),
-    ROBOTS_CACHE_MAX_AGE_SECONDS: _definition(
-        ROBOTS_CACHE_MAX_AGE_SECONDS,
-        value_type="integer",
-        default=86_400,
-        supported_scopes=ALL_SCOPES,
-        resolution_point="when calculating robots snapshot fresh_until",
-        consequences="larger values retain current evidence longer; smaller values fetch more often",
-        display_name="Robots cache maximum age",
-        risk_summary="Cache age changes robots retrieval frequency and evidence freshness.",
-        validator=_bounded_integer(minimum=300, maximum=86_400),
-    ),
-    ROBOTS_CACHE_MAX_STALE_SECONDS: _definition(
-        ROBOTS_CACHE_MAX_STALE_SECONDS,
-        value_type="integer",
-        default=604_800,
-        supported_scopes=ALL_SCOPES,
-        resolution_point="when calculating robots snapshot stale_until",
-        consequences="larger values retain stale evidence eligibility longer",
-        display_name="Robots cache maximum stale age",
-        risk_summary="Stale-age changes how long prior evidence may inform unavailable handling.",
-        validator=_bounded_integer(minimum=0, maximum=2_592_000),
-    ),
-    ROBOTS_FETCH_LIMITS: _definition(
-        ROBOTS_FETCH_LIMITS,
-        value_type="object",
-        default=DEFAULT_ROBOTS_FETCH_LIMITS,
-        supported_scopes=ALL_SCOPES,
-        resolution_point="before robots retrieval",
-        consequences="changes bounded response, redirects, and network timeout behavior",
-        display_name="Robots fetch limits",
-        risk_summary="Larger limits can increase resource use and outbound request duration.",
-        validator=_robots_fetch_limits,
-    ),
     RETRY_AFTER_ENFORCEMENT: _definition(
         RETRY_AFTER_ENFORCEMENT,
         value_type="boolean",

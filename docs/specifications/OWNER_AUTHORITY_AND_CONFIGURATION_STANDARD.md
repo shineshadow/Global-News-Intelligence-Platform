@@ -6,24 +6,18 @@
 
 ## Governing Rule
 
-The owner of GNI has final authority over every runtime policy, safety
-behavior, limit, format, schedule, workflow, and configuration. Safe defaults
-are strongly preferred, but a default is not an irrevocable rule.
+The Owner of GNI has final authority over every runtime policy, safety
+behavior, limit, format, schedule, workflow, and configuration. A default is not an irrevocable rule.
 
 No architecture, implementation, migration, review, or AI-assisted change may
 declare a policy non-configurable, non-bypassable, permanently read-only, or
-outside owner control without the owner's explicit approval for that exact
+outside Owner control without the Owner's explicit approval for that exact
 restriction. Silence, prior AI-generated prose, and a commit authored under
-the owner's Git identity do not establish that approval.
-
-External systems and physical constraints remain factual. For example, an
-owner override can authorize GNI to retry despite a provider limit, but cannot
-force the provider to return content. GNI records both the external signal and
-the owner's effective decision.
+the Owner's Git identity do not establish that approval.
 
 ## Authority Surface
 
-The primary authority is the PostgreSQL-backed `owner_policy_overrides` ledger.
+The primary authority is the PostgreSQL-backed `Owner_policy_overrides` ledger.
 It supports:
 
 - JSON policy values rather than boolean-only bypasses;
@@ -36,29 +30,26 @@ It supports:
 - append-only creation, application, consumption, supersession, and revocation
   evidence.
 
-The initial owner interface is deliberately operational rather than UI-bound:
-
 ```bash
-python -m scripts.owner_policy set POLICY_KEY JSON_VALUE \
+python -m scripts.Owner_policy set POLICY_KEY JSON_VALUE \
   --scope-type endpoint --scope-identity 47 \
   --actor shine \
   --reason "Owner-authorized behavior" \
   --acknowledge-risk "I accept responsibility for this policy change"
 
-python -m scripts.owner_policy set POLICY_KEY false \
+python -m scripts.Owner_policy set POLICY_KEY false \
   --scope-type request --scope-identity REQUEST_ID \
   --once --actor shine --reason "One request" \
   --acknowledge-risk "I accept responsibility for this request"
 
-python -m scripts.owner_policy effective POLICY_KEY --endpoint-id 47
-python -m scripts.owner_policy list --active-only
-python -m scripts.owner_policy history OVERRIDE_ID
-python -m scripts.owner_policy revoke OVERRIDE_ID \
+python -m scripts.Owner_policy effective POLICY_KEY --endpoint-id 47
+python -m scripts.Owner_policy list --active-only
+python -m scripts.Owner_policy history OVERRIDE_ID
+python -m scripts.Owner_policy revoke OVERRIDE_ID \
   --actor shine --reason "Override no longer required"
 ```
 
-Database and script access remain installation-controlled. A future UI may
-call the same service, but it may not create a second authority model.
+Database and script access remain installation-controlled. The installation is owned and controlled by the Owner. Therefore, the Database and script access ultimitly remain Owner-controlled. A future UI may call the same service, but it may not create a second authority model.
 
 Owner information access is not created by a UI role or screen. Information
 defined by a governing standard as Owner information shall remain available
@@ -68,9 +59,38 @@ worker, diagnostic, or authorized agent use of the same information does not
 make it internal-only. Missing UI presentation is an implementation gap, not
 an Owner-information lockout.
 
+## Internal And Owner Information
+
+Information may serve both internal operation and Owner explanation. A field used by workers, diagnostics, or authorized agent models is not therefore internal-only. When a domain standard marks information as Owner information:
+
+```text
+the authoritative structured value must be retained
+the implemented operational/API/CLI surface must preserve Owner access
+the future Admin UI must expose the registered Owner-visible projection
+the User UI may omit administrative diagnostic detail
+Admin-UI placement does not create or limit the Owner's information rights to it or Authority of it
+missing UI presentation remains an explicit implementation gap
+```
+
+## Required Owner-Facing Presentation
+
+A detail view shall answer:
+
+```text
+What was GNI trying to do?
+What happened?
+Who's at fault
+What result was produced?
+What currently blocks progress?
+Why exactly did that happen?
+What evidence produced that conclusion?
+Which adapter, policy, ruleset, parser, detector, or model was used?
+What action is available?
+```
+
 ## Precedence
 
-Among matching owner policies, the most exact scope wins:
+Among matching Owner policies, the most exact scope wins:
 
 ```text
 exact request
@@ -84,8 +104,7 @@ global
 repository/application default
 ```
 
-Priority resolves multiple equally exact matches. A more specific owner value
-does not need to weaken a default; it may restore or strengthen it.
+Priority resolves multiple equally exact matches.
 
 ## Current Runtime Integration
 
@@ -93,23 +112,17 @@ The following policies are registered and consumed by the Phase 3 acquisition
 worker:
 
 ```text
-acquisition.robots.enforce                       default true
 acquisition.retry_after.enforce                  default true
 acquisition.provider_hard_limits.enforce         default true
 acquisition.rate_limit.manual_poll_enforce       default true
-acquisition.archive.inspection_limits             default bounded JSON object
+acquisition.archive.inspection_limits            default bounded JSON object
 ```
 
 Manual-poll authority bypasses local bucket denial while still creating an
 atomic reservation and retaining counters. Retry-After and provider-limit
 authority independently control whether observed external signals install or
 govern durable holds. All provider observations remain persisted with the
-effective owner-policy evidence.
-
-Robots holds have their own durable bucket dimension and are evaluated through
-`acquisition.robots.enforce`. Robots retrieval and parsing are not yet
-implemented, so this is an authority integration point rather than a claim
-that robots proof 34 is complete.
+effective Owner-policy evidence.
 
 Archive inspection resolves the complete member/depth/expanded-byte/ratio/path
 limit object before retrieval. The shared worker validates the exact field set
@@ -119,7 +132,7 @@ effective policy plus audit evidence into the recursive sandbox runtime. See
 
 ## Implementation Requirement
 
-Adding a default is incomplete until its owner-control disposition is stated:
+Adding a default is incomplete until its Owner-control disposition is stated:
 
 ```text
 policy key
@@ -134,37 +147,34 @@ default-path test
 override-path test
 ```
 
-If a control has not yet been connected to the owner service, documentation
+If a control has not yet been connected to the Owner service, documentation
 must say so. It may not be described as permanently inaccessible merely because
 the wiring remains incomplete.
 
 ## Data and Audit
 
-Audit history is append-only by default so owner decisions remain explainable.
-This is a protective implementation default, not a claim that the project
-owner lacks database or code authority. Destructive owner operations, if
-added, must distinguish intentionally rewriting/deleting history from ordinary
-configuration so their consequences are unmistakable.
+Audit history is append-only by default so Owner decisions remain explainable.
+This is an informative implementation meassure so the Owner has review capabilitites.
 
 ## Review Rule
 
 Implementation reviews must test both:
 
-1. the safe/default behavior; and
-2. at least one exact, audited owner override for every integrated policy
+1. the default behavior; and
+2. at least one exact, audited Owner override for every integrated policy
    family.
 
 Reviews must also compare new `cannot`, `never`, `non-configurable`, hard-limit,
 and read-only language against this standard. Unapproved contradictions block
-the review rather than owner authority.
+the review rather than Owner authority.
 
 ## Verification
 
 ```text
-focused owner-authority migration/service/worker suite       24 passed
+focused Owner-authority migration/service/worker suite       24 passed
 guarded migration-safety suite                               23 passed
 guarded non-migration repository suite                      401 passed
-final owner-policy/worker hardening suite                    16 passed
+final Owner-policy/worker hardening suite                    16 passed
 current non-migration repository collection              402 collected
 Alembic current                                  f6a8c2d4e901 (head)
 Alembic schema drift                                         none

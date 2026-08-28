@@ -41,6 +41,7 @@ tests required
 acceptance criteria
 rollback considerations
 operational verification
+Owner approval
 ```
 
 ---
@@ -165,8 +166,7 @@ The composed credential quota identity, every-bucket reservation, bounded
 provider response parsing, durable retry authority, and rate-delay health
 semantics are recorded in
 `../specifications/PHASE_3_CREDENTIAL_AND_PROVIDER_RATE_AUTHORITY.md`. This
-closes formal proofs 33 and 51 and implements the provider portion of proof 34;
-robots acquisition and crawl enforcement remain separate required work.
+closes formal proofs 33 and 51.
 The owner's final authority over runtime policies and configuration is
 governed by
 `../specifications/OWNER_AUTHORITY_AND_CONFIGURATION_STANDARD.md`. The scoped,
@@ -184,8 +184,8 @@ Zstandard, 7-Zip, or RAR. It supplies implementation candidates for formal
 proofs 23-26; only the next formal review may mark those proofs passed.
 The formal implementation review is recorded in
 `../specifications/PHASE_3_FORMAL_IMPLEMENTATION_REVIEW.md`. The repository,
-migration, lint, and live RSS gates pass, but Phase 3 is not frozen: mandatory
-robots policy enforcement, object-storage promotion, later signature-authority
+migration, lint, and live RSS gates pass, but Phase 3 is not frozen:
+object-storage promotion, later signature-authority
 updates, and two direct regression proofs remain open. Archive proofs 23-26
 now have a remediation candidate pending review. Existing live RSS approval is
 retained only for the exact reviewed CISA

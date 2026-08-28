@@ -1,6 +1,6 @@
 registry_name: GNI UI Component Registry
-registry_version: 2
-last_updated: "2026-08-26"
+registry_version: 1
+last_updated: "2026-08-03"
 components:
   - id: CMP-0001
     name: Application Shell
@@ -47,8 +47,3 @@ components:
     status: Proposed
     owner: ui-platform
     record: components/CMP-0009-date-time-display.yaml
-  - id: CMP-0010
-    name: Robots Decision And Owner Override
-    status: Experimental
-    owner: acquisition-runtime
-    record: components/CMP-0010-robots-decision-and-owner-override.yaml

@@ -118,7 +118,7 @@ async def test_artifact_state_blocks_destructive_downgrade(
     downgrade = _alembic("downgrade", "b8d4f0a2c315", check=False)
     assert downgrade.returncode != 0
     assert "Phase 3" in (downgrade.stdout + downgrade.stderr)
-    assert _alembic("current").stdout.strip().endswith("b8d0f2a4c6e8 (head)")
+    assert _alembic("current").stdout.strip().endswith("d9e1f3a5b7c9 (head)")
 
     async with database_session_factory() as session, session.begin():
         await session.execute(text("DELETE FROM artifact_signature_releases"))

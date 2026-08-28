@@ -27,12 +27,6 @@
 {% if request.query_params.get("rolled_back") %}
 <div class="alert alert-warning">Endpoint rolled back to the legacy feed path.</div>
 {% endif %}
-{% if request.query_params.get("robots_overridden") %}
-<div class="alert alert-success">Owner robots override activated. The external Disallows finding remains unchanged.</div>
-{% endif %}
-{% if request.query_params.get("robots_revoked") %}
-<div class="alert alert-warning">Owner robots override revoked. Current disallow enforcement is restored.</div>
-{% endif %}
 {% if action_error %}
 <div class="alert alert-danger">{{ action_error }}</div>
 {% endif %}
@@ -63,16 +57,14 @@
                     <th>Endpoint</th>
                     <th>Path / Configuration</th>
                     <th>Operational State</th>
-                    <th>Publisher Robots</th>
-                    <th>Evidence</th>
+                    <th>Feed history</th>
                     <th>Activity</th>
                     <th>Cutover Control</th>
                 </tr>
             </thead>
             <tbody>
             {% for endpoint in endpoints %}
-                {% set robots = robots_statuses[endpoint.endpoint_id] %}
-                <tr id="endpoint-{{ endpoint.endpoint_id }}">
+                <tr>
                     <td>
                         <a class="fw-bold" href="{{ url_for('web_source_detail', source_id=endpoint.source_id) }}">
                             {{ endpoint.source_name }} — {{ endpoint.endpoint_name }}
@@ -97,38 +89,7 @@
                         <div>Health: {{ badge(endpoint.health_state) }}</div>
                         <div>Gate: {{ badge(endpoint.gate_state or "none") }}</div>
                     </td>
-                    <td style="min-width: 14rem">
-                        <span class="badge bg-{{ robots.badge_tone }}-lt"
-                              aria-label="External robots finding: {{ robots.badge_label }}; {% if robots.owner_override_active %}Owner override active, fetch permitted{% elif robots.effective_fetch_permitted is sameas true %}fetch permitted{% elif robots.effective_fetch_permitted is sameas false %}fetch prevented{% else %}effective authorization pending current evidence{% endif %}">
-                            {{ robots.badge_label }}
-                        </span>
-                        {% if robots.owner_override_active %}
-                        <div class="text-success small fw-bold mt-1">Owner override active</div>
-                        {% elif robots.external_decision == "disallowed" and robots.current_evidence %}
-                        <div class="text-danger small mt-1">Restriction enforced</div>
-                        {% elif robots.external_decision == "unavailable" and robots.current_evidence %}
-                        <div class="small mt-1">Effective action: {{ robots.effective_unavailable_action | title }}</div>
-                        {% endif %}
-                        {% if principal.can("site.admin") and robots.unavailable_reason %}
-                        <div class="text-secondary small">{{ robots.unavailable_reason | replace("_", " ") | title }}</div>
-                        {% endif %}
-                        {% if principal.can("site.admin") %}
-                        <div class="small mt-1">
-                            <a href="{{ url_for('web_robots_detail', endpoint_id=endpoint.endpoint_id) }}">Review decision</a>
-                        </div>
-                        {% endif %}
-                        {% if robots.next_robots_review_at %}
-                        <div class="text-secondary small">Next review: {{ robots.next_robots_review_at | datetime_user(false) }}</div>
-                        {% endif %}
-                        {% if principal.can("owner.policy") and robots.can_override %}
-                        <a class="btn btn-sm btn-danger mt-2" href="{{ url_for('web_robots_override_review', endpoint_id=endpoint.endpoint_id) }}">Override</a>
-                        {% elif principal.can("owner.policy") and robots.owner_override_active %}
-                        <a class="btn btn-sm btn-outline-warning mt-2" href="{{ url_for('web_robots_override_revoke_review', endpoint_id=endpoint.endpoint_id) }}">Review / revoke</a>
-                        {% endif %}
-                    </td>
                     <td>
-                        <div>{{ endpoint.accepted_artifact_count | number }} accepted Artifacts</div>
-                        <div>{{ endpoint.rejection_count | number }} rejections</div>
                         <div>{{ endpoint.cutover_event_count | number }} cutover events</div>
                         {% if endpoint.latest_cutover_event %}
                         <div class="text-secondary small">
@@ -165,7 +126,7 @@
                     </td>
                 </tr>
             {% else %}
-                <tr><td colspan="7" class="text-secondary">No RSS or Atom endpoints exist.</td></tr>
+                <tr><td colspan="6" class="text-secondary">No RSS or Atom endpoints exist.</td></tr>
             {% endfor %}
             </tbody>
         </table>

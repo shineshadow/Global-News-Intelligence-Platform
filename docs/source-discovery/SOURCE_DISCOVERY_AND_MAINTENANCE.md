@@ -596,7 +596,6 @@ ingestion_method_current
 requires_javascript
 requires_authentication
 paywall_status
-robots_status
 source_status
 ```
 
@@ -894,7 +893,6 @@ PARSER_BROKEN
 JAVASCRIPT_REQUIRED
 PAYWALL_ADDED
 AUTH_REQUIRED
-ROBOTS_CHANGED
 WAF_DETECTED
 SOURCE_REBRANDED
 SOURCE_MERGED
@@ -1201,7 +1199,6 @@ Monitoring priority
 Ingestion method
 Paywall status
 Authentication requirement
-Robots status
 JavaScript requirement
 Anti-bot/WAF status
 ```

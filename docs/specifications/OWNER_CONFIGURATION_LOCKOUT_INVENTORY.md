@@ -1,6 +1,6 @@
 # Owner Configuration Lockout Inventory
 
-**Audit dates:** 2026-08-03; Proof 34 authority review 2026-08-24<br>
+**Audit dates:** 2026-08-03; authentication authority review 2026-08-26<br>
 **Status:** ACTIVE REMEDIATION INVENTORY
 
 This inventory records policy areas previously described or implemented as
@@ -11,8 +11,7 @@ approved a permanent lockout.
 
 | Policy family | Current default | Owner authority status | Next integration |
 |---|---|---|---|
-| Site authentication and authority | Passwordless passkeys; required UV; six credentials; recovery registration only | Implemented foundation; Owner remains highest application authority; authentication and recovery information is internal and Owner information | Complete the remaining authenticated Owner/Admin management surfaces; Proof 34C uses the existing capability and Owner-policy services |
-| Robots access/crawl decision | Enforce observed restriction | Proof 34B runtime and 34C authenticated GUI are implemented candidates; Override/revocation use the shared ledger, preserve all applicable scopes and external evidence, and immediately reconcile the exact gate | Complete Owner UI review and Proof 34D end-to-end acceptance |
+| Site authentication and authority | Passwordless passkeys; required UV; six credentials; recovery registration only | Implemented foundation; Owner remains highest application authority; authentication and recovery information is internal and Owner information | Complete the remaining authenticated Owner/Admin management surfaces |
 | HTTP Retry-After | Honor bounded valid value | Implemented | Extend effective-policy diagnostics/UI if desired |
 | Provider quota/reset and HTTP 429 fallback | Enforce provider hold | Implemented | Extend effective-policy diagnostics/UI if desired |
 | Manual-poll rate denial | Same buckets as scheduled work | Implemented | Extend effective-policy diagnostics/UI if desired |
@@ -23,7 +22,7 @@ approved a permanent lockout.
 | Sandbox limits and detector availability | Fixed limits and fail closed | Pending | Add bounded resource/action policy adapters |
 | SSRF/private/internal destination policy | Public-only except installation registrations | Pending | Add exact owner network/host authorization without weakening destination evidence |
 | Redirect credential forwarding | Strip/deny across origins | Pending | Add exact destination/credential authorization policy |
-| Response byte/header/redirect/time limits | Installation-owned fixed limits | Generic family pending; Proof 34 robots fetch defaults, bounds, and guarded runtime adapter implemented | Route non-robots limit families through scoped owner policy; preserve explicit Owner disposition for installation egress bounds |
+| Response byte/header/redirect/time limits | Installation-owned fixed limits | Pending | Route limit values through scoped owner policy |
 | Missing/invalid secret behavior | Send no request | Pending | Add explicit fallback behavior policy without persisting secret values |
 | Adapter/legacy fallback | Fail closed for configured Phase 3 endpoint | Pending | Add exact fallback and degraded-operation policies |
 | Signature/hash/scanner bypass behavior | Always rescan known bytes | Pending | Add explicit owner acceptance path with provenance |
@@ -33,8 +32,7 @@ approved a permanent lockout.
 | Migration downgrade refusal | Lossless-only | Pending | Add owner-authorized destructive downgrade tooling with backup/evidence requirements |
 | Cutover cohort size | Environment value, default one | Configurable through installation environment | Surface effective value and consider database owner policy |
 | Date/time display format | American User-local standard | Pending project-wide preference authority | Replace universal formatting mandate with owner/user preference configuration |
-| UI visibility and administrative controls | Several mutations not yet surfaced | Owner authority exists independently of UI; Proof 34C robots Override/revocation is implemented through authenticated Owner authority and the existing ledger | Complete Owner review and continue routing future GUI mutations through owner-authorized services; never treat absent UI as an Owner lockout |
-| Robots unavailable-evidence reasons | Internal and Owner/Admin operational information | Owner-approved internal **and** Owner information; closed reason/phase/retryability/summary contract is persisted and exposed in the authenticated 34C administrative detail view | Preserve the registered semantics and complete Proof 34D UI acceptance; never reclassify the information as internal-only |
+| UI visibility and administrative controls | Several mutations not yet surfaced | Owner authority exists independently of UI | Continue routing future GUI mutations through owner-authorized services; never treat absent UI as an Owner lockout |
 | Celery schedules and dispatch limits | Environment-backed defaults | Configurable through installation environment | Inventory restart requirements and optionally bridge to owner policies |
 | Internal service identities | Installation environment registration | Configurable through installation environment | Add owner diagnostics and controlled runtime reload if desired |
 | Artifact staging/canonical roots | Installation environment paths | Configurable through installation environment | Document restart and permission requirements |

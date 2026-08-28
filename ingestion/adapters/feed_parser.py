@@ -56,15 +56,6 @@ class FeedParserAdapter:
             allowed_schemes=frozenset({"http", "https"}),
         )
 
-    def robots_target_url(
-        self,
-        endpoint: SourceEndpoint,
-        *,
-        configuration: dict[str, Any],
-    ) -> str:
-        self.inspection_configuration(configuration=configuration)
-        return endpoint.url
-
     def inspection_configuration(
         self,
         *,

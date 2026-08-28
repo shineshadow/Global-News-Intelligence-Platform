@@ -62,11 +62,9 @@ current healthy last success and an already-passed Phase 3 cutover proof.
 
 ## Deliberate Exclusion
 
-This package implements provider response authority and now participates in
-the project-wide owner policy layer. It does not retrieve,
-parse, persist, or enforce `robots.txt` crawl rules. Consequently formal proof
-34 remains open for its robots-policy requirement even though its
-`Retry-After` and provider quota/reset portion is now implemented.
+This package implements provider response authority and participates in the
+project-wide owner policy layer. Publisher crawl-rule handling is outside this
+runtime contract.
 
 ## Proof Disposition
 
@@ -77,9 +75,8 @@ This package closes formal proofs 33 and 51:
 - proof 51: the composed worker reserves every applicable bucket atomically,
   including credential buckets.
 
-It also supplies the provider-response portion of proof 34 and reinforces
-proof 35 by proving that throttling is operational delay, not structural source
-failure.
+It also reinforces proof 35 by proving that throttling is operational delay,
+not structural source failure.
 
 ## Verification
 

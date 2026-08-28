@@ -1044,7 +1044,7 @@ Playwright fallback
 
 These are operator workflows and should not be relegated solely to raw SQLAdmin CRUD.
 
-Rate-limit forms distinguish installation, adapter, provider/robots,
+Rate-limit forms distinguish installation, adapter, provider,
 credential/platform, Source, and endpoint policy. They show the effective
 strictest policy, quota/reset state, concurrency, polling, retry, jitter, and
 budget without permitting a manual poll to bypass the effective limit.

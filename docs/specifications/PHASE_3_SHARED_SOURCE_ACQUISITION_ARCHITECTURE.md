@@ -1085,7 +1085,6 @@ Modes:
 
 ```text
 provider_defined
-robots_aware
 conservative
 custom
 ```
@@ -1163,7 +1162,7 @@ acquisition_rate_limit_reservations
   one expiring reservation per outbound request and IngestionRun
 
 acquisition_rate_limit_observations
-  append-only status, Retry-After, provider quota/reset, and robots evidence
+  append-only status, Retry-After, and provider quota/reset evidence
 ```
 
 Scope checks require only the resource appropriate to the binding. Credential
@@ -1183,7 +1182,7 @@ lock all applicable buckets in deterministic order
         ↓
 expire abandoned reservations
         ↓
-evaluate provider/robots holds and every installation, adapter, platform,
+evaluate provider holds and every installation, adapter, platform,
 credential, origin, Source, and endpoint bucket
         ├─ any denial
         │      → create no partial reservation
@@ -1212,7 +1211,6 @@ applicable default limit wins:
 
 ```text
 provider Retry-After or reset
-robots access/crawl policy
 credential/platform quota
 origin bucket
 adapter and installation policy
@@ -1237,13 +1235,13 @@ platform and credential quota
 origin policy
 Source policy
 endpoint override
-provider/robots temporary hold
+provider temporary hold
 effective controlling policy and next eligible time
 ```
 
 Authorized controls may create owner, Source, and endpoint policies and
 configure or override rate, burst, concurrency, polling, retry, budget,
-Retry-After, provider, robots, manual-poll, and other registered values with
+Retry-After, provider, manual-poll, and other registered values with
 actor, reason, risk acknowledgement, scope, and durable history. External
 signals and consequences remain visible even when the owner selects a
 different effective decision.
@@ -1468,8 +1466,6 @@ Phase 3 implementation must directly prove:
 31. HTTP 304 produces no new Artifact or Document.
 32. Secret values cannot enter database metadata, logs, Celery, API, or HTML.
 33. Shared credential/platform quotas apply across endpoints.
-34. Retry-After and robots/provider policy are observed and enforced by
-    default; exact audited owner authority can select a different decision.
 35. Rate limiting does not count as structural endpoint failure.
 36. Operator mutations are server-authorized and actor/reason audited.
 37. Security rejection evidence remains auditable; owner-authorized rejection

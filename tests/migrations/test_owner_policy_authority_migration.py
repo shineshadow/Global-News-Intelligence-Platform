@@ -9,7 +9,7 @@ from app.config import settings
 from app.models import OwnerPolicyOverride
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "b8d0f2a4c6e8"
+HEAD = "d9e1f3a5b7c9"
 PREVIOUS = "d3f5a7b9c1e4"
 
 
@@ -54,9 +54,7 @@ async def test_owner_policy_schema_supports_scoped_timed_and_single_use_authorit
                     SELECT column_name
                     FROM information_schema.columns
                     WHERE table_name = 'acquisition_rate_limit_buckets'
-                      AND column_name IN (
-                          'retry_after_until', 'provider_limit_until', 'robots_disallow_until'
-                      )
+                      AND column_name IN ('retry_after_until', 'provider_limit_until')
                     ORDER BY column_name
                     """
                     )
@@ -81,7 +79,6 @@ async def test_owner_policy_schema_supports_scoped_timed_and_single_use_authorit
     assert bucket_columns == [
         "provider_limit_until",
         "retry_after_until",
-        "robots_disallow_until",
     ]
 
 

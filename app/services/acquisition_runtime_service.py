@@ -20,7 +20,6 @@ from app.services.outbound_egress_service import (
     InternalServiceRegistry,
     OutboundEgressGuard,
 )
-from app.services.robots_runtime_service import GuardedRobotsFetcher, RobotsRuntimeService
 from ingestion.adapters import (
     ChangedetectionAdapter,
     DirectJSONAPIAdapter,
@@ -112,8 +111,9 @@ def create_phase3_acquisition_worker(
     """Compose the repository-approved Phase 3 runtime without unsafe defaults."""
 
     internal_services = _create_internal_service_registry(runtime_settings=runtime_settings)
-    egress_guard = OutboundEgressGuard(internal_services=internal_services)
-    guarded_http_client = GuardedHTTPClient(guard=egress_guard)
+    guarded_http_client = GuardedHTTPClient(
+        guard=OutboundEgressGuard(internal_services=internal_services)
+    )
     return Phase3AcquisitionWorker(
         adapters=(
             FeedParserAdapter(http_client=guarded_http_client),
@@ -125,5 +125,4 @@ def create_phase3_acquisition_worker(
             PlaywrightAdapter(http_client=guarded_http_client),
         ),
         artifact_runtime=_create_feed_artifact_runtime(runtime_settings=runtime_settings),
-        robots_service=RobotsRuntimeService(fetcher=GuardedRobotsFetcher(guard=egress_guard)),
     )

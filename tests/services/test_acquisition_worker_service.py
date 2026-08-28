@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-import httpx
 import pytest
 from sqlalchemy import func, select
 
@@ -33,16 +32,13 @@ from app.services.artifact_security_service import (
     ArtifactSecurityOutcome,
     ArtifactSecurityUnavailable,
 )
-from app.services.outbound_egress_service import GuardedHTTPResponse
 from app.services.owner_policy_service import (
     ARCHIVE_INSPECTION_LIMITS,
     MANUAL_POLL_RATE_ENFORCEMENT,
     PROVIDER_HARD_LIMIT_ENFORCEMENT,
     RETRY_AFTER_ENFORCEMENT,
-    ROBOTS_ENFORCEMENT,
     OwnerPolicyService,
 )
-from app.services.robots_runtime_service import RobotsAuthorizationResult, RobotsRuntimeService
 from ingestion.adapters.types import (
     AcquisitionRateLimitedError,
     AdapterRetrieval,
@@ -88,10 +84,6 @@ class FakeFeedAdapter:
     retrieval_count: int = 0
     rate_limit_feedback: RateLimitFeedback | None = None
     rate_limited: bool = False
-
-    def robots_target_url(self, endpoint, *, configuration):
-        assert configuration == {}
-        return endpoint.url
 
     def inspection_configuration(self, *, configuration):
         return dict(configuration)
@@ -156,9 +148,6 @@ class FakeCredentialAdapter(FakeFeedAdapter):
     slug: str = "changedetection"
     implementation: str = "ingestion.adapters.monitored_listing:ChangedetectionAdapter"
 
-    def robots_target_url(self, endpoint, *, configuration):
-        return endpoint.url
-
     def allowed_artifact_formats(self, endpoint, *, configuration):
         assert configuration["internal_service_identity"] == "local-changedetection"
         return frozenset({endpoint.endpoint_format})
@@ -204,45 +193,6 @@ class FakeArtifactRuntime:
             artifact_id=1 if self.accepted else None,
             rejection_id=None if self.accepted else 1,
             reason_code=None if self.accepted else "test_rejection",
-        )
-
-
-@dataclass
-class FakeRobotsService:
-    permitted: bool = True
-
-    async def authorize(self, session, **kwargs):
-        del session, kwargs
-        return RobotsAuthorizationResult(
-            permitted=self.permitted,
-            state="permitted" if self.permitted else "deny",
-            external_decision="allowed" if self.permitted else "disallowed",
-            effective_action="allow" if self.permitted else "deny",
-            snapshot_id=1,
-            evaluation_id=1,
-            gate_id=None,
-            next_eligible_at=(None if self.permitted else datetime.now(UTC) + timedelta(minutes=15)),
-            crawl_delay_seconds=None,
-            operations=(),
-        )
-
-    async def record_crawl_delay(self, session, **kwargs):
-        del session, kwargs
-
-
-class DisallowingRobotsFetcher:
-    async def get(self, url, *, adapter_slug, headers, limits):
-        del adapter_slug, headers, limits
-        content = b"User-agent: *\nDisallow: /\n"
-        return GuardedHTTPResponse(
-            requested_url=url,
-            final_url=url,
-            status_code=200,
-            headers=httpx.Headers({"Content-Type": "text/plain"}),
-            content=content,
-            response_bytes=len(content),
-            connected_address="203.0.113.10",
-            redirect_count=0,
         )
 
 
@@ -377,7 +327,6 @@ async def test_worker_composes_authority_artifact_and_feed_persistence(
         adapters=(adapter,),
         artifact_runtime=artifact_runtime,
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(
@@ -443,7 +392,6 @@ async def test_owner_archive_limits_are_validated_and_passed_with_audit_evidence
         adapters=(FakeFeedAdapter(),),
         artifact_runtime=artifact_runtime,
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(
@@ -462,84 +410,6 @@ async def test_owner_archive_limits_are_validated_and_passed_with_audit_evidence
     assert evidence["scope_type"] == "endpoint"
 
 
-async def test_robots_denial_precedes_rate_reservation_and_target_retrieval(
-    database_session_factory,
-) -> None:
-    async with database_session_factory() as session, session.begin():
-        endpoint_id = await _configured_feed(session)
-    adapter = FakeFeedAdapter()
-    worker = Phase3AcquisitionWorker(
-        adapters=(adapter,),
-        artifact_runtime=FakeArtifactRuntime(),
-        session_factory=database_session_factory,
-        robots_service=RobotsRuntimeService(fetcher=DisallowingRobotsFetcher()),
-    )
-
-    result = await worker.run(
-        endpoint_id,
-        trigger_type="scheduled",
-        execution_identity="scheduled:robots-denied:config:1",
-        owner_identifier="test-worker",
-    )
-
-    assert result.state == "robots_denied"
-    assert adapter.retrieval_count == 0
-    async with database_session_factory() as session:
-        reservation_count = await session.scalar(
-            select(func.count(AcquisitionRateLimitReservation.id))
-        )
-    assert reservation_count == 0
-
-
-async def test_one_use_robots_override_is_not_consumed_when_rate_gate_still_denies(
-    database_session_factory,
-) -> None:
-    async with database_session_factory() as session, session.begin():
-        endpoint_id = await _configured_feed(session)
-        installation = await session.scalar(
-            select(AcquisitionRateLimitBucket).where(
-                AcquisitionRateLimitBucket.scope_identity == "installation"
-            )
-        )
-        assert installation is not None
-        installation.blocked_until = datetime.now(UTC) + timedelta(hours=1)
-        await OwnerPolicyService().set_override(
-            session,
-            policy_key=ROBOTS_ENFORCEMENT,
-            value=False,
-            scope_type="endpoint",
-            scope_identity=str(endpoint_id),
-            actor="shine",
-            reason="Prove deferred one-use robots authority consumption",
-            risk_acknowledgement=OWNER_ACKNOWLEDGEMENT,
-            max_uses=1,
-        )
-    adapter = FakeFeedAdapter()
-    worker = Phase3AcquisitionWorker(
-        adapters=(adapter,),
-        artifact_runtime=FakeArtifactRuntime(),
-        session_factory=database_session_factory,
-        robots_service=RobotsRuntimeService(fetcher=DisallowingRobotsFetcher()),
-    )
-
-    result = await worker.run(
-        endpoint_id,
-        trigger_type="scheduled",
-        execution_identity="scheduled:robots-override-rate-denied:config:1",
-        owner_identifier="test-worker",
-    )
-
-    assert result.state == "delayed"
-    assert adapter.retrieval_count == 0
-    async with database_session_factory() as session:
-        consumed = await session.scalar(
-            select(func.count(OwnerPolicyOverrideEvent.id)).where(
-                OwnerPolicyOverrideEvent.event_type == "consumed"
-            )
-        )
-    assert consumed == 0
-
-
 async def test_worker_reserves_credential_bucket_without_persisting_secret_value(
     database_session_factory,
 ) -> None:
@@ -552,7 +422,6 @@ async def test_worker_reserves_credential_bucket_without_persisting_secret_value
             environment={"GNI_TEST_BROWSER_KEY": "ephemeral-browser-key"}
         ),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(
@@ -593,7 +462,6 @@ async def test_worker_fails_authority_and_persists_no_document_on_artifact_rejec
         adapters=(FakeFeedAdapter(),),
         artifact_runtime=FakeArtifactRuntime(accepted=False),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     with pytest.raises(ArtifactRejectedError, match="rejected and deleted"):
@@ -626,7 +494,6 @@ async def test_worker_replay_performs_no_second_retrieval(
         adapters=(adapter,),
         artifact_runtime=artifact_runtime,
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
     arguments = {
         "trigger_type": "manual",
@@ -661,7 +528,6 @@ async def test_worker_commits_rate_delay_and_performs_no_retrieval(
         adapters=(adapter,),
         artifact_runtime=FakeArtifactRuntime(),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(
@@ -705,7 +571,6 @@ async def test_worker_proves_artifact_infrastructure_before_retrieval(
             preflight_error=ArtifactSecurityUnavailable("scanner unavailable")
         ),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     with pytest.raises(ArtifactSecurityUnavailable, match="scanner unavailable"):
@@ -742,7 +607,6 @@ async def test_owner_authorized_manual_poll_bypasses_local_rate_denial(
         adapters=(adapter,),
         artifact_runtime=FakeArtifactRuntime(),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(
@@ -784,7 +648,6 @@ async def test_provider_hold_is_durable_delay_not_structural_failure(
         adapters=(FakeFeedAdapter(rate_limit_feedback=feedback, rate_limited=True),),
         artifact_runtime=FakeArtifactRuntime(),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(
@@ -835,7 +698,6 @@ async def test_malformed_429_uses_conservative_nonshortening_fallback(
         adapters=(FakeFeedAdapter(rate_limit_feedback=feedback, rate_limited=True),),
         artifact_runtime=FakeArtifactRuntime(),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(
@@ -888,7 +750,6 @@ async def test_owner_override_records_provider_denial_without_installing_hold(
         adapters=(FakeFeedAdapter(rate_limit_feedback=feedback, rate_limited=True),),
         artifact_runtime=FakeArtifactRuntime(),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(
@@ -951,7 +812,6 @@ async def test_disabled_provider_hold_cannot_override_enabled_retry_after(
         adapters=(FakeFeedAdapter(rate_limit_feedback=feedback, rate_limited=True),),
         artifact_runtime=FakeArtifactRuntime(),
         session_factory=database_session_factory,
-        robots_service=FakeRobotsService(),
     )
 
     result = await worker.run(

@@ -2,7 +2,7 @@
 
 Status: IMPLEMENTED CANDIDATE
 
-Date: 08-03-2026
+Date: 2026-08-03
 
 ## Scope
 
@@ -16,8 +16,7 @@ The package provides:
 - `rsshub` version `1` and `rss_bridge` version `1` runtime adapters;
 - exact `feed/rss|atom/feed_parser` compatibility declarations;
 - terminal RSS and Atom identification and safe-parser capabilities;
-- required `internal_service_identity` and exact `publisher_target_url`
-  endpoint configuration;
+- required `internal_service_identity` endpoint configuration;
 - installation configuration through `ACQUISITION_INTERNAL_SERVICES`;
 - exact adapter, scheme, hostname, port, address-network, TLS-policy, and
   purpose checks before connection; and
@@ -45,22 +44,14 @@ JSON array with this shape:
 ]
 ```
 
-The endpoint configuration stores the matching service identity and the exact
-Owner-supplied publisher target governed by robots evaluation:
+The endpoint configuration stores only the matching identity:
 
 ```json
-{
-  "internal_service_identity": "local-rsshub",
-  "publisher_target_url": "https://publisher.example/news/feed.xml"
-}
+{"internal_service_identity": "local-rsshub"}
 ```
 
 Missing, malformed, mismatched, or endpoint-invented identities fail closed.
-The publisher target must be absolute HTTP(S), contains no URL credentials,
-and is distinct from the installation-owned internal service locator. Proof
-34B migration `a7c9e1f3b5d4` adds this required binding and refuses activation
-when an existing generated-feed configuration has no reviewed publisher
-target. Public endpoint validation is unchanged.
+Public endpoint validation is unchanged.
 
 ## Retrieval and Artifact Boundary
 

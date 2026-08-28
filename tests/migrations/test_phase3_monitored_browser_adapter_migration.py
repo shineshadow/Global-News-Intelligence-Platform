@@ -14,7 +14,7 @@ from app.models import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-HEAD = "b8d0f2a4c6e8"
+HEAD = "d9e1f3a5b7c9"
 PREVIOUS = "c1e3f5a7b9d2"
 
 

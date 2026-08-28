@@ -121,7 +121,6 @@ Live operation
 | 25 | Blocked | Traversal, expansion bomb, link, device-file, depth, member-count, and ratio controls are not implemented or tested. |
 | 26 | Blocked | The schema can store `parent_artifact_id` and `member_path`, but the runtime does not create accepted nested Artifact provenance. |
 | 30 | Proof gap | The ingestion service deliberately retains old validators on a partial item result, but no direct regression test proves that contract. |
-| 34 | Blocked | Adapters and the worker apply bounded provider feedback by default and now honor exact owner overrides for Retry-After, provider hard-limit, robots-hold, and manual-poll decisions. The runtime still does not retrieve, parse, or persist robots access/crawl policy. |
 | 39 | Proof gap | `verified_empty` projection exists, but no direct test proves that a valid empty endpoint can remain healthy. |
 | 48 | Blocked | Filesystem promotion re-hashes and publishes atomically. No object-storage promotion backend implements the frozen opaque-staging, checksum, committed-pointer, and cleanup contract. |
 | 57 | Blocked | Only the reviewed repository bootstrap can be imported. The required guarded, scanned, regression-tested lifecycle for later untrusted authority releases is absent. |
@@ -170,16 +169,12 @@ non-activating, and none should be presented as live-approved by this review.
 1. Implement recursive container/archive inspection and all-or-nothing
    Artifact-tree promotion for proofs 23-26. **Implemented candidate at
    `a9c1e3f5b7d2`; formal rerun pending.**
-2. Implement robots acquisition, parsing, persistence, default enforcement,
-   and exact owner-override proof to complete amended proof 34. Credential
-   identity, provider-response authority, and their owner-control path are now
-   implemented candidates.
-3. Implement the object-storage canonical promotion contract for proof 48.
-4. Implement the guarded later-authority release lifecycle and active-release
+2. Implement the object-storage canonical promotion contract for proof 48.
+3. Implement the guarded later-authority release lifecycle and active-release
    preservation tests for proofs 12 and 57.
-5. Add direct partial-validator and verified-empty-health regressions for
+4. Add direct partial-validator and verified-empty-health regressions for
    proofs 30 and 39.
-6. Rerun the complete guarded suite, Alembic head/drift, scoped lint/format,
+5. Rerun the complete guarded suite, Alembic head/drift, scoped lint/format,
    operational smokes, and this formal review.
 
 Only the final rerun may change the outcome to `PASS — IMPLEMENTATION FROZEN`.

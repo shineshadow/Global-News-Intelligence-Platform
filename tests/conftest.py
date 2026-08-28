@@ -122,9 +122,6 @@ async def truncate_test_tables() -> None:
             auth_webauthn_credentials,
             auth_user_roles,
             auth_users,
-            acquisition_robots_gates,
-            acquisition_robots_evaluations,
-            acquisition_robots_snapshots,
             owner_policy_override_events,
             owner_policy_overrides,
             acquisition_endpoint_cutover_events,
@@ -378,24 +375,16 @@ async def truncate_test_tables() -> None:
                             'properties', jsonb_build_object(
                                 'internal_service_identity', jsonb_build_object(
                                     'type', 'string', 'minLength', 1
-                                ),
-                                'publisher_target_url', jsonb_build_object(
-                                    'type', 'string', 'minLength', 1,
-                                    'maxLength', 8192, 'pattern', '^https?://'
                                 )
                             ),
-                            'required', jsonb_build_array(
-                                'internal_service_identity', 'publisher_target_url'
-                            ),
+                            'required', jsonb_build_array('internal_service_identity'),
                             'additionalProperties', false
                         ),
                         jsonb_build_object(
                             'migration', 'b7d9e1f3a5c2',
                             'egress_policy', 'installation-registered-internal-v1',
                             'activation_scope',
-                            'registry-only-no-service-or-endpoint-configuration',
-                            'robots_target_binding', 'publisher-target-url-v1',
-                            'proof_34b_migration', 'a7c9e1f3b5d4'
+                            'registry-only-no-service-or-endpoint-configuration'
                         ),
                         now()
                     ),
@@ -408,24 +397,16 @@ async def truncate_test_tables() -> None:
                             'properties', jsonb_build_object(
                                 'internal_service_identity', jsonb_build_object(
                                     'type', 'string', 'minLength', 1
-                                ),
-                                'publisher_target_url', jsonb_build_object(
-                                    'type', 'string', 'minLength', 1,
-                                    'maxLength', 8192, 'pattern', '^https?://'
                                 )
                             ),
-                            'required', jsonb_build_array(
-                                'internal_service_identity', 'publisher_target_url'
-                            ),
+                            'required', jsonb_build_array('internal_service_identity'),
                             'additionalProperties', false
                         ),
                         jsonb_build_object(
                             'migration', 'b7d9e1f3a5c2',
                             'egress_policy', 'installation-registered-internal-v1',
                             'activation_scope',
-                            'registry-only-no-service-or-endpoint-configuration',
-                            'robots_target_binding', 'publisher-target-url-v1',
-                            'proof_34b_migration', 'a7c9e1f3b5d4'
+                            'registry-only-no-service-or-endpoint-configuration'
                         ),
                         now()
                     );

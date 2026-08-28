@@ -245,7 +245,7 @@ structured data (JSON-LD)
 Future design should explicitly address:
 
 - 403/429 handling,
-- robots and publisher restrictions,
+- publisher access restrictions,
 - rate limiting,
 - exponential backoff,
 - user-agent policy,

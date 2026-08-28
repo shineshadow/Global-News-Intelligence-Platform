@@ -675,7 +675,7 @@ class AcquisitionRateLimitPolicy(Base):
     __table_args__ = (
         UniqueConstraint("slug", "version", name="uq_acquisition_rate_limit_policies_slug_version"),
         CheckConstraint(
-            "mode IN ('provider_defined', 'robots_aware', 'conservative', 'custom')",
+            "mode IN ('provider_defined', 'conservative', 'custom')",
             name="mode",
         ),
         CheckConstraint("requests_per_period BETWEEN 1 AND 10000", name="requests"),
@@ -862,7 +862,6 @@ class AcquisitionRateLimitBucket(Base):
     blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     retry_after_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     provider_limit_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    robots_disallow_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     provider_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_eligible_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
@@ -952,7 +951,7 @@ class AcquisitionRateLimitObservation(Base):
     __table_args__ = (
         CheckConstraint(
             "observation_type IN ('http_status', 'retry_after', 'provider_quota', "
-            "'provider_reset', 'robots')",
+            "'provider_reset')",
             name="observation_type",
         ),
         CheckConstraint(

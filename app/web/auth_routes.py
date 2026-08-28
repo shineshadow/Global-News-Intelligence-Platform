@@ -68,21 +68,14 @@ def _set_auth_cookies(response: Any, issued: Any) -> None:
 
 @router.get("/auth/login", response_class=HTMLResponse, name="auth_login")
 async def login_page(
-    request: Request,
-    session: DatabaseSession,
-    next_path: str | None = None,
-    reauth: bool = False,
+    request: Request, session: DatabaseSession, next_path: str | None = None
 ) -> HTMLResponse:
     session_cookie, _ = auth_cookie_names()
-    if not reauth and await get_auth_service().resolve_session(
-        session, token=request.cookies.get(session_cookie)
-    ):
+    if await get_auth_service().resolve_session(session, token=request.cookies.get(session_cookie)):
         return RedirectResponse(_safe_next(next_path), status_code=303)
     return _no_store(
         templates.TemplateResponse(
-            request=request,
-            name="auth/login.html",
-            context={"next_path": _safe_next(next_path), "reauth": reauth},
+            request=request, name="auth/login.html", context={"next_path": _safe_next(next_path)}
         )
     )
 

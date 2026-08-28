@@ -25,8 +25,8 @@ single-use enrollment URL once. It accepts no password. Existing site and API ro
 while health, static assets, login, enrollment, and recovery entry points remain public as required.
 
 The implementation preserves the governing `OWNER_*` precedence: Owner remains the highest role,
-caller-submitted actor fields no longer govern protected mutations, and the existing Owner-policy
-ledger remains the robots-override authority. Authenticated robots GUI work remains the next slice.
+caller-submitted actor fields no longer govern protected mutations, and the generic Owner-policy
+ledger remains available for governed runtime policies.
 
 ## Verification
 

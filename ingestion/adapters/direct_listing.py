@@ -40,12 +40,6 @@ class _DirectListingAdapter:
             adapter_slug=self.slug, allowed_schemes=frozenset({"http", "https"})
         )
 
-    def robots_target_url(
-        self, endpoint: SourceEndpoint, *, configuration: dict[str, Any]
-    ) -> str:
-        self._validate_configuration(configuration)
-        return endpoint.url
-
     def inspection_configuration(
         self,
         *,

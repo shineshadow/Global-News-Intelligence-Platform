@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
-
 from app.models import SourceEndpoint
 from app.services.outbound_egress_service import EgressRequestPolicy, GuardedHTTPClient
 from ingestion.adapters.feed_parser import FeedParserAdapter
@@ -17,40 +15,14 @@ class _InternalGeneratedFeedAdapter(FeedParserAdapter):
 
     @staticmethod
     def _internal_service_identity(configuration: dict[str, Any]) -> str:
-        if set(configuration) != {"internal_service_identity", "publisher_target_url"}:
+        if set(configuration) != {"internal_service_identity"}:
             raise ValueError(
-                "Generated-feed configuration requires internal_service_identity and "
-                "publisher_target_url."
+                "Generated-feed configuration requires only internal_service_identity."
             )
         identity = configuration.get("internal_service_identity")
         if not isinstance(identity, str) or not identity.strip():
             raise ValueError("Generated-feed internal_service_identity must be non-empty.")
-        target = configuration.get("publisher_target_url")
-        try:
-            parsed_target = httpx.URL(target) if isinstance(target, str) else None
-        except httpx.InvalidURL as exc:
-            raise ValueError("Generated-feed publisher_target_url is invalid.") from exc
-        if (
-            parsed_target is None
-            or parsed_target.scheme not in {"http", "https"}
-            or not parsed_target.host
-            or parsed_target.username
-            or parsed_target.password
-        ):
-            raise ValueError("Generated-feed publisher_target_url must be absolute HTTP(S).")
         return identity.strip()
-
-    def robots_target_url(
-        self,
-        endpoint: SourceEndpoint,
-        *,
-        configuration: dict[str, Any],
-    ) -> str:
-        del endpoint
-        self._internal_service_identity(configuration)
-        target = configuration["publisher_target_url"]
-        parsed = httpx.URL(target)
-        return str(parsed.copy_with(fragment=None))
 
     def allowed_artifact_formats(
         self,

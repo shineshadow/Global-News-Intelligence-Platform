@@ -83,9 +83,8 @@ They must be exposed in the future authenticated Owner/Admin interface. Their cu
 does not reclassify them as internal-only and does not reduce operational Owner access.
 
 The next authority UI must let an authenticated Owner invite identities, assign permitted roles,
-inspect and revoke credentials/sessions, rotate recovery codes, and exercise the existing robots
-override service. It must call the existing authority services rather than inventing a UI-owned
-authority store.
+inspect and revoke credentials/sessions, and rotate recovery codes. It must call the existing
+authority services rather than inventing a UI-owned authority store.
 
 ## Acceptance requirements
 

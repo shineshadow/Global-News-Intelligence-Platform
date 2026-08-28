@@ -56,7 +56,6 @@ class AcquisitionRateLimitService:
         bypass_limits: bool = False,
         enforce_retry_after: bool = True,
         enforce_provider_hard_limits: bool = True,
-        enforce_robots: bool = True,
         reservation_ttl: timedelta = timedelta(minutes=2),
         now: datetime | None = None,
     ) -> RateLimitDecision:
@@ -138,7 +137,6 @@ class AcquisitionRateLimitService:
                 current_time,
                 enforce_retry_after=enforce_retry_after,
                 enforce_provider_hard_limits=enforce_provider_hard_limits,
-                enforce_robots=enforce_robots,
             )
             if eligible is not None and (controlling is None or eligible > controlling[2]):
                 controlling = (bucket, binding, eligible)
@@ -268,12 +266,6 @@ class AcquisitionRateLimitService:
             bucket.blocked_until = max(holds) if holds else None
             if observation_type == "retry_after" and retry_after_at is not None:
                 bucket.retry_after_until = retry_after_at
-            if observation_type == "robots" and retry_after_at is not None:
-                bucket.robots_disallow_until = max(
-                    value
-                    for value in (bucket.robots_disallow_until, retry_after_at)
-                    if value is not None
-                )
             if observation_type in {"http_status", "provider_quota", "provider_reset"}:
                 provider_hold = provider_reset_at or retry_after_at
                 if provider_hold is not None:
@@ -696,18 +688,15 @@ class AcquisitionRateLimitService:
         *,
         enforce_retry_after: bool,
         enforce_provider_hard_limits: bool,
-        enforce_robots: bool,
     ) -> datetime | None:
         candidates: list[datetime] = []
         external_holds = (
             bucket.retry_after_until if enforce_retry_after else None,
             bucket.provider_limit_until if enforce_provider_hard_limits else None,
-            bucket.robots_disallow_until if enforce_robots else None,
         )
         if (
             bucket.retry_after_until is None
             and bucket.provider_limit_until is None
-            and bucket.robots_disallow_until is None
             and bucket.blocked_until is not None
         ):
             external_holds = (*external_holds, bucket.blocked_until)

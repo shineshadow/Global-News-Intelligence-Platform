@@ -31,7 +31,6 @@ dependencies = [
     "langcodes>=3.5.1,<4",
     "python-multipart==0.0.32",
     "python-dateutil>=2.9,<3",
-    "protego==0.6.2",
     "webauthn==3.0.0",
     "cbor2>=5.6,<7",
 ]

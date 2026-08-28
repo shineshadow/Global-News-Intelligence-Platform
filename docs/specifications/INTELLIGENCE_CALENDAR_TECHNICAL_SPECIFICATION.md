@@ -1849,7 +1849,6 @@ Polling escalation must respect:
 
 ```text
 rate limits
-robots
 site stability
 API quotas
 source-specific rules

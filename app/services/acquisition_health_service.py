@@ -11,11 +11,9 @@ from sqlalchemy.orm import aliased
 from app.config import Settings, settings
 from app.models import (
     AcquisitionAdapter,
-    AcquisitionArtifact,
     AcquisitionEndpointConfiguration,
     AcquisitionEndpointCutoverEvent,
     AcquisitionLease,
-    ArtifactRejection,
     IngestionRun,
     Source,
     SourceEndpoint,
@@ -50,8 +48,6 @@ class AcquisitionHealthItem:
     latest_success_at: datetime | None
     latest_failure_at: datetime | None
     next_poll_at: datetime | None
-    accepted_artifact_count: int
-    rejection_count: int
     cutover_event_count: int
     latest_cutover_at: datetime | None
     latest_cutover_event: str | None
@@ -222,18 +218,6 @@ async def list_acquisition_health(
         .correlate(SourceEndpoint)
         .scalar_subquery()
     )
-    artifact_count = (
-        select(func.count(AcquisitionArtifact.id))
-        .where(AcquisitionArtifact.source_endpoint_id == SourceEndpoint.id)
-        .correlate(SourceEndpoint)
-        .scalar_subquery()
-    )
-    rejection_count = (
-        select(func.count(ArtifactRejection.id))
-        .where(ArtifactRejection.source_endpoint_id == SourceEndpoint.id)
-        .correlate(SourceEndpoint)
-        .scalar_subquery()
-    )
     event_count = (
         select(func.count(AcquisitionEndpointCutoverEvent.id))
         .where(AcquisitionEndpointCutoverEvent.source_endpoint_id == SourceEndpoint.id)
@@ -258,8 +242,6 @@ async def list_acquisition_health(
             AcquisitionAdapter,
             latest_run,
             latest_event,
-            artifact_count.label("artifact_count"),
-            rejection_count.label("rejection_count"),
             event_count.label("event_count"),
             phase3_success_count.label("phase3_success_count"),
         )
@@ -321,8 +303,6 @@ async def list_acquisition_health(
         adapter,
         run,
         event,
-        accepted_count,
-        rejected_count,
         cutover_events,
         phase3_successes,
     ) in rows:
@@ -393,8 +373,6 @@ async def list_acquisition_health(
                     run.finished_at if run is not None and run.status == "failed" else None
                 ),
                 next_poll_at=endpoint.next_poll_at,
-                accepted_artifact_count=int(accepted_count or 0),
-                rejection_count=int(rejected_count or 0),
                 cutover_event_count=int(cutover_events or 0),
                 latest_cutover_at=event.recorded_at if event is not None else None,
                 latest_cutover_event=event.event_type if event is not None else None,

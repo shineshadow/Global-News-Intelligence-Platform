@@ -12,9 +12,7 @@ from typing import Protocol
 import httpx
 
 REDIRECT_STATUS_CODES = frozenset({301, 302, 303, 307, 308})
-STANDARD_CREDENTIAL_HEADERS = frozenset(
-    {"authorization", "proxy-authorization", "cookie"}
-)
+STANDARD_CREDENTIAL_HEADERS = frozenset({"authorization", "proxy-authorization", "cookie"})
 CGNAT_NETWORK = ipaddress.ip_network("100.64.0.0/10")
 CLOUD_METADATA_ADDRESSES = frozenset(
     {
@@ -28,10 +26,6 @@ CLOUD_METADATA_ADDRESSES = frozenset(
 
 class OutboundEgressError(RuntimeError):
     """Base failure for guarded outbound retrieval."""
-
-    def __init__(self, message: str, *, reason_code: str | None = None) -> None:
-        self.reason_code = reason_code
-        super().__init__(message)
 
 
 class OutboundDestinationRejected(OutboundEgressError):
@@ -116,9 +110,7 @@ class InternalServiceRegistry:
         by_identity: dict[str, InternalServiceRegistration] = {}
         for registration in registrations:
             if registration.identity in by_identity:
-                raise ValueError(
-                    f"Duplicate internal-service identity {registration.identity!r}."
-                )
+                raise ValueError(f"Duplicate internal-service identity {registration.identity!r}.")
             by_identity[registration.identity] = registration
         self._by_identity = by_identity
 
@@ -149,9 +141,7 @@ class EgressRequestPolicy:
         normalized_headers = frozenset(
             value.strip().lower() for value in self.credential_header_names
         )
-        normalized_query = frozenset(
-            value.strip() for value in self.credential_query_keys
-        )
+        normalized_query = frozenset(value.strip() for value in self.credential_query_keys)
         if any(not value for value in normalized_headers | normalized_query):
             raise ValueError("Credential names must be non-empty.")
         object.__setattr__(self, "credential_header_names", normalized_headers)
@@ -219,20 +209,14 @@ class AsyncioControlledResolver:
                 proto=socket.IPPROTO_TCP,
             )
         except OSError as exc:
-            raise OutboundDestinationRejected(
-                "Controlled DNS resolution failed.",
-                reason_code="dns_failure",
-            ) from exc
+            raise OutboundDestinationRejected("Controlled DNS resolution failed.") from exc
         addresses: list[str] = []
         for _, _, _, _, socket_address in rows:
             address = str(socket_address[0])
             if address not in addresses:
                 addresses.append(address)
         if not addresses:
-            raise OutboundDestinationRejected(
-                "Controlled DNS resolution returned no addresses.",
-                reason_code="dns_failure",
-            )
+            raise OutboundDestinationRejected("Controlled DNS resolution returned no addresses.")
         return tuple(addresses)
 
 
@@ -258,9 +242,7 @@ class OutboundEgressGuard:
         if len(str(url)) > 8192:
             raise OutboundDestinationRejected("Outbound URL exceeds its length limit.")
         if url.scheme not in policy.allowed_schemes:
-            raise OutboundDestinationRejected(
-                "URL scheme is not approved for the exact adapter."
-            )
+            raise OutboundDestinationRejected("URL scheme is not approved for the exact adapter.")
         if url.username or url.password:
             raise OutboundDestinationRejected(
                 "User-info credentials are forbidden in outbound URLs."
@@ -270,9 +252,7 @@ class OutboundEgressGuard:
         try:
             hostname = _normalize_hostname(url.host)
         except ValueError as exc:
-            raise OutboundDestinationRejected(
-                "Outbound hostname normalization failed."
-            ) from exc
+            raise OutboundDestinationRejected("Outbound hostname normalization failed.") from exc
         if _is_forbidden_hostname(hostname):
             raise OutboundDestinationRejected("Local-use hostname is forbidden.")
         port = url.port or (443 if url.scheme == "https" else 80)
@@ -325,9 +305,7 @@ class OutboundEgressGuard:
             if address not in addresses:
                 addresses.append(address)
         if not addresses:
-            raise OutboundDestinationRejected(
-                "Controlled resolver returned no usable addresses."
-            )
+            raise OutboundDestinationRejected("Controlled resolver returned no usable addresses.")
         return tuple(addresses)
 
     @staticmethod
@@ -380,23 +358,24 @@ class HttpxPinnedTransport:
     ) -> AsyncIterator[httpx.Response]:
         extensions = {"sni_hostname": sni_hostname} if sni_hostname else {}
         try:
-            async with httpx.AsyncClient(
-                verify=self._ssl_context,
-                follow_redirects=False,
-                trust_env=False,
-                timeout=timeout,
-            ) as client, client.stream(
-                method,
-                url,
-                headers=headers,
-                extensions=extensions,
-                follow_redirects=False,
-            ) as response:
+            async with (
+                httpx.AsyncClient(
+                    verify=self._ssl_context,
+                    follow_redirects=False,
+                    trust_env=False,
+                    timeout=timeout,
+                ) as client,
+                client.stream(
+                    method,
+                    url,
+                    headers=headers,
+                    extensions=extensions,
+                    follow_redirects=False,
+                ) as response,
+            ):
                 yield response
         except httpx.RequestError as exc:
-            raise OutboundTransportError(
-                "Pinned outbound transport failed."
-            ) from exc
+            raise OutboundTransportError("Pinned outbound transport failed.") from exc
 
 
 class GuardedHTTPClient:
@@ -432,19 +411,8 @@ class GuardedHTTPClient:
         try:
             async with asyncio.timeout(self._limits.total_seconds):
                 while True:
-                    try:
-                        destination = await self._guard.validate(current_url, policy)
-                    except OutboundDestinationRejected as exc:
-                        if redirect_count:
-                            raise OutboundDestinationRejected(
-                                "Outbound redirect destination was rejected.",
-                                reason_code="redirect_destination_rejected",
-                            ) from exc
-                        raise
-                    if (
-                        previous_origin is not None
-                        and destination.origin != previous_origin
-                    ):
+                    destination = await self._guard.validate(current_url, policy)
+                    if previous_origin is not None and destination.origin != previous_origin:
                         request_headers = {
                             key: value
                             for key, value in request_headers.items()
@@ -463,9 +431,7 @@ class GuardedHTTPClient:
                     hop_headers = dict(request_headers)
                     hop_headers["Host"] = _host_header(destination)
                     sni_hostname = (
-                        destination.hostname
-                        if destination.url.scheme == "https"
-                        else None
+                        destination.hostname if destination.url.scheme == "https" else None
                     )
                     async with self._transport.stream(
                         method="GET",
@@ -488,16 +454,10 @@ class GuardedHTTPClient:
                         ):
                             if redirect_count >= self._limits.max_redirects:
                                 raise OutboundResponseLimitError(
-                                    "Outbound redirect limit was exceeded.",
-                                    reason_code="redirect_limit_reached",
+                                    "Outbound redirect limit was exceeded."
                                 )
-                            redirect_url = destination.url.join(
-                                response.headers["Location"]
-                            )
-                            if (
-                                destination.url.scheme == "https"
-                                and redirect_url.scheme == "http"
-                            ):
+                            redirect_url = destination.url.join(response.headers["Location"])
+                            if destination.url.scheme == "https" and redirect_url.scheme == "http":
                                 raise OutboundDestinationRejected(
                                     "HTTPS downgrade redirect is forbidden."
                                 )
@@ -531,8 +491,7 @@ class GuardedHTTPClient:
                         )
         except TimeoutError as exc:
             raise OutboundResponseLimitError(
-                "Outbound request exceeded its total duration limit.",
-                reason_code="read_timeout",
+                "Outbound request exceeded its total duration limit."
             ) from exc
 
 
@@ -547,9 +506,8 @@ def _normalize_hostname(hostname: str) -> str:
 
 
 def _is_forbidden_hostname(hostname: str) -> bool:
-    return (
-        hostname in {"localhost", "home.arpa"}
-        or hostname.endswith((".localhost", ".local", ".home.arpa"))
+    return hostname in {"localhost", "home.arpa"} or hostname.endswith(
+        (".localhost", ".local", ".home.arpa")
     )
 
 
@@ -560,10 +518,7 @@ def _require_public_address(
     checked = effective or address
     if (
         checked in CLOUD_METADATA_ADDRESSES
-        or (
-            isinstance(checked, ipaddress.IPv4Address)
-            and checked in CGNAT_NETWORK
-        )
+        or (isinstance(checked, ipaddress.IPv4Address) and checked in CGNAT_NETWORK)
         or checked.is_loopback
         or checked.is_link_local
         or checked.is_multicast
@@ -571,9 +526,7 @@ def _require_public_address(
         or checked.is_private
         or checked.is_reserved
     ):
-        raise OutboundDestinationRejected(
-            "Resolved address is forbidden by public egress policy."
-        )
+        raise OutboundDestinationRejected("Resolved address is forbidden by public egress policy.")
 
 
 def _normalize_request_headers(headers: Mapping[str, str]) -> dict[str, str]:
@@ -624,19 +577,14 @@ def _verified_peer_address(
             "Pinned transport did not expose a valid connected peer."
         ) from exc
     if peer != expected:
-        raise OutboundTransportError(
-            "Connected peer disagrees with the validated pinned address."
-        )
+        raise OutboundTransportError("Connected peer disagrees with the validated pinned address.")
     return peer
 
 
 def _enforce_header_limit(headers: httpx.Headers, byte_limit: int) -> None:
     total = sum(len(name) + len(value) + 4 for name, value in headers.raw)
     if total > byte_limit:
-        raise OutboundResponseLimitError(
-            "Outbound response headers exceeded their byte limit.",
-            reason_code="response_too_large",
-        )
+        raise OutboundResponseLimitError("Outbound response headers exceeded their byte limit.")
 
 
 async def _read_limited_body(
@@ -652,22 +600,14 @@ async def _read_limited_body(
                 "Outbound response declared an invalid Content-Length."
             ) from exc
         if declared_length < 0:
-            raise OutboundTransportError(
-                "Outbound response declared a negative Content-Length."
-            )
+            raise OutboundTransportError("Outbound response declared a negative Content-Length.")
         if declared_length > byte_limit:
-            raise OutboundResponseLimitError(
-                "Outbound response exceeded its declared byte limit.",
-                reason_code="response_too_large",
-            )
+            raise OutboundResponseLimitError("Outbound response exceeded its declared byte limit.")
     content = bytearray()
     async for chunk in response.aiter_bytes():
         content.extend(chunk)
         if len(content) > byte_limit:
-            raise OutboundResponseLimitError(
-                "Outbound response exceeded its streaming byte limit.",
-                reason_code="response_too_large",
-            )
+            raise OutboundResponseLimitError("Outbound response exceeded its streaming byte limit.")
     return bytes(content)
 
 
